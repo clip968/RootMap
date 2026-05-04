@@ -29,7 +29,7 @@
 
 > 작업을 완료할 때마다 해당 항목을 `[x]`로 바꿔 진행 상황을 추적한다.
 
-- [ ] 01. [01-project-foundation.md](./01-project-foundation.md) - 프로젝트 기본 구조, 환경, 공통 타입 준비
+- [x] 01. [01-project-foundation.md](./01-project-foundation.md) - 프로젝트 기본 구조, 환경, 공통 타입 준비
 - [ ] 02. [02-data-model-and-storage.md](./02-data-model-and-storage.md) - 학습 트리/노드/진행 상태 저장 모델 구현
 - [ ] 03. [03-llm-prompts-and-schema.md](./03-llm-prompts-and-schema.md) - LLM 프롬프트, JSON 스키마, 파싱/검증 구현
 - [ ] 04. [04-tree-generation-api.md](./04-tree-generation-api.md) - 학습 트리 생성 API 구현
