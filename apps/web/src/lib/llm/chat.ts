@@ -7,42 +7,46 @@ export interface ChatMessage {
   content: string;
 }
 
-interface OpenAiChoiceMessage {
+interface OpenRouterChoiceMessage {
   content?: string | null;
 }
 
-interface OpenAiChatCompletionResponse {
-  choices?: Array<{ message?: OpenAiChoiceMessage }>;
+interface OpenRouterChatCompletionResponse {
+  choices?: Array<{ message?: OpenRouterChoiceMessage }>;
   error?: { message?: string };
 }
 
 function getBaseUrl(): string {
-  const u = process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1";
+  const u = process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1";
   return u.replace(/\/$/, "");
 }
 
 function jsonObjectModeEnabled(): boolean {
-  return process.env.OPENAI_JSON_MODE !== "false";
+  return process.env.OPENROUTER_JSON_MODE !== "false";
 }
 
 /**
- * OpenAI 호환 Chat Completions. 서버 전용(환경 변수 사용).
+ * OpenRouter Chat Completions. 서버 전용(환경 변수 사용).
+ *
+ * 공식 OpenRouter API는 OpenAI Chat Completions와 유사한 요청/응답 스키마를 사용한다.
  */
 export async function createChatCompletion(messages: ChatMessage[]): Promise<{
   rawText: string;
   status: number;
 }> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
-    throw new LlmTransportError("OPENAI_API_KEY가 설정되어 있지 않습니다.", 0);
+    throw new LlmTransportError("OPENROUTER_API_KEY가 설정되어 있지 않습니다.", 0);
   }
 
-  const model = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
+  const model = process.env.OPENROUTER_MODEL;
   const body: Record<string, unknown> = {
-    model,
     messages,
     temperature: 0.4,
   };
+  if (model) {
+    body.model = model;
+  }
 
   if (jsonObjectModeEnabled()) {
     body.response_format = { type: "json_object" };
@@ -53,12 +57,18 @@ export async function createChatCompletion(messages: ChatMessage[]): Promise<{
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
+      ...(process.env.OPENROUTER_SITE_URL
+        ? { "HTTP-Referer": process.env.OPENROUTER_SITE_URL }
+        : {}),
+      ...(process.env.OPENROUTER_APP_NAME
+        ? { "X-OpenRouter-Title": process.env.OPENROUTER_APP_NAME }
+        : {}),
     },
     body: JSON.stringify(body),
   });
 
   const status = res.status;
-  const json = (await res.json()) as OpenAiChatCompletionResponse;
+  const json = (await res.json()) as OpenRouterChatCompletionResponse;
 
   if (!res.ok) {
     const msg =

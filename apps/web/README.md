@@ -1,36 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RootMap Web
 
-## Getting Started
+Phase 1 MVP 웹 앱입니다. 사용자가 학습 주제를 입력하면 OpenRouter Chat Completions API로 선수지식 기반 학습 트리를 생성하고, 노드별 상세 설명·이해 상태·다음 학습 추천을 확인할 수 있습니다.
 
-First, run the development server:
+## 수동 테스트 방법
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd apps/web
+npm install
+cp .env.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`.env.local`에 OpenRouter 키를 설정합니다.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+OPENROUTER_API_KEY=sk-or-...
+# 선택: 비워두면 OpenRouter 계정 기본 모델 사용
+OPENROUTER_MODEL=google/gemini-2.5-flash
+DATABASE_URL=file:./data/rootmap.db
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+DB 테이블을 준비하고 개발 서버를 실행합니다.
 
-## Learn More
+```bash
+npm run db:push
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+브라우저에서 [http://localhost:3000](http://localhost:3000)을 열고 아래 Phase 1 테스트 주제를 입력해 확인합니다.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `Rust lifetime`
+- `Transformer`
+- `가상 메모리`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+확인할 흐름:
 
-## Deploy on Vercel
+1. 시작 화면에서 주제 입력 후 트리 생성
+2. 다섯 타입 섹션 확인: 선수지식 / 핵심 개념 / 부가 지식 / 오개념 / 이해 점검
+3. 추천 노드 영역 확인
+4. 노드 클릭 후 상세 설명 생성 확인
+5. 이해 상태를 `안다 / 조금 안다 / 모른다`로 변경
+6. 추천 결과 갱신 확인
+7. 새로고침 후 저장된 트리와 진행 상태 복원 확인
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 자동 검증
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+cd apps/web
+npm run check
+```
+
+`check`는 lint, DB smoke, LLM 파싱 smoke, Phase 1 MVP fixture smoke, production build/type check를 순서대로 실행합니다.
