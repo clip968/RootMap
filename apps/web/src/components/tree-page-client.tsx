@@ -211,9 +211,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   const dragStateRef = useRef<{
     pointerId: number;
     startX: number;
-    startY: number;
     scrollLeft: number;
-    scrollTop: number;
   } | null>(null);
   const [isTreeDragging, setIsTreeDragging] = useState(false);
   const [progressBusy, setProgressBusy] = useState<string | null>(null);
@@ -292,9 +290,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     dragStateRef.current = {
       pointerId: ev.pointerId,
       startX: ev.clientX,
-      startY: ev.clientY,
       scrollLeft: viewport.scrollLeft,
-      scrollTop: viewport.scrollTop,
     };
     viewport.setPointerCapture(ev.pointerId);
     setIsTreeDragging(true);
@@ -306,10 +302,9 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     if (!viewport || !drag || drag.pointerId !== ev.pointerId) return;
 
     const deltaX = ev.clientX - drag.startX;
-    const deltaY = ev.clientY - drag.startY;
     ev.preventDefault();
     viewport.scrollLeft = drag.scrollLeft - deltaX;
-    viewport.scrollTop = drag.scrollTop - deltaY;
+    viewport.scrollTop = 0;
   };
 
   const endTreeDrag = (ev: React.PointerEvent<HTMLDivElement>) => {
@@ -322,6 +317,12 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     }
     dragStateRef.current = null;
     setIsTreeDragging(false);
+  };
+
+  const onTreeWheel = (ev: React.WheelEvent<HTMLDivElement>) => {
+    ev.preventDefault();
+    const direction = ev.deltaY > 0 ? -1 : 1;
+    setTreeScale((s) => clampTreeScale(s + direction * TREE_SCALE_STEP));
   };
 
   const centerTreeViewport = () => {
@@ -655,7 +656,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                   학습 Tree
                 </h2>
                 <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                  선수관계와 children 연결을 따라 위에서 아래로 펼친 mindmap형 트리입니다.
+                  마우스 휠로 확대/축소하고, 빈 공간을 좌클릭 드래그해 좌우로 이동합니다.
                 </p>
               </div>
               <div className="flex flex-wrap gap-1 text-xs">
@@ -727,10 +728,11 @@ export function TreePageClient({ treeId }: { treeId: string }) {
             <div
               ref={treeViewportRef}
               onPointerDown={onTreePointerDown}
+              onWheel={onTreeWheel}
               onPointerMove={onTreePointerMove}
               onPointerUp={endTreeDrag}
               onPointerCancel={endTreeDrag}
-              className={`max-h-[72vh] touch-none overflow-auto rounded-xl border border-zinc-100 bg-zinc-50/40 pb-4 dark:border-zinc-900 dark:bg-zinc-950/30 ${
+              className={`max-h-[72vh] touch-none overflow-hidden rounded-xl border border-zinc-100 bg-zinc-50/40 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:border-zinc-900 dark:bg-zinc-950/30 ${
                 isTreeDragging ? "cursor-grabbing select-none" : "cursor-grab"
               }`}
             >
