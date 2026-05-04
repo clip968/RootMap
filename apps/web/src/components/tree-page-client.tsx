@@ -34,6 +34,149 @@ const PROGRESS_LABEL: Record<ProgressStatus, string> = {
   unknown: "모른다",
 };
 
+type TreeViewMode = "tree" | "sections";
+
+interface TreeBranch {
+  key: string;
+  node: ApiLearningNode;
+  children: TreeBranch[];
+  isReference: boolean;
+}
+
+const NODE_TYPE_TONE: Record<NodeType, { card: string; badge: string; connector: string }> = {
+  prerequisite: {
+    card: "border-blue-200 bg-blue-50/80 dark:border-blue-900 dark:bg-blue-950/25",
+    badge: "bg-blue-100 text-blue-900 dark:bg-blue-950/60 dark:text-blue-200",
+    connector: "bg-blue-300 dark:bg-blue-800",
+  },
+  core: {
+    card: "border-emerald-200 bg-emerald-50/80 dark:border-emerald-900 dark:bg-emerald-950/25",
+    badge: "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200",
+    connector: "bg-emerald-300 dark:bg-emerald-800",
+  },
+  supplementary: {
+    card: "border-violet-200 bg-violet-50/80 dark:border-violet-900 dark:bg-violet-950/25",
+    badge: "bg-violet-100 text-violet-900 dark:bg-violet-950/60 dark:text-violet-200",
+    connector: "bg-violet-300 dark:bg-violet-800",
+  },
+  misconception: {
+    card: "border-rose-200 bg-rose-50/80 dark:border-rose-900 dark:bg-rose-950/25",
+    badge: "bg-rose-100 text-rose-900 dark:bg-rose-950/60 dark:text-rose-200",
+    connector: "bg-rose-300 dark:bg-rose-800",
+  },
+  quiz: {
+    card: "border-amber-200 bg-amber-50/80 dark:border-amber-900 dark:bg-amber-950/25",
+    badge: "bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200",
+    connector: "bg-amber-300 dark:bg-amber-800",
+  },
+};
+
+const TYPE_ORDER_INDEX = new Map<NodeType, number>(
+  SECTION_ORDER.map((type, index) => [type, index]),
+);
+
+function buildTreeBranches(
+  nodes: ApiLearningNode[],
+  recommendedOrder: string[],
+): TreeBranch[] {
+  const nodeByKey = new Map(nodes.map((node) => [node.node_key, node]));
+  const recommendedIndex = new Map(
+    recommendedOrder.map((nodeKey, index) => [nodeKey, index]),
+  );
+
+  const compareNodeKeys = (a: string, b: string) => {
+    const nodeA = nodeByKey.get(a);
+    const nodeB = nodeByKey.get(b);
+    const orderA = recommendedIndex.get(a) ?? Number.MAX_SAFE_INTEGER;
+    const orderB = recommendedIndex.get(b) ?? Number.MAX_SAFE_INTEGER;
+    if (orderA !== orderB) return orderA - orderB;
+    const typeA = nodeA ? (TYPE_ORDER_INDEX.get(nodeA.type) ?? 99) : 99;
+    const typeB = nodeB ? (TYPE_ORDER_INDEX.get(nodeB.type) ?? 99) : 99;
+    if (typeA !== typeB) return typeA - typeB;
+    return (nodeA?.title ?? a).localeCompare(nodeB?.title ?? b, "ko");
+  };
+
+  const childKeysByKey = new Map<string, Set<string>>();
+  for (const node of nodes) {
+    childKeysByKey.set(node.node_key, new Set());
+  }
+
+  for (const node of nodes) {
+    const childSet = childKeysByKey.get(node.node_key)!;
+    for (const childKey of node.children) {
+      if (nodeByKey.has(childKey) && childKey !== node.node_key) {
+        childSet.add(childKey);
+      }
+    }
+  }
+
+  // LLM 응답에서 children이 듬성듬성 비어 있어도 prerequisites 관계로 트리 간선을 보강한다.
+  for (const node of nodes) {
+    for (const prerequisiteKey of node.prerequisites) {
+      if (nodeByKey.has(prerequisiteKey) && prerequisiteKey !== node.node_key) {
+        childKeysByKey.get(prerequisiteKey)!.add(node.node_key);
+      }
+    }
+  }
+
+  const normalizedChildKeysByKey = new Map<string, string[]>();
+  const incomingCount = new Map(nodes.map((node) => [node.node_key, 0]));
+  for (const [nodeKey, childSet] of childKeysByKey) {
+    const childKeys = [...childSet].sort(compareNodeKeys);
+    normalizedChildKeysByKey.set(nodeKey, childKeys);
+    for (const childKey of childKeys) {
+      incomingCount.set(childKey, (incomingCount.get(childKey) ?? 0) + 1);
+    }
+  }
+
+  const sortedNodeKeys = nodes.map((node) => node.node_key).sort(compareNodeKeys);
+  const rootKeys = sortedNodeKeys.filter(
+    (nodeKey) => (incomingCount.get(nodeKey) ?? 0) === 0,
+  );
+  if (rootKeys.length === 0 && sortedNodeKeys.length > 0) {
+    rootKeys.push(sortedNodeKeys[0]!);
+  }
+
+  const expanded = new Set<string>();
+
+  const buildBranch = (nodeKey: string, path: Set<string>): TreeBranch | null => {
+    const node = nodeByKey.get(nodeKey);
+    if (!node) return null;
+
+    const isReference = expanded.has(nodeKey) || path.has(nodeKey);
+    if (isReference) {
+      return { key: nodeKey, node, children: [], isReference: true };
+    }
+
+    expanded.add(nodeKey);
+    const nextPath = new Set(path);
+    nextPath.add(nodeKey);
+
+    const children: TreeBranch[] = [];
+    for (const childKey of normalizedChildKeysByKey.get(nodeKey) ?? []) {
+      const child = buildBranch(childKey, nextPath);
+      if (child) children.push(child);
+    }
+
+    return { key: nodeKey, node, children, isReference: false };
+  };
+
+  const branches: TreeBranch[] = [];
+  for (const rootKey of rootKeys) {
+    const branch = buildBranch(rootKey, new Set());
+    if (branch) branches.push(branch);
+  }
+
+  // 순환·공유 참조 때문에 루트에서 펼치지 못한 노드도 놓치지 않고 별도 가지로 표시한다.
+  for (const nodeKey of sortedNodeKeys) {
+    if (expanded.has(nodeKey)) continue;
+    const branch = buildBranch(nodeKey, new Set());
+    if (branch) branches.push(branch);
+  }
+
+  return branches;
+}
+
 export function TreePageClient({ treeId }: { treeId: string }) {
   const router = useRouter();
   const [tree, setTree] = useState<ApiTreeResponse | null>(null);
@@ -50,6 +193,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
 
   const [regenLoading, setRegenLoading] = useState(false);
   const [reuseConcepts, setReuseConcepts] = useState(true);
+  const [viewMode, setViewMode] = useState<TreeViewMode>("tree");
   const [progressBusy, setProgressBusy] = useState<string | null>(null);
 
   const loadTree = useCallback(async () => {
@@ -107,6 +251,11 @@ export function TreePageClient({ treeId }: { treeId: string }) {
       m.get(n.type)!.push(n);
     }
     return m;
+  }, [tree]);
+
+  const treeBranches = useMemo(() => {
+    if (!tree) return [];
+    return buildTreeBranches(tree.nodes, tree.recommended_order);
   }, [tree]);
 
   const loadDetail = useCallback(
@@ -207,6 +356,105 @@ export function TreePageClient({ treeId }: { treeId: string }) {
       setRegenLoading(false);
     }
   };
+  const renderTreeBranch = (branch: TreeBranch, pathKey: string) => {
+    const n = branch.node;
+    const highlighted = recommendSet.has(n.id);
+    const tone = NODE_TYPE_TONE[n.type];
+    const selected = selectedId === n.id;
+
+    return (
+      <li key={pathKey} className="flex flex-col items-center">
+        <div
+          className={`w-72 rounded-2xl border px-4 py-3 shadow-sm transition ${tone.card} ${
+            highlighted
+              ? "ring-2 ring-emerald-400 dark:ring-emerald-500"
+              : selected
+                ? "ring-2 ring-zinc-400 dark:ring-zinc-500"
+                : ""
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() => onSelectNode(n.id)}
+            className="block w-full text-left"
+          >
+            <span className="flex flex-wrap items-center gap-1.5 text-xs font-medium">
+              <span className={`rounded-full px-2 py-0.5 ${tone.badge}`}>
+                {SECTION_LABEL[n.type]}
+              </span>
+              {n.is_reused_concept === true ? (
+                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-sky-900 dark:bg-sky-950/60 dark:text-sky-200">
+                  이전에 본 개념
+                </span>
+              ) : n.is_reused_concept === false ? (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200">
+                  새 개념
+                </span>
+              ) : null}
+              {highlighted ? (
+                <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-white">
+                  추천
+                </span>
+              ) : null}
+              {branch.isReference ? (
+                <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                  참조
+                </span>
+              ) : null}
+            </span>
+            <span className="mt-2 block font-semibold leading-snug text-zinc-950 dark:text-zinc-50">
+              {n.title}
+            </span>
+            <span className="mt-1 line-clamp-3 block text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+              {n.description}
+            </span>
+            {n.concept_tree_count != null && n.concept_tree_count > 1 ? (
+              <span className="mt-2 block text-xs text-zinc-500 dark:text-zinc-400">
+                다른 학습 주제에서도 쓰임 · 총 {n.concept_tree_count}개 트리
+              </span>
+            ) : null}
+          </button>
+          <label className="mt-3 flex items-center justify-between gap-2 text-xs text-zinc-700 dark:text-zinc-300">
+            <span>이해 정도</span>
+            <select
+              value={n.progress}
+              disabled={progressBusy === n.id}
+              onChange={(e) =>
+                void onProgressChange(n.id, e.target.value as ProgressStatus)
+              }
+              onClick={(ev) => ev.stopPropagation()}
+              className="rounded-lg border border-zinc-300 bg-white px-2 py-1 dark:border-zinc-600 dark:bg-zinc-900"
+            >
+              {(Object.keys(PROGRESS_LABEL) as ProgressStatus[]).map((s) => (
+                <option key={s} value={s}>
+                  {PROGRESS_LABEL[s]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        {branch.children.length > 0 ? (
+          <>
+            <div className={`h-6 w-px ${tone.connector}`} />
+            <ul
+              className={`flex items-start justify-center gap-4 pt-6 ${
+                branch.children.length > 1
+                  ? "border-t border-zinc-300 dark:border-zinc-700"
+                  : ""
+              }`}
+            >
+              {branch.children.map((child, index) =>
+                renderTreeBranch(child, `${pathKey}-${child.key}-${index}`),
+              )}
+            </ul>
+          </>
+        ) : null}
+      </li>
+    );
+  };
+
+
 
   if (loadError) {
     return (
@@ -269,6 +517,25 @@ export function TreePageClient({ treeId }: { treeId: string }) {
               새 주제
             </Link>
           </div>
+          <div className="flex flex-wrap items-center gap-2 pt-2">
+            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              보기 방식
+            </span>
+            {(["tree", "sections"] as TreeViewMode[]).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setViewMode(mode)}
+                className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${
+                  viewMode === mode
+                    ? "border-emerald-500 bg-emerald-600 text-white dark:border-emerald-400 dark:bg-emerald-500 dark:text-zinc-950"
+                    : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                }`}
+              >
+                {mode === "tree" ? "Tree 보기" : "섹션 보기"}
+              </button>
+            ))}
+          </div>
         </header>
 
         {recoError ? (
@@ -301,92 +568,149 @@ export function TreePageClient({ treeId }: { treeId: string }) {
           </section>
         ) : null}
 
-        {SECTION_ORDER.map((type) => {
-          const nodes = grouped.get(type) ?? [];
-          if (nodes.length === 0) return null;
-          return (
-            <section key={type} className="space-y-3">
-              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                {SECTION_LABEL[type]}
-              </h2>
-              <ul className="space-y-2">
-                {nodes.map((n) => {
-                  const highlighted = recommendSet.has(n.id);
-                  return (
-                    <li key={n.id}>
-                      <div
-                        className={`flex flex-col gap-2 rounded-xl border px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
-                          highlighted
-                            ? "border-emerald-500/70 bg-emerald-50/50 dark:border-emerald-600 dark:bg-emerald-950/25"
-                            : selectedId === n.id
-                              ? "border-zinc-400 bg-zinc-50 dark:border-zinc-500 dark:bg-zinc-900"
-                              : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
+        {viewMode === "tree" ? (
+          <section className="rounded-2xl border border-zinc-200 bg-white/70 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+            <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                  학습 Tree
+                </h2>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                  선수관계와 children 연결을 따라 위에서 아래로 펼친 mindmap형 트리입니다.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-1 text-xs">
+                {SECTION_ORDER.map((type) => (
+                  <span
+                    key={type}
+                    className={`rounded-full px-2 py-0.5 ${NODE_TYPE_TONE[type].badge}`}
+                  >
+                    {SECTION_LABEL[type]}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="overflow-x-auto pb-4">
+              <div className="inline-flex min-w-full justify-center px-2 pt-2">
+                <div className="flex flex-col items-center">
+                  <div className="max-w-xl rounded-3xl border border-emerald-300 bg-emerald-600 px-6 py-4 text-center text-white shadow-sm dark:border-emerald-500 dark:bg-emerald-500 dark:text-zinc-950">
+                    <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
+                      Main Topic
+                    </p>
+                    <h2 className="text-xl font-bold leading-tight">{tree.topic}</h2>
+                    {tree.summary ? (
+                      <p className="mt-1 text-sm opacity-90">{tree.summary}</p>
+                    ) : null}
+                  </div>
+                  {treeBranches.length > 0 ? (
+                    <>
+                      <div className="h-8 w-px bg-emerald-300 dark:bg-emerald-700" />
+                      <ul
+                        className={`flex items-start justify-center gap-5 pt-6 ${
+                          treeBranches.length > 1
+                            ? "border-t border-zinc-300 dark:border-zinc-700"
+                            : ""
                         }`}
                       >
-                        <button
-                          type="button"
-                          onClick={() => onSelectNode(n.id)}
-                          className="text-left"
+                        {treeBranches.map((branch, index) =>
+                          renderTreeBranch(branch, `${branch.key}-${index}`),
+                        )}
+                      </ul>
+                    </>
+                  ) : (
+                    <p className="mt-6 text-sm text-zinc-500">표시할 노드가 없습니다.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        ) : (
+          SECTION_ORDER.map((type) => {
+            const nodes = grouped.get(type) ?? [];
+            if (nodes.length === 0) return null;
+            return (
+              <section key={type} className="space-y-3">
+                <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                  {SECTION_LABEL[type]}
+                </h2>
+                <ul className="space-y-2">
+                  {nodes.map((n) => {
+                    const highlighted = recommendSet.has(n.id);
+                    return (
+                      <li key={n.id}>
+                        <div
+                          className={`flex flex-col gap-2 rounded-xl border px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
+                            highlighted
+                              ? "border-emerald-500/70 bg-emerald-50/50 dark:border-emerald-600 dark:bg-emerald-950/25"
+                              : selectedId === n.id
+                                ? "border-zinc-400 bg-zinc-50 dark:border-zinc-500 dark:bg-zinc-900"
+                                : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
+                          }`}
                         >
-                          <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 font-medium text-zinc-900 dark:text-zinc-50">
-                            {n.title}
-                            {n.is_reused_concept === true ? (
-                              <span className="rounded bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
-                                이전에 본 개념
-                              </span>
-                            ) : n.is_reused_concept === false ? (
-                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-                                새 개념
+                          <button
+                            type="button"
+                            onClick={() => onSelectNode(n.id)}
+                            className="text-left"
+                          >
+                            <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 font-medium text-zinc-900 dark:text-zinc-50">
+                              {n.title}
+                              {n.is_reused_concept === true ? (
+                                <span className="rounded bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                                  이전에 본 개념
+                                </span>
+                              ) : n.is_reused_concept === false ? (
+                                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                                  새 개념
+                                </span>
+                              ) : null}
+                            </span>
+                            <p className="mt-1 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">
+                              {n.description}
+                            </p>
+                            {n.concept_tree_count != null &&
+                            n.concept_tree_count > 1 ? (
+                              <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">
+                                다른 학습 주제에서도 쓰인 개념 (총 {n.concept_tree_count}개 트리)
                               </span>
                             ) : null}
-                          </span>
-                          <p className="mt-1 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">
-                            {n.description}
-                          </p>
-                          {n.concept_tree_count != null &&
-                          n.concept_tree_count > 1 ? (
-                            <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">
-                              다른 학습 주제에서도 쓰인 개념 (총{" "}
-                              {n.concept_tree_count}개 트리)
-                            </span>
-                          ) : null}
-                          {highlighted ? (
-                            <span className="mt-1 inline-block text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                              추천
-                            </span>
-                          ) : null}
-                        </button>
-                        <label className="flex shrink-0 items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                          <span className="sr-only">이해 정도</span>
-                          <select
-                            value={n.progress}
-                            disabled={progressBusy === n.id}
-                            onChange={(e) =>
-                              void onProgressChange(
-                                n.id,
-                                e.target.value as ProgressStatus,
-                              )
-                            }
-                            onClick={(ev) => ev.stopPropagation()}
-                            className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 dark:border-zinc-600 dark:bg-zinc-900"
-                          >
-                            {(Object.keys(PROGRESS_LABEL) as ProgressStatus[]).map(
-                              (s) => (
-                                <option key={s} value={s}>
-                                  {PROGRESS_LABEL[s]}
-                                </option>
-                              ),
-                            )}
-                          </select>
-                        </label>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          );
-        })}
+                            {highlighted ? (
+                              <span className="mt-1 inline-block text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                                추천
+                              </span>
+                            ) : null}
+                          </button>
+                          <label className="flex shrink-0 items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                            <span className="sr-only">이해 정도</span>
+                            <select
+                              value={n.progress}
+                              disabled={progressBusy === n.id}
+                              onChange={(e) =>
+                                void onProgressChange(
+                                  n.id,
+                                  e.target.value as ProgressStatus,
+                                )
+                              }
+                              onClick={(ev) => ev.stopPropagation()}
+                              className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 dark:border-zinc-600 dark:bg-zinc-900"
+                            >
+                              {(Object.keys(PROGRESS_LABEL) as ProgressStatus[]).map(
+                                (s) => (
+                                  <option key={s} value={s}>
+                                    {PROGRESS_LABEL[s]}
+                                  </option>
+                                ),
+                              )}
+                            </select>
+                          </label>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            );
+          })
+        )}
       </div>
 
       <aside className="lg:w-[420px] lg:shrink-0 lg:border-l lg:border-zinc-200 lg:dark:border-zinc-800">
