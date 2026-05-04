@@ -32,12 +32,12 @@
 - [x] 01. [01-project-foundation.md](./01-project-foundation.md) - 프로젝트 기본 구조, 환경, 공통 타입 준비
 - [x] 02. [02-data-model-and-storage.md](./02-data-model-and-storage.md) - 학습 트리/노드/진행 상태 저장 모델 구현
 - [x] 03. [03-llm-prompts-and-schema.md](./03-llm-prompts-and-schema.md) - LLM 프롬프트, JSON 스키마, 파싱/검증 구현
-- [ ] 04. [04-tree-generation-api.md](./04-tree-generation-api.md) - 학습 트리 생성 API 구현
-- [ ] 05. [05-start-screen.md](./05-start-screen.md) - 주제 입력 시작 화면 구현
-- [ ] 06. [06-tree-result-screen.md](./06-tree-result-screen.md) - 트리 결과 화면과 노드 클릭 UX 구현
-- [ ] 07. [07-node-detail-flow.md](./07-node-detail-flow.md) - 노드 상세 설명 생성 API/UI 구현
-- [ ] 08. [08-progress-and-recommendations.md](./08-progress-and-recommendations.md) - 이해 상태 저장과 규칙 기반 추천 구현
-- [ ] 09. [09-saved-tree-retrieval.md](./09-saved-tree-retrieval.md) - 저장된 트리 조회와 상태 복원 구현
+- [x] 04. [04-tree-generation-api.md](./04-tree-generation-api.md) - 학습 트리 생성 API 구현
+- [x] 05. [05-start-screen.md](./05-start-screen.md) - 주제 입력 시작 화면 구현
+- [x] 06. [06-tree-result-screen.md](./06-tree-result-screen.md) - 트리 결과 화면과 노드 클릭 UX 구현
+- [x] 07. [07-node-detail-flow.md](./07-node-detail-flow.md) - 노드 상세 설명 생성 API/UI 구현
+- [x] 08. [08-progress-and-recommendations.md](./08-progress-and-recommendations.md) - 이해 상태 저장과 규칙 기반 추천 구현
+- [x] 09. [09-saved-tree-retrieval.md](./09-saved-tree-retrieval.md) - 저장된 트리 조회와 상태 복원 구현
 - [ ] 10. [10-quality-tests-and-polish.md](./10-quality-tests-and-polish.md) - 테스트 주제 검증, 품질 개선, MVP 완료 체크
 
 
