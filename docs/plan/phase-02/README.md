@@ -25,6 +25,22 @@ Phase 1에서 생성된 학습 트리 노드를 재사용 가능한 내부 개�
 | 9 | [09-node-detail-topic-context-ui.md](./09-node-detail-topic-context-ui.md) | Concept 기반 상세 패널·주제 맥락 UX | P1 |
 | 10 | [10-admin-and-phase2-quality-tests.md](./10-admin-and-phase2-quality-tests.md) | 최소 관리자 조회 화면, 병합 후보, 명세 테스트 케이스 | P2 |
 
+## 진행 체크리스트
+
+> 작업을 완료할 때마다 해당 항목을 `[x]`로 바꿔 진행 상황을 추적한다.
+
+- [ ] 01. [01-concept-schema-and-migrations.md](./01-concept-schema-and-migrations.md) - Concept 관련 DDL, Phase 1 `learning_nodes` 확장 마이그레이션
+- [ ] 02. [02-concept-repository-and-resolution.md](./02-concept-repository-and-resolution.md) - 저장소·검색(정규화 제목·alias·domain)·슬러그 규약
+- [ ] 03. [03-phase2-llm-schema-and-prompts.md](./03-phase2-llm-schema-and-prompts.md) - 트리 LLM 출력에 `concept_candidate`·간선 스키마, 프롬프트 확장
+- [ ] 04. [04-post-generation-concept-persistence.md](./04-post-generation-concept-persistence.md) - 생성 후 Concept 해석·연결·edge·`learning_tree_concepts` 영속 파이프라인
+- [ ] 05. [05-tree-generate-api-extension.md](./05-tree-generate-api-extension.md) - `POST /api/trees/generate` 확장 (`reuse_concepts`) 및 응답 필드
+- [ ] 06. [06-concepts-api.md](./06-concepts-api.md) - Concept CRUD 조회·간선·트리 참조 REST API
+- [ ] 07. [07-progress-recommendations-concept-layer.md](./07-progress-recommendations-concept-layer.md) - `user_concept_progress`, 추천 로직 확장, 상세 재사용 연동
+- [ ] 08. [08-tree-ui-concept-indicators.md](./08-tree-ui-concept-indicators.md) - 트리 화면에 신규/재사용·상태 표시
+- [ ] 09. [09-node-detail-topic-context-ui.md](./09-node-detail-topic-context-ui.md) - Concept 기반 상세 패널·주제 맥락 UX
+- [ ] 10. [10-admin-and-phase2-quality-tests.md](./10-admin-and-phase2-quality-tests.md) - 최소 관리자 조회 화면, 병합 후보, 명세 테스트 케이스
+
+
 ## Phase 2 범위 요약
 
 ### 포함
