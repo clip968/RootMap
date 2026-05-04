@@ -40,8 +40,10 @@ Phase 2.5 Tree View가 단순히 동작하는 수준을 넘어, 실제 학습 �
 
 - Tree View에 45%~100% zoom slider를 추가했다.
 - 기본 배율은 65%로 설정해 트리 전체 윤곽을 먼저 볼 수 있게 했다.
-- `한눈에` 버튼은 55%, `원본` 버튼은 100%로 즉시 전환한다.
+- `한눈에` 버튼은 55%, `원본` 버튼은 100%로 즉시 전환하며, `중앙` 버튼으로 트리 중앙에 다시 맞출 수 있다.
 - 축소 상태에서도 노드 클릭, 상세 패널, 진행 상태 select, 추천/Concept badge가 유지된다.
+- Tree View viewport에서 빈 공간을 마우스/터치로 드래그해 가로·세로 이동할 수 있게 했다.
+- 축소된 트리가 잘려 보이지 않도록 viewport 높이 제한, 내부 padding, 중앙 정렬 버튼을 추가했다.
 - 검증 명령:
   - `cd apps/web && npm run lint -- src/components/tree-page-client.tsx`
   - `cd apps/web && npm run build`

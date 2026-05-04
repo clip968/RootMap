@@ -10,7 +10,7 @@ import type {
 } from "@/types/learning";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const SECTION_ORDER: NodeType[] = [
   "prerequisite",
@@ -207,6 +207,15 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   const [reuseConcepts, setReuseConcepts] = useState(true);
   const [viewMode, setViewMode] = useState<TreeViewMode>("tree");
   const [treeScale, setTreeScale] = useState(0.65);
+  const treeViewportRef = useRef<HTMLDivElement | null>(null);
+  const dragStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    scrollLeft: number;
+    scrollTop: number;
+  } | null>(null);
+  const [isTreeDragging, setIsTreeDragging] = useState(false);
   const [progressBusy, setProgressBusy] = useState<string | null>(null);
 
   const loadTree = useCallback(async () => {
@@ -272,6 +281,61 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   }, [tree]);
 
   const scaledTreeWidth = `${100 / treeScale}%`;
+
+  const onTreePointerDown = (ev: React.PointerEvent<HTMLDivElement>) => {
+    const viewport = treeViewportRef.current;
+    if (!viewport) return;
+    if (ev.button !== 0) return;
+    const target = ev.target as HTMLElement;
+    if (target.closest("button, input, select, textarea, a, label")) return;
+
+    dragStateRef.current = {
+      pointerId: ev.pointerId,
+      startX: ev.clientX,
+      startY: ev.clientY,
+      scrollLeft: viewport.scrollLeft,
+      scrollTop: viewport.scrollTop,
+    };
+    viewport.setPointerCapture(ev.pointerId);
+    setIsTreeDragging(true);
+  };
+
+  const onTreePointerMove = (ev: React.PointerEvent<HTMLDivElement>) => {
+    const viewport = treeViewportRef.current;
+    const drag = dragStateRef.current;
+    if (!viewport || !drag || drag.pointerId !== ev.pointerId) return;
+
+    const deltaX = ev.clientX - drag.startX;
+    const deltaY = ev.clientY - drag.startY;
+    ev.preventDefault();
+    viewport.scrollLeft = drag.scrollLeft - deltaX;
+    viewport.scrollTop = drag.scrollTop - deltaY;
+  };
+
+  const endTreeDrag = (ev: React.PointerEvent<HTMLDivElement>) => {
+    const viewport = treeViewportRef.current;
+    const drag = dragStateRef.current;
+    if (!viewport || !drag || drag.pointerId !== ev.pointerId) return;
+
+    if (viewport.hasPointerCapture(ev.pointerId)) {
+      viewport.releasePointerCapture(ev.pointerId);
+    }
+    dragStateRef.current = null;
+    setIsTreeDragging(false);
+  };
+
+  const centerTreeViewport = () => {
+    const viewport = treeViewportRef.current;
+    if (!viewport) return;
+    viewport.scrollLeft = Math.max(0, (viewport.scrollWidth - viewport.clientWidth) / 2);
+    viewport.scrollTop = 0;
+  };
+
+  useEffect(() => {
+    if (viewMode !== "tree") return;
+    const frame = window.requestAnimationFrame(centerTreeViewport);
+    return () => window.cancelAnimationFrame(frame);
+  }, [treeScale, treeBranches.length, viewMode]);
 
   const loadDetail = useCallback(
     async (nodeId: string) => {
@@ -648,18 +712,35 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                 >
                   원본
                 </button>
+                <button
+                  type="button"
+                  onClick={centerTreeViewport}
+                  className="rounded-lg px-2 py-1 font-medium text-zinc-600 underline underline-offset-2 dark:text-zinc-300"
+                >
+                  중앙
+                </button>
                 <span className="tabular-nums text-zinc-500 dark:text-zinc-400">
                   {formatTreeScale(treeScale)}
                 </span>
               </div>
             </div>
-            <div className="overflow-auto pb-4">
+            <div
+              ref={treeViewportRef}
+              onPointerDown={onTreePointerDown}
+              onPointerMove={onTreePointerMove}
+              onPointerUp={endTreeDrag}
+              onPointerCancel={endTreeDrag}
+              className={`max-h-[72vh] touch-none overflow-auto rounded-xl border border-zinc-100 bg-zinc-50/40 pb-4 dark:border-zinc-900 dark:bg-zinc-950/30 ${
+                isTreeDragging ? "cursor-grabbing select-none" : "cursor-grab"
+              }`}
+            >
               <div
-                className="inline-flex min-w-full justify-center px-2 pt-2 transition-transform"
+                className="inline-flex min-w-full justify-center px-8 py-8 transition-transform"
                 style={{
                   transform: `scale(${treeScale})`,
                   transformOrigin: "top center",
                   width: scaledTreeWidth,
+                  minHeight: scaledTreeWidth,
                 }}
               >
                 <div className="flex flex-col items-center">
