@@ -1,7 +1,10 @@
 import { jsonError } from "@/lib/api-errors";
 import { DEFAULT_USER_ID } from "@/db/constants";
 import { recommendNextNodes } from "@/lib/recommendation/recommend-next";
-import { getLearningTree } from "@/lib/repository/learning-repository";
+import {
+  getConceptProgressMapForUser,
+  getLearningTree,
+} from "@/lib/repository/learning-repository";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -32,6 +35,13 @@ export async function GET(_req: Request, ctx: Ctx) {
     bundle.progress.map((p) => [p.node_id, p.status]),
   );
 
-  const recommended_nodes = recommendNextNodes(inputs, progressMap);
+  const recommended_nodes = recommendNextNodes(inputs, progressMap, {
+    nodeConceptIds: new Map(
+      bundle.nodes
+        .filter((n) => n.conceptId != null)
+        .map((n) => [n.id, n.conceptId!]),
+    ),
+    conceptProgress: getConceptProgressMapForUser(DEFAULT_USER_ID),
+  });
   return NextResponse.json({ recommended_nodes });
 }

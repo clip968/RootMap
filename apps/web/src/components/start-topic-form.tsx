@@ -15,6 +15,7 @@ const EXAMPLE_TOPICS = [
 export function StartTopicForm() {
   const router = useRouter();
   const [topic, setTopic] = useState("");
+  const [reuseConcepts, setReuseConcepts] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,7 +31,7 @@ export function StartTopicForm() {
       const res = await fetch("/api/trees/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: t }),
+        body: JSON.stringify({ topic: t, reuse_concepts: reuseConcepts }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -85,6 +86,23 @@ export function StartTopicForm() {
         {error ? (
           <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
         ) : null}
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-left dark:border-zinc-700 dark:bg-zinc-900/50">
+          <input
+            type="checkbox"
+            checked={reuseConcepts}
+            onChange={(e) => setReuseConcepts(e.target.checked)}
+            className="mt-1 h-4 w-4 rounded border-zinc-400 text-emerald-700"
+          />
+          <span className="text-sm text-zinc-700 dark:text-zinc-300">
+            <span className="font-medium text-zinc-900 dark:text-zinc-100">
+              저장된 개념 재사용
+            </span>
+            <span className="mt-0.5 block text-xs text-zinc-500">
+              켜 두면 이전에 만든 Concept과 연결해 중복을 줄입니다. 끄면 항상
+              새 Concept을 만듭니다.
+            </span>
+          </span>
+        </label>
       </div>
 
       <button

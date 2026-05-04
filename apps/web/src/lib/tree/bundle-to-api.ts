@@ -27,6 +27,12 @@ export function bundleToApiTreeResponse(
     children: n.children,
     has_detail: n.detailJson != null,
     progress: progressByNode.get(n.id) ?? "unknown",
+    concept_id: n.conceptId,
+    is_reused_concept: n.isReusedConcept,
+    concept_tree_count:
+      n.conceptId != null ?
+        (bundle.conceptTreeCounts.get(n.conceptId) ?? 1)
+      : null,
   }));
 
   return {

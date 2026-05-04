@@ -10,22 +10,40 @@ export interface RecommendNodeInput {
   prerequisites: string[];
 }
 
+export interface RecommendNextOptions {
+  nodeConceptIds?: Map<string, string>;
+  conceptProgress?: Map<string, ProgressStatus>;
+}
+
 function byDifficultyAsc(a: RecommendNodeInput, b: RecommendNodeInput): number {
   return a.difficulty - b.difficulty;
 }
 
 /**
  * 명세 §8 규칙 기반 추천 (supplementary는 우선순위에 없어 후순위로만 포함)
+ * Phase 2: 노드가 unknown이면 같은 Concept의 타 트리 진행을 추론에 반영한다.
  */
 export function recommendNextNodes(
   nodes: RecommendNodeInput[],
   progressByNodeId: Map<string, ProgressStatus>,
+  opts?: RecommendNextOptions,
 ): ApiRecommendationItem[] {
+  const conceptProgress = opts?.conceptProgress;
+  const nodeConceptIds = opts?.nodeConceptIds;
+
+  function effectiveStatus(nodeId: string): ProgressStatus {
+    const direct = progressByNodeId.get(nodeId) ?? "unknown";
+    if (direct !== "unknown") return direct;
+    const cid = nodeConceptIds?.get(nodeId);
+    if (cid == null) return "unknown";
+    return conceptProgress?.get(cid) ?? "unknown";
+  }
+
   const keyToId = Object.fromEntries(nodes.map((n) => [n.node_key, n.id]));
 
   function statusForKey(key: string): ProgressStatus {
     const id = keyToId[key];
-    return id ? (progressByNodeId.get(id) ?? "unknown") : "unknown";
+    return id ? effectiveStatus(id) : "unknown";
   }
 
   function prereqsAllKnown(keys: string[]): boolean {
@@ -44,7 +62,7 @@ export function recommendNextNodes(
   }
 
   const preUnk = nodes.filter(
-    (n) => n.type === "prerequisite" && progressByNodeId.get(n.id) === "unknown",
+    (n) => n.type === "prerequisite" && effectiveStatus(n.id) === "unknown",
   );
   if (preUnk.length) {
     return mapReason(
@@ -55,7 +73,7 @@ export function recommendNextNodes(
 
   const prePart = nodes.filter(
     (n) =>
-      n.type === "prerequisite" && progressByNodeId.get(n.id) === "partial",
+      n.type === "prerequisite" && effectiveStatus(n.id) === "partial",
   );
   if (prePart.length) {
     return mapReason(
@@ -65,7 +83,7 @@ export function recommendNextNodes(
   }
 
   const coreCand = nodes.filter(
-    (n) => n.type === "core" && progressByNodeId.get(n.id) === "unknown",
+    (n) => n.type === "core" && effectiveStatus(n.id) === "unknown",
   );
   const coreReady = coreCand.filter((n) => prereqsAllKnown(n.prerequisites));
   if (coreReady.length) {
@@ -78,7 +96,7 @@ export function recommendNextNodes(
 
   const supUnk = nodes.filter(
     (n) =>
-      n.type === "supplementary" && progressByNodeId.get(n.id) === "unknown",
+      n.type === "supplementary" && effectiveStatus(n.id) === "unknown",
   );
   if (supUnk.length && coreCand.length === 0) {
     return mapReason(
@@ -88,15 +106,15 @@ export function recommendNextNodes(
   }
 
   const coreKnown = nodes.some(
-    (n) => n.type === "core" && progressByNodeId.get(n.id) === "known",
+    (n) => n.type === "core" && effectiveStatus(n.id) === "known",
   );
   const noCoreUnknown = !nodes.some(
-    (n) => n.type === "core" && progressByNodeId.get(n.id) === "unknown",
+    (n) => n.type === "core" && effectiveStatus(n.id) === "unknown",
   );
   const mis = nodes.filter(
     (n) =>
       n.type === "misconception" &&
-      progressByNodeId.get(n.id) === "unknown" &&
+      effectiveStatus(n.id) === "unknown" &&
       (coreKnown || noCoreUnknown),
   );
   if (mis.length) {
@@ -107,7 +125,7 @@ export function recommendNextNodes(
   }
 
   const quiz = nodes.filter(
-    (n) => n.type === "quiz" && progressByNodeId.get(n.id) === "unknown",
+    (n) => n.type === "quiz" && effectiveStatus(n.id) === "unknown",
   );
   if (quiz.length) {
     return mapReason(

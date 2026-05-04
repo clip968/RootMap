@@ -6,6 +6,13 @@ import * as schema from "./schema";
 
 export type RootMapDb = ReturnType<typeof drizzle<typeof schema>>;
 
+/** 트랜잭션 콜백 인자 — `RootMapDb`와 동일한 질의 API */
+export type RootMapTx = Parameters<
+  Parameters<RootMapDb["transaction"]>[0]
+>[0];
+
+export type RootMapDbClient = RootMapDb | RootMapTx;
+
 const globalForDb = globalThis as unknown as {
   rootmapSqlite?: Database.Database;
   rootmapDb?: RootMapDb;

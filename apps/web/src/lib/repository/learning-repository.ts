@@ -1,7 +1,18 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { DEFAULT_USER_ID } from "@/db/constants";
-import { learningNodes, learningTrees, userNodeProgress } from "@/db/schema";
+import {
+  getConceptById,
+  updateConceptPatch,
+} from "@/lib/repository/concept-repository";
+import { persistPhase2Concepts } from "@/lib/services/concept-persistence";
+import {
+  learningNodes,
+  learningTreeConcepts,
+  learningTrees,
+  userConceptProgress,
+  userNodeProgress,
+} from "@/db/schema";
 import type {
   ApiProgressEntry,
   LearningTreeNode,
@@ -34,6 +45,8 @@ export interface LearningNodeRow {
   prerequisites: string[];
   children: string[];
   detailJson: NodeDetailResponse | null;
+  conceptId: string | null;
+  isReusedConcept: boolean | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -42,6 +55,8 @@ export interface LearningTreeBundle {
   tree: LearningTreeRow;
   nodes: LearningNodeRow[];
   progress: ApiProgressEntry[];
+  /** concept id -> 서로 다른 학습 트리 개수 */
+  conceptTreeCounts: Map<string, number>;
 }
 
 function mapTreeRow(row: typeof learningTrees.$inferSelect): LearningTreeRow {
@@ -68,9 +83,30 @@ function mapNodeRow(row: typeof learningNodes.$inferSelect): LearningNodeRow {
     prerequisites: row.prerequisites,
     children: row.children,
     detailJson: row.detailJson ?? null,
+    conceptId: row.conceptId ?? null,
+    isReusedConcept: row.isReusedConcept ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+export function getConceptTreeUsageCounts(
+  conceptIds: string[],
+): Map<string, number> {
+  if (conceptIds.length === 0) return new Map();
+  const db = getDb();
+  const rows = db
+    .select({
+      cid: learningTreeConcepts.conceptId,
+      n: sql<number>`count(distinct ${learningTreeConcepts.treeId})`.mapWith(
+        Number,
+      ),
+    })
+    .from(learningTreeConcepts)
+    .where(inArray(learningTreeConcepts.conceptId, conceptIds))
+    .groupBy(learningTreeConcepts.conceptId)
+    .all();
+  return new Map(rows.map((r) => [r.cid, r.n]));
 }
 
 export function createLearningTree(
@@ -100,17 +136,23 @@ export function createLearningTree(
   return row.id;
 }
 
+export interface FullTreeOptions {
+  reuseConcepts?: boolean;
+}
+
 /**
- * 트리·노드·진행 초기화를 한 트랜잭션으로 저장한다. (생성 API용)
+ * 트리·노드·진행·Phase 2 Concept 연결을 한 트랜잭션으로 저장한다.
  */
 export function createFullLearningTree(
   topic: string,
   summary: string | null,
   treeJson: LearningTreeResponse,
   userId: string = DEFAULT_USER_ID,
+  options?: FullTreeOptions,
 ): string {
   const db = getDb();
   const now = new Date().toISOString();
+  const reuseConcepts = options?.reuseConcepts ?? true;
   return db.transaction((tx) => {
     const tr = tx
       .insert(learningTrees)
@@ -127,6 +169,7 @@ export function createFullLearningTree(
     const treeId = tr[0]?.id;
     if (!treeId) throw new Error("learning_trees insert failed");
 
+    const nodeKeyToDbId = new Map<string, string>();
     const nodeIds: string[] = [];
     for (const n of treeJson.nodes) {
       const nr = tx
@@ -147,6 +190,7 @@ export function createFullLearningTree(
         .all();
       const nid = nr[0]?.id;
       if (!nid) throw new Error("learning_nodes insert failed");
+      nodeKeyToDbId.set(n.id, nid);
       nodeIds.push(nid);
     }
 
@@ -163,6 +207,13 @@ export function createFullLearningTree(
         )
         .run();
     }
+
+    persistPhase2Concepts(tx, {
+      treeId,
+      tree: treeJson,
+      nodeKeyToDbId,
+      reuseConcepts,
+    });
 
     return treeId;
   });
@@ -249,11 +300,16 @@ export function getLearningTree(
     .all();
 
   const progress = getProgressByTree(userId, treeId);
+  const mapped = nodeRows.map(mapNodeRow);
+  const cids = mapped
+    .map((n) => n.conceptId)
+    .filter((x): x is string => x != null);
 
   return {
     tree: mapTreeRow(treeRow),
-    nodes: nodeRows.map(mapNodeRow),
+    nodes: mapped,
     progress,
+    conceptTreeCounts: getConceptTreeUsageCounts(cids),
   };
 }
 
@@ -280,7 +336,23 @@ export function saveNodeDetail(
     .set({ detailJson, updatedAt: now })
     .where(eq(learningNodes.id, nodeId))
     .run();
-  return result.changes > 0;
+  if (result.changes === 0) return false;
+
+  const nodeRow = db
+    .select({ conceptId: learningNodes.conceptId })
+    .from(learningNodes)
+    .where(eq(learningNodes.id, nodeId))
+    .all()[0];
+  const cid = nodeRow?.conceptId;
+  if (cid && detailJson.easy_explanation?.trim()) {
+    const concept = getConceptById(db, cid);
+    if (concept && !concept.explanation?.trim()) {
+      updateConceptPatch(db, cid, {
+        explanation: detailJson.easy_explanation.trim(),
+      });
+    }
+  }
+  return true;
 }
 
 export function updateNodeProgress(
@@ -301,6 +373,39 @@ export function updateNodeProgress(
     )
     .run();
   return result.changes > 0;
+}
+
+export function upsertUserConceptProgress(
+  userId: string,
+  conceptId: string,
+  status: ProgressStatus,
+): void {
+  const db = getDb();
+  const now = new Date().toISOString();
+  db.insert(userConceptProgress)
+    .values({
+      userId,
+      conceptId,
+      status,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [userConceptProgress.userId, userConceptProgress.conceptId],
+      set: { status, updatedAt: now },
+    })
+    .run();
+}
+
+export function getConceptProgressMapForUser(
+  userId: string,
+): Map<string, ProgressStatus> {
+  const db = getDb();
+  const rows = db
+    .select()
+    .from(userConceptProgress)
+    .where(eq(userConceptProgress.userId, userId))
+    .all();
+  return new Map(rows.map((r) => [r.conceptId, r.status as ProgressStatus]));
 }
 
 /** 진행 행이 없으면 INSERT, 있으면 UPDATE (PATCH API용) */

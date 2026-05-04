@@ -4,6 +4,7 @@ import {
   getLearningTree,
   getNodeById,
   upsertNodeProgress,
+  upsertUserConceptProgress,
 } from "@/lib/repository/learning-repository";
 import { NextResponse } from "next/server";
 import { z } from "zod/v3";
@@ -59,6 +60,13 @@ export async function PATCH(req: Request, ctx: Ctx) {
     nodeId,
     parsed.data.status,
   );
+  if (node.conceptId) {
+    upsertUserConceptProgress(
+      DEFAULT_USER_ID,
+      node.conceptId,
+      parsed.data.status,
+    );
+  }
 
   return NextResponse.json({
     node_id: nodeId,

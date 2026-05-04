@@ -1,6 +1,11 @@
 import { InvalidTopicError } from "@/lib/llm/errors";
 import { generateLearningTree } from "@/lib/llm/generate-tree";
 import { MAX_TOPIC_LENGTH } from "@/lib/constants/limits";
+import { getDb } from "@/db/client";
+import {
+  formatConceptsForPrompt,
+  searchConceptsForPromptContext,
+} from "@/lib/repository/concept-repository";
 import {
   DEFAULT_USER_ID,
   createFullLearningTree,
@@ -31,11 +36,29 @@ export function validateTopicInput(topic: unknown): string {
   return t;
 }
 
-export async function generateAndPersistTree(rawTopic: unknown): Promise<
+export interface GenerateAndPersistOptions {
+  /** 기본 true — 기존 Concept 재사용 */
+  reuseConcepts?: boolean;
+}
+
+export async function generateAndPersistTree(
+  rawTopic: unknown,
+  options?: GenerateAndPersistOptions,
+): Promise<
   ReturnType<typeof bundleToApiTreeResponse> & { quality_warnings: string[] }
 > {
   const topic = validateTopicInput(rawTopic);
-  const { tree: llmTree, qualityWarnings } = await generateLearningTree(topic);
+  const reuseConcepts = options?.reuseConcepts ?? true;
+
+  const db = getDb();
+  const storeContext = reuseConcepts
+    ? formatConceptsForPrompt(searchConceptsForPromptContext(db, topic, 24))
+    : undefined;
+
+  const { tree: llmTree, qualityWarnings } = await generateLearningTree(topic, {
+    reuseConcepts,
+    storeContext,
+  });
 
   let treeId: string;
   try {
@@ -44,6 +67,7 @@ export async function generateAndPersistTree(rawTopic: unknown): Promise<
       llmTree.summary ?? null,
       llmTree,
       DEFAULT_USER_ID,
+      { reuseConcepts },
     );
   } catch {
     throw new TreePersistError();

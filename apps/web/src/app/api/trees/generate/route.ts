@@ -38,8 +38,18 @@ export async function POST(req: Request) {
   }
 
   try {
+    const reuseConcepts =
+      body &&
+      typeof body === "object" &&
+      "reuse_concepts" in body &&
+      typeof (body as { reuse_concepts: unknown }).reuse_concepts ===
+        "boolean" ?
+        (body as { reuse_concepts: boolean }).reuse_concepts
+      : true;
+
     const data = await generateAndPersistTree(
       (body as { topic: unknown }).topic,
+      { reuseConcepts },
     );
     return NextResponse.json(data);
   } catch (e) {

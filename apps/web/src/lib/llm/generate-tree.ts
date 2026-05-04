@@ -27,23 +27,36 @@ export interface GenerateLearningTreeResult {
   qualityWarnings: string[];
 }
 
+export interface GenerateLearningTreeOptions {
+  reuseConcepts?: boolean;
+  /** `reuseConcepts`가 true일 때만 사용자 메시지에 포함 */
+  storeContext?: string;
+}
+
 /**
  * 주제로 학습 트리 JSON을 생성·검증한다. 파싱/스키마 실패 시 최대 3회 재시도.
  */
 export async function generateLearningTree(
   topic: string,
+  options?: GenerateLearningTreeOptions,
 ): Promise<GenerateLearningTreeResult> {
   const trimmed = topic.trim();
   if (!trimmed) {
     throw new InvalidTopicError();
   }
 
+  const storeContext =
+    options?.reuseConcepts === false ? undefined : options?.storeContext;
+
   let lastError: unknown;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
       const { rawText } = await createChatCompletion([
         { role: "system", content: LEARNING_TREE_SYSTEM_PROMPT },
-        { role: "user", content: buildLearningTreeUserMessage(trimmed) },
+        {
+          role: "user",
+          content: buildLearningTreeUserMessage(trimmed, storeContext),
+        },
       ]);
       const tree = parseLearningTreeResponse(rawText);
       const qualityWarnings = learningTreeQualityWarnings(tree, trimmed);

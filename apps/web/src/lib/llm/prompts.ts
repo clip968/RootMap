@@ -1,12 +1,13 @@
 /**
- * Phase 1 명세 §6 학습 트리 생성 프롬프트
+ * Phase 2: Concept 후보·간선을 포함한 학습 트리 생성 프롬프트 (명세 §12·§13.1)
  */
 export const LEARNING_TREE_SYSTEM_PROMPT = `You are an AI learning path designer.
 
 Your task is not to directly explain the topic first.
 Instead, decompose the topic into a prerequisite-aware learning tree.
+You also propose reusable Concept candidates per node and concept-level edges.
 
-Classify concepts into the following categories:
+Classify concepts into the following categories (same as learning node type):
 1. prerequisite: concepts the learner should understand before the main topic
 2. core: concepts that directly constitute the main topic
 3. supplementary: useful background or extension concepts
@@ -30,7 +31,12 @@ Requirements:
 - For established English technical terms, prefer Korean-first titles with the original term in parentheses, e.g. "소유권 (Ownership)".
 - Keep node ids machine-readable in lowercase ASCII snake_case.
 - Keep type values exactly as specified in the schema.
-- Use node ids, not titles, in prerequisites, children, and recommended_order.
+- Use node ids, not titles, in prerequisites, children, recommended_order, and edges.from / edges.to.
+- For each node, fill concept_candidate with canonical_title (English technical label is fine), useful aliases in Korean/English, optional domain string, and short_description aligned with the description.
+- Set concept_candidate.is_reusable true for concepts that could appear in other learning topics.
+- Add edges[] for key concept relationships not already implied only by prerequisites (relation_type: prerequisite | part_of | related | misconception_of | example_of | application_of). Use prerequisite when from must be learned before to.
+
+If the user message lists "Known concepts in store", prefer reusing those titles/aliases when they clearly match a node instead of inventing near-duplicate canonical titles.
 
 JSON schema:
 {
@@ -44,16 +50,38 @@ JSON schema:
       "description": string,
       "difficulty": number,
       "prerequisites": string[],
-      "children": string[]
+      "children": string[],
+      "concept_candidate": {
+        "canonical_title": string,
+        "aliases": string[],
+        "domain": string | null,
+        "short_description": string,
+        "is_reusable": boolean
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": string,
+      "to": string,
+      "relation_type": "prerequisite" | "part_of" | "related" | "misconception_of" | "example_of" | "application_of",
+      "reason": string
     }
   ],
   "recommended_order": string[]
 }`;
 
-export function buildLearningTreeUserMessage(topic: string): string {
+export function buildLearningTreeUserMessage(
+  topic: string,
+  storeContext?: string,
+): string {
+  const ctx =
+    storeContext?.trim() ?
+      `\n\nKnown concepts in store (prefer reusing when they clearly match a node):\n${storeContext}\n`
+    : "";
   return `The user wants to learn the following topic:
 ${topic}
-
+${ctx}
 The app UI language is Korean. Return Korean learner-facing content, while preserving established technical terms in parentheses when helpful.
 
 Return only a single JSON object matching the schema above.`;

@@ -49,6 +49,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   const [detailError, setDetailError] = useState<string | null>(null);
 
   const [regenLoading, setRegenLoading] = useState(false);
+  const [reuseConcepts, setReuseConcepts] = useState(true);
   const [progressBusy, setProgressBusy] = useState<string | null>(null);
 
   const loadTree = useCallback(async () => {
@@ -194,7 +195,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
       const res = await fetch("/api/trees/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: tree.topic }),
+        body: JSON.stringify({ topic: tree.topic, reuse_concepts: reuseConcepts }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -241,6 +242,15 @@ export function TreePageClient({ treeId }: { treeId: string }) {
           </h1>
           <p className="text-zinc-600 dark:text-zinc-400">{tree.summary}</p>
           <div className="flex flex-wrap gap-2 pt-2">
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs text-zinc-700 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200">
+              <input
+                type="checkbox"
+                checked={reuseConcepts}
+                onChange={(e) => setReuseConcepts(e.target.checked)}
+                className="rounded border-zinc-400"
+              />
+              개념 재사용
+            </label>
             <button
               type="button"
               onClick={() => void onRegenerate()}
@@ -318,12 +328,28 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                           onClick={() => onSelectNode(n.id)}
                           className="text-left"
                         >
-                          <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                          <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 font-medium text-zinc-900 dark:text-zinc-50">
                             {n.title}
+                            {n.is_reused_concept === true ? (
+                              <span className="rounded bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                                이전에 본 개념
+                              </span>
+                            ) : n.is_reused_concept === false ? (
+                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                                새 개념
+                              </span>
+                            ) : null}
                           </span>
                           <p className="mt-1 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">
                             {n.description}
                           </p>
+                          {n.concept_tree_count != null &&
+                          n.concept_tree_count > 1 ? (
+                            <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">
+                              다른 학습 주제에서도 쓰인 개념 (총{" "}
+                              {n.concept_tree_count}개 트리)
+                            </span>
+                          ) : null}
                           {highlighted ? (
                             <span className="mt-1 inline-block text-xs font-medium text-emerald-700 dark:text-emerald-400">
                               추천
@@ -401,6 +427,16 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                   ))}
                 </ul>
               ) : null}
+              {detail.topic_context_line ? (
+                <p className="rounded-lg bg-zinc-100 px-3 py-2 text-xs leading-relaxed text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                  {detail.topic_context_line}
+                </p>
+              ) : null}
+              {detail.from_concept_store ? (
+                <p className="text-xs font-medium text-emerald-800 dark:text-emerald-200">
+                  Concept 저장소의 설명을 바탕으로 보여 줍니다.
+                </p>
+              ) : null}
               <section>
                 <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
                   왜 중요한가
@@ -422,7 +458,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                   비유
                 </h3>
                 <p className="mt-1 text-zinc-700 dark:text-zinc-300">
-                  {detail.analogy}
+                  {detail.analogy || "—"}
                 </p>
               </section>
               <section>
@@ -447,6 +483,9 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                 <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
                   이해 점검
                 </h3>
+                {detail.check_questions.length === 0 ? (
+                  <p className="mt-1 text-xs text-zinc-500">항목 없음</p>
+                ) : (
                 <ul className="mt-2 space-y-3">
                   {detail.check_questions.map((q, i) => (
                     <li
@@ -462,7 +501,52 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                     </li>
                   ))}
                 </ul>
+                )}
               </section>
+              {detail.prerequisite_concepts &&
+              detail.prerequisite_concepts.length > 0 ? (
+                <section>
+                  <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
+                    선수 개념 (저장소)
+                  </h3>
+                  <ul className="mt-1 list-inside list-disc text-zinc-700 dark:text-zinc-300">
+                    {detail.prerequisite_concepts.map((p) => (
+                      <li key={p.id}>{p.title}</li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+              {detail.related_concepts && detail.related_concepts.length > 0 ? (
+                <section>
+                  <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
+                    관련 개념
+                  </h3>
+                  <ul className="mt-1 list-inside list-disc text-zinc-700 dark:text-zinc-300">
+                    {detail.related_concepts.map((p) => (
+                      <li key={p.id}>{p.title}</li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+              {detail.used_in_other_trees &&
+              detail.used_in_other_trees.length > 0 ? (
+                <section>
+                  <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
+                    다른 학습 주제에서의 사용
+                  </h3>
+                  <ul className="mt-1 space-y-1 text-zinc-700 dark:text-zinc-300">
+                    {detail.used_in_other_trees.map((t) => (
+                      <li key={t.tree_id} className="text-xs">
+                        <span className="font-medium">{t.topic}</span>
+                        <span className="text-zinc-500">
+                          {" "}
+                          — {t.role_in_tree}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
               {detail.next_nodes.length > 0 ? (
                 <section>
                   <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">

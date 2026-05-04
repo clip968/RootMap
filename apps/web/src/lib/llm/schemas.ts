@@ -9,6 +9,30 @@ const nodeTypeSchema = z.enum([
   "quiz",
 ]);
 
+const conceptRelationSchema = z.enum([
+  "prerequisite",
+  "part_of",
+  "related",
+  "misconception_of",
+  "example_of",
+  "application_of",
+]);
+
+export const conceptCandidateSchema = z.object({
+  canonical_title: z.string().min(1),
+  aliases: z.array(z.string()).default([]),
+  domain: z.string().nullable().optional(),
+  short_description: z.string().optional().default(""),
+  is_reusable: z.boolean().optional().default(true),
+});
+
+export const llmConceptEdgeSchema = z.object({
+  from: z.string().min(1),
+  to: z.string().min(1),
+  relation_type: conceptRelationSchema,
+  reason: z.string().optional(),
+});
+
 export const learningTreeNodeSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
@@ -17,6 +41,7 @@ export const learningTreeNodeSchema = z.object({
   difficulty: z.number().finite(),
   prerequisites: z.array(z.string()),
   children: z.array(z.string()),
+  concept_candidate: conceptCandidateSchema.optional(),
 });
 
 export const learningTreeResponseSchema = z
@@ -25,6 +50,7 @@ export const learningTreeResponseSchema = z
     summary: z.string(),
     nodes: z.array(learningTreeNodeSchema),
     recommended_order: z.array(z.string()),
+    edges: z.array(llmConceptEdgeSchema).optional(),
   })
   .superRefine((data, ctx) => {
     const ids = new Set<string>();
@@ -75,7 +101,53 @@ export const learningTreeResponseSchema = z
         });
       }
     }
-  });
+
+    const edges = data.edges ?? [];
+    for (let i = 0; i < edges.length; i++) {
+      const e = edges[i]!;
+      if (!ids.has(e.from)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `edges[${i}].from이 노드 id에 없습니다: ${e.from}`,
+          path: ["edges", i, "from"],
+        });
+      }
+      if (!ids.has(e.to)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `edges[${i}].to가 노드 id에 없습니다: ${e.to}`,
+          path: ["edges", i, "to"],
+        });
+      }
+    }
+  })
+  .transform((data): LearningTreeResponse => ({
+    ...data,
+    edges: data.edges ?? [],
+    nodes: data.nodes.map((node) => {
+      const cc =
+        node.concept_candidate ?
+          {
+            canonical_title: node.concept_candidate.canonical_title,
+            aliases: node.concept_candidate.aliases ?? [],
+            domain: node.concept_candidate.domain ?? null,
+            short_description:
+              node.concept_candidate.short_description ?? "",
+            is_reusable: node.concept_candidate.is_reusable ?? true,
+          }
+        : {
+            canonical_title: node.title,
+            aliases: [] as string[],
+            domain: null as string | null,
+            short_description: node.description,
+            is_reusable: true,
+          };
+      return {
+        ...node,
+        concept_candidate: cc,
+      };
+    }),
+  }));
 
 export const nodeDetailQuestionSchema = z.object({
   question: z.string().min(1),
