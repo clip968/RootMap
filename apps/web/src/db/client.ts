@@ -17,7 +17,9 @@ function resolveSqliteFilePath(): string {
     throw new Error("DATABASE_URL는 SQLite용 file: URL이어야 합니다.");
   }
   const raw = url.slice("file:".length);
-  return path.isAbsolute(raw) ? raw : path.join(process.cwd(), raw);
+  return path.isAbsolute(raw)
+    ? raw
+    : path.join(/* turbopackIgnore: true */ process.cwd(), raw);
 }
 
 export function getDb(): RootMapDb {

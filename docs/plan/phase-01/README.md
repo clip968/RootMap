@@ -38,7 +38,7 @@
 - [x] 07. [07-node-detail-flow.md](./07-node-detail-flow.md) - 노드 상세 설명 생성 API/UI 구현
 - [x] 08. [08-progress-and-recommendations.md](./08-progress-and-recommendations.md) - 이해 상태 저장과 규칙 기반 추천 구현
 - [x] 09. [09-saved-tree-retrieval.md](./09-saved-tree-retrieval.md) - 저장된 트리 조회와 상태 복원 구현
-- [ ] 10. [10-quality-tests-and-polish.md](./10-quality-tests-and-polish.md) - 테스트 주제 검증, 품질 개선, MVP 완료 체크
+- [x] 10. [10-quality-tests-and-polish.md](./10-quality-tests-and-polish.md) - 테스트 주제 검증, 품질 개선, MVP 완료 체크
 
 
 ## MVP 범위

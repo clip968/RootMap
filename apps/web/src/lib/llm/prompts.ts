@@ -21,6 +21,11 @@ Requirements:
 - Return valid JSON only.
 - Do not include markdown outside JSON.
 - Do not wrap the JSON in code fences.
+- Generate 8 to 20 nodes total.
+- Include at least 3 prerequisite nodes, 3 core nodes, 1 misconception node, and 2 quiz nodes.
+- Put prerequisite nodes before core nodes in recommended_order whenever possible.
+- Ensure every prerequisite id appears earlier than the node that depends on it in recommended_order.
+- Include the essential concepts a beginner would expect for the requested topic.
 
 JSON schema:
 {
@@ -65,6 +70,9 @@ Requirements:
 - Return valid JSON only.
 - Do not include markdown outside JSON.
 - Do not wrap the JSON in code fences.
+- Include at least one common misconception.
+- Include 1 to 3 short check questions with answers.
+- Keep easy_explanation, example, and check_questions concrete enough for a beginner to self-check.
 
 JSON schema:
 {
