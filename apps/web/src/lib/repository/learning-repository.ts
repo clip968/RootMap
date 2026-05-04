@@ -100,6 +100,74 @@ export function createLearningTree(
   return row.id;
 }
 
+/**
+ * 트리·노드·진행 초기화를 한 트랜잭션으로 저장한다. (생성 API용)
+ */
+export function createFullLearningTree(
+  topic: string,
+  summary: string | null,
+  treeJson: LearningTreeResponse,
+  userId: string = DEFAULT_USER_ID,
+): string {
+  const db = getDb();
+  const now = new Date().toISOString();
+  return db.transaction((tx) => {
+    const tr = tx
+      .insert(learningTrees)
+      .values({
+        userId,
+        topic,
+        summary,
+        treeJson,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning({ id: learningTrees.id })
+      .all();
+    const treeId = tr[0]?.id;
+    if (!treeId) throw new Error("learning_trees insert failed");
+
+    const nodeIds: string[] = [];
+    for (const n of treeJson.nodes) {
+      const nr = tx
+        .insert(learningNodes)
+        .values({
+          treeId,
+          nodeKey: n.id,
+          title: n.title,
+          type: n.type,
+          description: n.description,
+          difficulty: n.difficulty,
+          prerequisites: n.prerequisites,
+          children: n.children,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning({ id: learningNodes.id })
+        .all();
+      const nid = nr[0]?.id;
+      if (!nid) throw new Error("learning_nodes insert failed");
+      nodeIds.push(nid);
+    }
+
+    if (nodeIds.length > 0) {
+      tx.insert(userNodeProgress)
+        .values(
+          nodeIds.map((nodeId) => ({
+            userId,
+            treeId,
+            nodeId,
+            status: "unknown" as const,
+            updatedAt: now,
+          })),
+        )
+        .run();
+    }
+
+    return treeId;
+  });
+}
+
 export function createLearningNodes(
   treeId: string,
   nodes: LearningTreeNode[],
@@ -233,6 +301,30 @@ export function updateNodeProgress(
     )
     .run();
   return result.changes > 0;
+}
+
+/** 진행 행이 없으면 INSERT, 있으면 UPDATE (PATCH API용) */
+export function upsertNodeProgress(
+  userId: string,
+  treeId: string,
+  nodeId: string,
+  status: ProgressStatus,
+): void {
+  const db = getDb();
+  const now = new Date().toISOString();
+  db.insert(userNodeProgress)
+    .values({
+      userId,
+      treeId,
+      nodeId,
+      status,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [userNodeProgress.userId, userNodeProgress.nodeId],
+      set: { status, updatedAt: now, treeId },
+    })
+    .run();
 }
 
 export function getProgressByTree(
