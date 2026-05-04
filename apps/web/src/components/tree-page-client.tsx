@@ -34,7 +34,7 @@ const PROGRESS_LABEL: Record<ProgressStatus, string> = {
   unknown: "모른다",
 };
 
-const MIN_TREE_SCALE = 0.45;
+const MIN_TREE_SCALE = 0.2;
 const MAX_TREE_SCALE = 1;
 const TREE_SCALE_STEP = 0.05;
 
@@ -206,7 +206,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   const [regenLoading, setRegenLoading] = useState(false);
   const [reuseConcepts, setReuseConcepts] = useState(true);
   const [viewMode, setViewMode] = useState<TreeViewMode>("tree");
-  const [treeScale, setTreeScale] = useState(0.65);
+  const [treeScale, setTreeScale] = useState(0.55);
   const treeViewportRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<{
     pointerId: number;
@@ -279,6 +279,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   }, [tree]);
 
   const scaledTreeWidth = `${100 / treeScale}%`;
+  const scaledTreeMinHeight = `max(100%, ${100 / treeScale}%)`;
 
   const onTreePointerDown = (ev: React.PointerEvent<HTMLDivElement>) => {
     const viewport = treeViewportRef.current;
@@ -319,11 +320,6 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     setIsTreeDragging(false);
   };
 
-  const onTreeWheel = (ev: React.WheelEvent<HTMLDivElement>) => {
-    ev.preventDefault();
-    const direction = ev.deltaY > 0 ? -1 : 1;
-    setTreeScale((s) => clampTreeScale(s + direction * TREE_SCALE_STEP));
-  };
 
   const centerTreeViewport = () => {
     const viewport = treeViewportRef.current;
@@ -337,6 +333,22 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     const frame = window.requestAnimationFrame(centerTreeViewport);
     return () => window.cancelAnimationFrame(frame);
   }, [treeScale, treeBranches.length, viewMode]);
+
+  useEffect(() => {
+    if (viewMode !== "tree") return;
+    const viewport = treeViewportRef.current;
+    if (!viewport) return;
+
+    const onWheel = (ev: WheelEvent) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const direction = ev.deltaY > 0 ? -1 : 1;
+      setTreeScale((s) => clampTreeScale(s + direction * TREE_SCALE_STEP));
+    };
+
+    viewport.addEventListener("wheel", onWheel, { passive: false });
+    return () => viewport.removeEventListener("wheel", onWheel);
+  }, [viewMode]);
 
   const loadDetail = useCallback(
     async (nodeId: string) => {
@@ -675,7 +687,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                 </span>
                 <button
                   type="button"
-                  onClick={() => setTreeScale(0.55)}
+                  onClick={() => setTreeScale(0.35)}
                   className="rounded-lg border border-zinc-300 bg-white px-2 py-1 font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
                 >
                   한눈에
@@ -728,21 +740,20 @@ export function TreePageClient({ treeId }: { treeId: string }) {
             <div
               ref={treeViewportRef}
               onPointerDown={onTreePointerDown}
-              onWheel={onTreeWheel}
               onPointerMove={onTreePointerMove}
               onPointerUp={endTreeDrag}
               onPointerCancel={endTreeDrag}
-              className={`max-h-[72vh] touch-none overflow-hidden rounded-xl border border-zinc-100 bg-zinc-50/40 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:border-zinc-900 dark:bg-zinc-950/30 ${
+              className={`h-[78vh] touch-none overflow-hidden rounded-xl border border-zinc-100 bg-zinc-50/40 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:border-zinc-900 dark:bg-zinc-950/30 ${
                 isTreeDragging ? "cursor-grabbing select-none" : "cursor-grab"
               }`}
             >
               <div
-                className="inline-flex min-w-full justify-center px-8 py-8 transition-transform"
+                className="inline-flex min-h-full min-w-full justify-center px-8 py-8 transition-transform"
                 style={{
                   transform: `scale(${treeScale})`,
                   transformOrigin: "top center",
                   width: scaledTreeWidth,
-                  minHeight: scaledTreeWidth,
+                  minHeight: scaledTreeMinHeight,
                 }}
               >
                 <div className="flex flex-col items-center">
