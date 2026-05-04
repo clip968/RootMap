@@ -38,7 +38,7 @@ Phase 1에서 생성된 학습 트리 노드를 재사용 가능한 내부 개�
 - [x] 07. [07-progress-recommendations-concept-layer.md](./07-progress-recommendations-concept-layer.md) - `user_concept_progress`, 추천 로직 확장, 상세 재사용 연동
 - [x] 08. [08-tree-ui-concept-indicators.md](./08-tree-ui-concept-indicators.md) - 트리 화면에 신규/재사용·상태 표시
 - [x] 09. [09-node-detail-topic-context-ui.md](./09-node-detail-topic-context-ui.md) - Concept 기반 상세 패널·주제 맥락 UX
-- [ ] 10. [10-admin-and-phase2-quality-tests.md](./10-admin-and-phase2-quality-tests.md) - 최소 관리자 조회 화면, 병합 후보, 명세 테스트 케이스
+- [x] 10. [10-admin-and-phase2-quality-tests.md](./10-admin-and-phase2-quality-tests.md) - 최소 관리자 조회 화면, 병합 후보, 명세 테스트 케이스
 
 
 ## Phase 2 범위 요약

@@ -9,6 +9,19 @@ import type { ConceptCandidate } from "@/types/learning";
 
 export type ConceptRow = typeof concepts.$inferSelect;
 
+export interface ConceptMergeCandidateListItem {
+  id: string;
+  sourceConceptId: string;
+  targetConceptId: string;
+  similarityScore: number;
+  reason: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  sourceConcept: Pick<ConceptRow, "id" | "title" | "slug" | "domain"> | null;
+  targetConcept: Pick<ConceptRow, "id" | "title" | "slug" | "domain"> | null;
+}
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -366,6 +379,73 @@ export function listConcepts(
     .orderBy(desc(concepts.updatedAt))
     .limit(q.limit)
     .all();
+}
+
+
+export function listConceptDomains(db: RootMapDbClient): string[] {
+  const rows = client(db)
+    .select({ domain: concepts.domain })
+    .from(concepts)
+    .where(sql`${concepts.domain} is not null and trim(${concepts.domain}) <> ''`)
+    .groupBy(concepts.domain)
+    .orderBy(concepts.domain)
+    .all();
+  return rows
+    .map((r) => r.domain)
+    .filter((domain): domain is string => typeof domain === "string" && domain.length > 0);
+}
+
+export function listConceptMergeCandidates(
+  db: RootMapDbClient,
+  q: { status?: string; limit: number },
+): ConceptMergeCandidateListItem[] {
+  const d = client(db);
+  const limit = Math.min(Math.max(q.limit, 1), 100);
+  const rows = q.status?.trim()
+    ? d
+        .select()
+        .from(conceptMergeCandidates)
+        .where(eq(conceptMergeCandidates.status, q.status.trim()))
+        .orderBy(desc(conceptMergeCandidates.updatedAt))
+        .limit(limit)
+        .all()
+    : d
+        .select()
+        .from(conceptMergeCandidates)
+        .orderBy(desc(conceptMergeCandidates.updatedAt))
+        .limit(limit)
+        .all();
+
+  return rows.map((r) => {
+    const source = getConceptById(db, r.sourceConceptId);
+    const target = getConceptById(db, r.targetConceptId);
+    return {
+      id: r.id,
+      sourceConceptId: r.sourceConceptId,
+      targetConceptId: r.targetConceptId,
+      similarityScore: r.similarityScore,
+      reason: r.reason,
+      status: r.status,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+      sourceConcept: source
+        ? {
+            id: source.id,
+            title: source.title,
+            slug: source.slug,
+            domain: source.domain,
+          }
+        : null,
+      targetConcept: target
+        ? {
+            id: target.id,
+            title: target.title,
+            slug: target.slug,
+            domain: target.domain,
+          }
+        : null,
+    };
+  });
 }
 
 export function listEdgesForConcept(

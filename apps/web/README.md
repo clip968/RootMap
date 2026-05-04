@@ -1,6 +1,6 @@
 # RootMap Web
 
-Phase 1 MVP 웹 앱입니다. 사용자가 학습 주제를 입력하면 OpenRouter Chat Completions API로 선수지식 기반 학습 트리를 생성하고, 노드별 상세 설명·이해 상태·다음 학습 추천을 확인할 수 있습니다.
+Phase 2 Concept Store 웹 앱입니다. 사용자가 학습 주제를 입력하면 OpenRouter Chat Completions API로 선수지식 기반 학습 트리를 생성하고, 생성된 노드를 재사용 가능한 Concept으로 저장·재사용하며, 노드별 상세 설명·이해 상태·다음 학습 추천을 확인할 수 있습니다.
 
 ## 수동 테스트 방법
 
@@ -49,4 +49,14 @@ cd apps/web
 npm run check
 ```
 
-`check`는 lint, DB smoke, LLM 파싱 smoke, Phase 1 MVP fixture smoke, production build/type check를 순서대로 실행합니다.
+`check`는 lint, DB smoke, LLM 파싱 smoke, Phase 1 MVP fixture smoke, Phase 2 Concept Store fixture smoke, production build/type check를 순서대로 실행합니다.
+
+## Phase 2 관리자/개발자 화면
+
+```bash
+cd apps/web
+npm run dev
+# production/staging에서 임시 활성화가 필요하면 ROOTMAP_ADMIN_ENABLED=true 설정
+```
+
+브라우저에서 [http://localhost:3000/admin/concepts](http://localhost:3000/admin/concepts)를 열면 Concept 목록, 검색/domain 필터, 상세 Edge, 사용 트리, 병합 후보를 확인할 수 있습니다. 이 화면은 로컬 개발 또는 `ROOTMAP_ADMIN_ENABLED=true`에서만 활성화됩니다.
