@@ -211,7 +211,9 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   const dragStateRef = useRef<{
     pointerId: number;
     startX: number;
+    startY: number;
     scrollLeft: number;
+    scrollTop: number;
   } | null>(null);
   const [isTreeDragging, setIsTreeDragging] = useState(false);
   const [progressBusy, setProgressBusy] = useState<string | null>(null);
@@ -288,10 +290,13 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     const target = ev.target as HTMLElement;
     if (target.closest("button, input, select, textarea, a, label")) return;
 
+    ev.preventDefault();
     dragStateRef.current = {
       pointerId: ev.pointerId,
       startX: ev.clientX,
+      startY: ev.clientY,
       scrollLeft: viewport.scrollLeft,
+      scrollTop: viewport.scrollTop,
     };
     viewport.setPointerCapture(ev.pointerId);
     setIsTreeDragging(true);
@@ -303,9 +308,10 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     if (!viewport || !drag || drag.pointerId !== ev.pointerId) return;
 
     const deltaX = ev.clientX - drag.startX;
+    const deltaY = ev.clientY - drag.startY;
     ev.preventDefault();
     viewport.scrollLeft = drag.scrollLeft - deltaX;
-    viewport.scrollTop = 0;
+    viewport.scrollTop = drag.scrollTop - deltaY;
   };
 
   const endTreeDrag = (ev: React.PointerEvent<HTMLDivElement>) => {
@@ -332,7 +338,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     if (viewMode !== "tree") return;
     const frame = window.requestAnimationFrame(centerTreeViewport);
     return () => window.cancelAnimationFrame(frame);
-  }, [treeScale, treeBranches.length, viewMode]);
+  }, [treeBranches.length, viewMode]);
 
   useEffect(() => {
     if (viewMode !== "tree") return;
@@ -342,13 +348,24 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     const onWheel = (ev: WheelEvent) => {
       ev.preventDefault();
       ev.stopPropagation();
-      const direction = ev.deltaY > 0 ? -1 : 1;
-      setTreeScale((s) => clampTreeScale(s + direction * TREE_SCALE_STEP));
+      ev.stopImmediatePropagation();
+
+      const primaryDelta =
+        Math.abs(ev.deltaY) >= Math.abs(ev.deltaX) ? ev.deltaY : ev.deltaX;
+      if (primaryDelta === 0) return;
+
+      const direction = primaryDelta > 0 ? -1 : 1;
+      setTreeScale((scale) =>
+        clampTreeScale(scale + direction * TREE_SCALE_STEP),
+      );
     };
 
-    viewport.addEventListener("wheel", onWheel, { passive: false });
-    return () => viewport.removeEventListener("wheel", onWheel);
-  }, [viewMode]);
+    viewport.addEventListener("wheel", onWheel, {
+      capture: true,
+      passive: false,
+    });
+    return () => viewport.removeEventListener("wheel", onWheel, { capture: true });
+  }, [viewMode, tree?.tree_id]);
 
   const loadDetail = useCallback(
     async (nodeId: string) => {
@@ -668,7 +685,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                   학습 Tree
                 </h2>
                 <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                  마우스 휠로 확대/축소하고, 빈 공간을 좌클릭 드래그해 좌우로 이동합니다.
+                  마우스 휠로 확대/축소하고, 빈 공간을 좌클릭 드래그해 상하좌우로 이동합니다.
                 </p>
               </div>
               <div className="flex flex-wrap gap-1 text-xs">
@@ -743,7 +760,8 @@ export function TreePageClient({ treeId }: { treeId: string }) {
               onPointerMove={onTreePointerMove}
               onPointerUp={endTreeDrag}
               onPointerCancel={endTreeDrag}
-              className={`h-[78vh] touch-none overflow-hidden rounded-xl border border-zinc-100 bg-zinc-50/40 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:border-zinc-900 dark:bg-zinc-950/30 ${
+              onLostPointerCapture={endTreeDrag}
+              className={`h-[78vh] touch-none overflow-scroll overscroll-contain rounded-xl border border-zinc-100 bg-zinc-50/40 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:border-zinc-900 dark:bg-zinc-950/30 ${
                 isTreeDragging ? "cursor-grabbing select-none" : "cursor-grab"
               }`}
             >

@@ -42,9 +42,9 @@ Phase 2.5 Tree View가 단순히 동작하는 수준을 넘어, 실제 학습 �
 - 기본 배율은 55%, `한눈에` 배율은 35%로 설정해 큰 트리도 더 끝까지 축소해 볼 수 있게 했다.
 - `한눈에` 버튼은 35%, `원본` 버튼은 100%로 즉시 전환하며, `중앙` 버튼으로 트리 중앙에 다시 맞출 수 있다.
 - 축소 상태에서도 노드 클릭, 상세 패널, 진행 상태 select, 추천/Concept badge가 유지된다.
-- Tree View viewport에서 빈 공간을 마우스/터치로 좌클릭 드래그해 좌우 이동할 수 있게 했다.
-- 마우스 휠은 native wheel listener(`passive: false`)에서 차단해 페이지/트리 스크롤 대신 Tree View 확대·축소로만 동작하게 했다.
-- 위아래 이동은 막고, viewport의 기본 스크롤바는 숨겼다.
+- Tree View viewport에서 빈 공간을 마우스/터치로 좌클릭 드래그해 상하좌우 이동할 수 있게 했다.
+- 마우스 휠은 Tree View DOM이 렌더링된 뒤 native wheel listener(`passive: false`, `capture: true`)에서 차단해 포인터가 Tree View 안에 있을 때 페이지 스크롤 대신 Tree View 확대·축소로만 동작하게 했다.
+- Tree View viewport에는 `overscroll-contain`을 적용해 트리 영역 조작이 페이지 스크롤로 전파되지 않게 보강하고, 기본 스크롤바는 숨겼다.
 - 축소된 트리가 잘려 보이지 않도록 viewport 높이, scale 보정 min-height, 내부 padding, 중앙 정렬 버튼을 추가했다.
 - 검증 명령:
   - `cd apps/web && npm run lint -- src/components/tree-page-client.tsx`
