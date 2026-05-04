@@ -16,6 +16,7 @@
 |---:|---|---|---|
 | 1 | [01-tree-view-layout.md](./01-tree-view-layout.md) | 기존 섹션형 결과 화면을 보완하는 실제 Tree View 구현 | P0 |
 | 2 | [02-tree-view-polish-and-quality.md](./02-tree-view-polish-and-quality.md) | 트리 UX 품질, fallback, 반응형/접근성/검증 보강 | P1 |
+| 3 | ChatGPT형 Home/History Shell | 중앙 주제 입력 화면과 접이식 Tree 히스토리 사이드바 | P1 |
 
 ## 진행 체크리스트
 
@@ -23,6 +24,7 @@
 
 - [x] 01. [01-tree-view-layout.md](./01-tree-view-layout.md) - 루트 주제 중심 실제 Tree View 구현
 - [x] 02. [02-tree-view-polish-and-quality.md](./02-tree-view-polish-and-quality.md) - Tree View 품질 보강 및 검증
+- [x] 03. ChatGPT형 Home/History Shell - 중앙 주제 입력 화면과 접이식 Tree 히스토리 사이드바
 
 ## Phase 2.5 범위 요약
 

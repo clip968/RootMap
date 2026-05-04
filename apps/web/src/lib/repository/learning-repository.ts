@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { DEFAULT_USER_ID } from "@/db/constants";
 import {
@@ -59,6 +59,15 @@ export interface LearningTreeBundle {
   conceptTreeCounts: Map<string, number>;
 }
 
+export interface LearningTreeHistoryRow {
+  id: string;
+  topic: string;
+  summary: string | null;
+  nodeCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 function mapTreeRow(row: typeof learningTrees.$inferSelect): LearningTreeRow {
   return {
     id: row.id,
@@ -107,6 +116,38 @@ export function getConceptTreeUsageCounts(
     .groupBy(learningTreeConcepts.conceptId)
     .all();
   return new Map(rows.map((r) => [r.cid, r.n]));
+}
+
+export function listLearningTreeHistory(
+  userId: string = DEFAULT_USER_ID,
+  limit: number = 50,
+): LearningTreeHistoryRow[] {
+  const db = getDb();
+  const rows = db
+    .select({
+      id: learningTrees.id,
+      topic: learningTrees.topic,
+      summary: learningTrees.summary,
+      createdAt: learningTrees.createdAt,
+      updatedAt: learningTrees.updatedAt,
+      nodeCount: sql<number>`count(${learningNodes.id})`.mapWith(Number),
+    })
+    .from(learningTrees)
+    .leftJoin(learningNodes, eq(learningNodes.treeId, learningTrees.id))
+    .where(eq(learningTrees.userId, userId))
+    .groupBy(learningTrees.id)
+    .orderBy(desc(learningTrees.updatedAt), desc(learningTrees.createdAt))
+    .limit(limit)
+    .all();
+
+  return rows.map((row) => ({
+    id: row.id,
+    topic: row.topic,
+    summary: row.summary,
+    nodeCount: row.nodeCount,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  }));
 }
 
 export function createLearningTree(

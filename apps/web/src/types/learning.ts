@@ -100,6 +100,14 @@ export interface ApiTreePayload {
   recommended_order: string[];
 }
 
+export interface ApiTreeHistoryItem {
+  tree_id: string;
+  topic: string;
+  summary: string;
+  node_count: number;
+  created_at: string;
+  updated_at: string;
+}
 export interface ApiProgressEntry {
   node_id: string;
   status: ProgressStatus;
