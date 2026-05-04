@@ -10,14 +10,16 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:smoke": "DATABASE_URL=file:./data/smoke.db tsx scripts/smoke-learning-repo.ts"
+    "db:smoke": "DATABASE_URL=file:./data/smoke.db tsx scripts/smoke-learning-repo.ts",
+    "llm:smoke-parse": "tsx scripts/smoke-llm-parse.ts"
   },
   "dependencies": {
     "better-sqlite3": "^12.9.0",
     "drizzle-orm": "^0.45.2",
     "next": "16.2.4",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
