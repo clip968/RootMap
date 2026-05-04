@@ -22,7 +22,7 @@
 > 작업을 완료할 때마다 해당 항목을 `[x]`로 바꿔 진행 상황을 추적한다.
 
 - [x] 01. [01-tree-view-layout.md](./01-tree-view-layout.md) - 루트 주제 중심 실제 Tree View 구현
-- [ ] 02. [02-tree-view-polish-and-quality.md](./02-tree-view-polish-and-quality.md) - Tree View 품질 보강 및 검증
+- [x] 02. [02-tree-view-polish-and-quality.md](./02-tree-view-polish-and-quality.md) - Tree View 품질 보강 및 검증
 
 ## Phase 2.5 범위 요약
 

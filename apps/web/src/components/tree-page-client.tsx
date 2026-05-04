@@ -34,6 +34,18 @@ const PROGRESS_LABEL: Record<ProgressStatus, string> = {
   unknown: "모른다",
 };
 
+const MIN_TREE_SCALE = 0.45;
+const MAX_TREE_SCALE = 1;
+const TREE_SCALE_STEP = 0.05;
+
+function clampTreeScale(value: number): number {
+  return Math.min(MAX_TREE_SCALE, Math.max(MIN_TREE_SCALE, value));
+}
+
+function formatTreeScale(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
 type TreeViewMode = "tree" | "sections";
 
 interface TreeBranch {
@@ -194,6 +206,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   const [regenLoading, setRegenLoading] = useState(false);
   const [reuseConcepts, setReuseConcepts] = useState(true);
   const [viewMode, setViewMode] = useState<TreeViewMode>("tree");
+  const [treeScale, setTreeScale] = useState(0.65);
   const [progressBusy, setProgressBusy] = useState<string | null>(null);
 
   const loadTree = useCallback(async () => {
@@ -257,6 +270,8 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     if (!tree) return [];
     return buildTreeBranches(tree.nodes, tree.recommended_order);
   }, [tree]);
+
+  const scaledTreeWidth = `${100 / treeScale}%`;
 
   const loadDetail = useCallback(
     async (nodeId: string) => {
@@ -589,9 +604,64 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                   </span>
                 ))}
               </div>
+              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs dark:border-zinc-800 dark:bg-zinc-900/70">
+                <span className="font-medium text-zinc-600 dark:text-zinc-300">
+                  Zoom
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setTreeScale(0.55)}
+                  className="rounded-lg border border-zinc-300 bg-white px-2 py-1 font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                >
+                  한눈에
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTreeScale((s) => clampTreeScale(s - TREE_SCALE_STEP))}
+                  className="rounded-lg border border-zinc-300 bg-white px-2 py-1 font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                  aria-label="트리 축소"
+                >
+                  −
+                </button>
+                <input
+                  type="range"
+                  min={MIN_TREE_SCALE}
+                  max={MAX_TREE_SCALE}
+                  step={TREE_SCALE_STEP}
+                  value={treeScale}
+                  onChange={(e) => setTreeScale(Number(e.target.value))}
+                  className="w-28 accent-emerald-600"
+                  aria-label="트리 확대/축소"
+                />
+                <button
+                  type="button"
+                  onClick={() => setTreeScale((s) => clampTreeScale(s + TREE_SCALE_STEP))}
+                  className="rounded-lg border border-zinc-300 bg-white px-2 py-1 font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                  aria-label="트리 확대"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTreeScale(1)}
+                  className="rounded-lg px-2 py-1 font-medium text-zinc-600 underline underline-offset-2 dark:text-zinc-300"
+                >
+                  원본
+                </button>
+                <span className="tabular-nums text-zinc-500 dark:text-zinc-400">
+                  {formatTreeScale(treeScale)}
+                </span>
+              </div>
             </div>
-            <div className="overflow-x-auto pb-4">
-              <div className="inline-flex min-w-full justify-center px-2 pt-2">
+            <div className="overflow-auto pb-4">
+              <div
+                className="inline-flex min-w-full justify-center px-2 pt-2 transition-transform"
+                style={{
+                  transform: `scale(${treeScale})`,
+                  transformOrigin: "top center",
+                  width: scaledTreeWidth,
+                }}
+              >
                 <div className="flex flex-col items-center">
                   <div className="max-w-xl rounded-3xl border border-emerald-300 bg-emerald-600 px-6 py-4 text-center text-white shadow-sm dark:border-emerald-500 dark:bg-emerald-500 dark:text-zinc-950">
                     <p className="text-xs font-semibold uppercase tracking-wide opacity-80">

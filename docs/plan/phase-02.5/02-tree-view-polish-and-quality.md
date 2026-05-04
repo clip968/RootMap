@@ -36,6 +36,17 @@ Phase 2.5 Tree View가 단순히 동작하는 수준을 넘어, 실제 학습 �
   - 진행 상태 변경 후 추천 갱신
   - 재생성 시 새 Tree View 표시
 
+## 검증 결과
+
+- Tree View에 45%~100% zoom slider를 추가했다.
+- 기본 배율은 65%로 설정해 트리 전체 윤곽을 먼저 볼 수 있게 했다.
+- `한눈에` 버튼은 55%, `원본` 버튼은 100%로 즉시 전환한다.
+- 축소 상태에서도 노드 클릭, 상세 패널, 진행 상태 select, 추천/Concept badge가 유지된다.
+- 검증 명령:
+  - `cd apps/web && npm run lint -- src/components/tree-page-client.tsx`
+  - `cd apps/web && npm run build`
+
+
 ## 완료 조건
 
 - 대표 주제 1개 이상에서 Tree View가 학습 경로로 읽힌다.
