@@ -1,0 +1,16 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# SQLite checkpointers
+*.sqlite
+
+# Local agent run data
+.agent/forge-runs/
+.agent/forge-config/
+scripts
+templates
+.forge
+.agents
+.agent

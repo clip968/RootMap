@@ -16,6 +16,7 @@
 | 1 | [01-tree-view-layout.md](./01-tree-view-layout.md) | 기존 섹션형 결과 화면을 보완하는 실제 Tree View 구현 | P0 |
 | 2 | [02-tree-view-polish-and-quality.md](./02-tree-view-polish-and-quality.md) | 트리 UX 품질, fallback, 반응형/접근성/검증 보강 | P1 |
 | 3 | ChatGPT형 Home/History Shell | 중앙 주제 입력 화면과 접이식 Tree 히스토리 사이드바 | P1 |
+| 4 | [04-tree-generation-latency-and-perceived-performance.md](./04-tree-generation-latency-and-perceived-performance.md) | Tree 생성 지연 계측 및 생성 대기 UX 개선 | P0 |
 
 ## 진행 체크리스트
 
@@ -24,6 +25,7 @@
 - [x] 01. [01-tree-view-layout.md](./01-tree-view-layout.md) - 루트 주제 중심 실제 Tree View 구현
 - [x] 02. [02-tree-view-polish-and-quality.md](./02-tree-view-polish-and-quality.md) - Tree View 품질 보강 및 검증
 - [x] 03. ChatGPT형 Home/History Shell - 중앙 주제 입력 화면과 접이식 Tree 히스토리 사이드바
+- [ ] 04. [04-tree-generation-latency-and-perceived-performance.md](./04-tree-generation-latency-and-perceived-performance.md) - Tree 생성 지연 계측 및 생성 대기 UX 개선
 
 ## Phase 2.5 범위 요약
 
@@ -36,6 +38,7 @@
 - Concept 재사용 badge, 추천 강조, 이해 상태 변경, 상세 모달 연동 유지
 - 순환/공유 참조, 고아 노드 fallback 처리
 - 노드 상세는 오른쪽 패널이 아닌 노트형 modal/dialog로 표시
+- Tree 생성 대기 시간 계측, 재시도 가시화, 생성/재생성 대기 UX 개선
 
 ### 제외
 
@@ -51,4 +54,5 @@
 - Rust lifetime 같은 주제에서 표처럼만 보이지 않고 실제 학습 경로 구조가 드러난다.
 - 기존 섹션 보기, 노드 상세, 추천, 진행 상태, Concept 표시 기능이 깨지지 않는다.
 - Tree 상세는 오른쪽 사이드 패널이 아니라 노트형 모달에서 열린다.
+- Tree 생성 지연 원인이 구간별로 계측되고, 생성/재생성 중 경과 시간 또는 단계형 안내가 표시된다.
 
