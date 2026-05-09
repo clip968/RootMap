@@ -25,7 +25,7 @@
 - [x] 01. [01-tree-view-layout.md](./01-tree-view-layout.md) - 루트 주제 중심 실제 Tree View 구현
 - [x] 02. [02-tree-view-polish-and-quality.md](./02-tree-view-polish-and-quality.md) - Tree View 품질 보강 및 검증
 - [x] 03. ChatGPT형 Home/History Shell - 중앙 주제 입력 화면과 접이식 Tree 히스토리 사이드바
-- [ ] 04. [04-tree-generation-latency-and-perceived-performance.md](./04-tree-generation-latency-and-perceived-performance.md) - Tree 생성 지연 계측 및 생성 대기 UX 개선
+- [x] 04. [04-tree-generation-latency-and-perceived-performance.md](./04-tree-generation-latency-and-perceived-performance.md) - Tree 생성 지연 계측 및 생성 대기 UX 개선
 
 ## Phase 2.5 범위 요약
 

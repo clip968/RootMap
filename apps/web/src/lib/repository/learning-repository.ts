@@ -179,6 +179,14 @@ export function createLearningTree(
 
 export interface FullTreeOptions {
   reuseConcepts?: boolean;
+  requestId?: string;
+}
+
+function logLearningPersistence(
+  event: string,
+  details: Record<string, unknown>,
+): void {
+  console.info("[tree-generate]", { stage: "persistence", event, ...details });
 }
 
 /**
@@ -194,7 +202,10 @@ export function createFullLearningTree(
   const db = getDb();
   const now = new Date().toISOString();
   const reuseConcepts = options?.reuseConcepts ?? true;
+  const requestId = options?.requestId;
+  const transactionStartedAt = Date.now();
   return db.transaction((tx) => {
+    const treeInsertStartedAt = Date.now();
     const tr = tx
       .insert(learningTrees)
       .values({
@@ -209,7 +220,15 @@ export function createFullLearningTree(
       .all();
     const treeId = tr[0]?.id;
     if (!treeId) throw new Error("learning_trees insert failed");
+    if (requestId) {
+      logLearningPersistence("tree_insert_complete", {
+        requestId,
+        durationMs: Date.now() - treeInsertStartedAt,
+        treeId,
+      });
+    }
 
+    const nodeInsertStartedAt = Date.now();
     const nodeKeyToDbId = new Map<string, string>();
     const nodeIds: string[] = [];
     for (const n of treeJson.nodes) {
@@ -234,7 +253,15 @@ export function createFullLearningTree(
       nodeKeyToDbId.set(n.id, nid);
       nodeIds.push(nid);
     }
+    if (requestId) {
+      logLearningPersistence("node_insert_complete", {
+        requestId,
+        durationMs: Date.now() - nodeInsertStartedAt,
+        nodeCount: nodeIds.length,
+      });
+    }
 
+    const progressInsertStartedAt = Date.now();
     if (nodeIds.length > 0) {
       tx.insert(userNodeProgress)
         .values(
@@ -248,13 +275,36 @@ export function createFullLearningTree(
         )
         .run();
     }
+    if (requestId) {
+      logLearningPersistence("progress_insert_complete", {
+        requestId,
+        durationMs: Date.now() - progressInsertStartedAt,
+        progressCount: nodeIds.length,
+      });
+    }
 
+    const conceptPersistenceStartedAt = Date.now();
     persistPhase2Concepts(tx, {
       treeId,
       tree: treeJson,
       nodeKeyToDbId,
       reuseConcepts,
+      requestId,
     });
+    if (requestId) {
+      logLearningPersistence("concept_persistence_complete", {
+        requestId,
+        durationMs: Date.now() - conceptPersistenceStartedAt,
+        nodeCount: treeJson.nodes.length,
+        edgeCount: treeJson.edges?.length ?? 0,
+        reuseConcepts,
+      });
+      logLearningPersistence("transaction_complete", {
+        requestId,
+        durationMs: Date.now() - transactionStartedAt,
+        treeId,
+      });
+    }
 
     return treeId;
   });

@@ -2,7 +2,7 @@
 
 import type { ApiTreeResponse } from "@/lib/tree/bundle-to-api";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const EXAMPLE_TOPICS = [
   "Transformer",
@@ -12,12 +12,29 @@ const EXAMPLE_TOPICS = [
   "운영체제 스케줄링",
 ];
 
+function generationStageMessage(elapsedSeconds: number): string {
+  if (elapsedSeconds < 5) return "주제를 분석하고 학습 목표를 정리하는 중입니다.";
+  if (elapsedSeconds < 20) return "학습 경로와 선수지식 Tree를 생성하는 중입니다.";
+  if (elapsedSeconds < 40) return "Concept 후보와 관계를 연결하는 중입니다.";
+  return "생성 결과를 검증하고 Tree로 저장하는 중입니다.";
+}
+
 export function StartTopicForm() {
   const router = useRouter();
   const [topic, setTopic] = useState("");
   const [reuseConcepts, setReuseConcepts] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!loading) return;
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [loading]);
 
   const submit = async () => {
     const t = topic.trim();
@@ -26,6 +43,7 @@ export function StartTopicForm() {
       return;
     }
     setError(null);
+    setElapsedSeconds(0);
     setLoading(true);
     try {
       const res = await fetch("/api/trees/generate", {
@@ -86,6 +104,21 @@ export function StartTopicForm() {
             <p className="px-2 text-xs text-zinc-500">
               Ctrl+Enter (또는 ⌘+Enter)로 빠르게 생성할 수 있습니다.
             </p>
+            {loading ? (
+              <div className="mx-2 rounded-2xl border border-emerald-100 bg-emerald-50/80 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
+                <p className="font-medium">
+                  생성 중 · {elapsedSeconds}초 경과
+                </p>
+                <p className="mt-1 text-xs">
+                  {generationStageMessage(elapsedSeconds)}
+                </p>
+                {reuseConcepts ? (
+                  <p className="mt-1 text-xs text-emerald-800/80 dark:text-emerald-200/80">
+                    저장된 Concept과 비교해 중복을 줄이는 중이라 조금 더 걸릴 수 있습니다.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             {error ? (
               <p className="px-2 text-sm text-red-700 dark:text-red-400">{error}</p>
             ) : null}
@@ -94,7 +127,8 @@ export function StartTopicForm() {
                 type="checkbox"
                 checked={reuseConcepts}
                 onChange={(e) => setReuseConcepts(e.target.checked)}
-                className="mt-1 h-4 w-4 rounded border-zinc-400 text-emerald-700"
+                disabled={loading}
+                className="mt-1 h-4 w-4 rounded border-zinc-400 text-emerald-700 disabled:opacity-60"
               />
               <span className="text-sm text-zinc-700 dark:text-zinc-300">
                 <span className="font-medium text-zinc-900 dark:text-zinc-100">
@@ -113,7 +147,7 @@ export function StartTopicForm() {
             disabled={loading}
             className="rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60 dark:bg-emerald-600 dark:hover:bg-emerald-500"
           >
-            {loading ? "생성 중…" : "트리 생성"}
+            {loading ? `생성 중 · ${elapsedSeconds}초` : "트리 생성"}
           </button>
         </div>
       </div>
@@ -128,7 +162,8 @@ export function StartTopicForm() {
               key={ex}
               type="button"
               onClick={() => setTopic(ex)}
-              className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-800 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+              disabled={loading}
+              className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-800 hover:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
             >
               {ex}
             </button>

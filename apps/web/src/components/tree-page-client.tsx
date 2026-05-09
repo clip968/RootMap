@@ -48,6 +48,13 @@ function formatTreeScale(value: number): string {
 
 type TreeViewMode = "tree" | "sections";
 
+function generationStageMessage(elapsedSeconds: number): string {
+  if (elapsedSeconds < 5) return "주제를 분석하고 학습 목표를 정리하는 중입니다.";
+  if (elapsedSeconds < 20) return "학습 경로와 선수지식 Tree를 생성하는 중입니다.";
+  if (elapsedSeconds < 40) return "Concept 후보와 관계를 연결하는 중입니다.";
+  return "생성 결과를 검증하고 Tree로 저장하는 중입니다.";
+}
+
 interface TreeBranch {
   key: string;
   node: ApiLearningNode;
@@ -198,6 +205,8 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   const [detailError, setDetailError] = useState<string | null>(null);
 
   const [regenLoading, setRegenLoading] = useState(false);
+  const [regenElapsedSeconds, setRegenElapsedSeconds] = useState(0);
+  const [regenError, setRegenError] = useState<string | null>(null);
   const [reuseConcepts, setReuseConcepts] = useState(true);
   const [viewMode, setViewMode] = useState<TreeViewMode>("tree");
   const [treeScale, setTreeScale] = useState(0.55);
@@ -458,9 +467,20 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     }
   };
 
+  useEffect(() => {
+    if (!regenLoading) return;
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      setRegenElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [regenLoading]);
+
   const onRegenerate = async () => {
     if (!tree) return;
     setRegenLoading(true);
+    setRegenElapsedSeconds(0);
+    setRegenError(null);
     try {
       const res = await fetch("/api/trees/generate", {
         method: "POST",
@@ -469,6 +489,10 @@ export function TreePageClient({ treeId }: { treeId: string }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        setRegenError(
+          data?.error?.message ??
+            "트리를 다시 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        );
         return;
       }
       const newId = (data as ApiTreeResponse).tree_id;
@@ -616,7 +640,8 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                 type="checkbox"
                 checked={reuseConcepts}
                 onChange={(e) => setReuseConcepts(e.target.checked)}
-                className="rounded border-zinc-400"
+                disabled={regenLoading}
+                className="rounded border-zinc-400 disabled:opacity-60"
               />
               개념 재사용
             </label>
@@ -626,7 +651,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
               disabled={regenLoading}
               className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
             >
-              {regenLoading ? "재생성 중…" : "다시 생성"}
+              {regenLoading ? `재생성 중 · ${regenElapsedSeconds}초` : "다시 생성"}
             </button>
             <span className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
               저장됨
@@ -638,6 +663,26 @@ export function TreePageClient({ treeId }: { treeId: string }) {
               새 주제
             </Link>
           </div>
+          {regenLoading ? (
+            <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/80 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
+              <p className="font-medium">
+                재생성 중 · {regenElapsedSeconds}초 경과
+              </p>
+              <p className="mt-1 text-xs">
+                {generationStageMessage(regenElapsedSeconds)}
+              </p>
+              {reuseConcepts ? (
+                <p className="mt-1 text-xs text-emerald-800/80 dark:text-emerald-200/80">
+                  저장된 Concept과 비교해 중복을 줄이는 중이라 조금 더 걸릴 수 있습니다.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          {regenError ? (
+            <p className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+              {regenError} 다시 생성 버튼으로 재시도할 수 있습니다.
+            </p>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2 pt-2">
             <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
               보기 방식

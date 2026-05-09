@@ -13,6 +13,13 @@ import {
 } from "@/lib/repository/concept-repository";
 import { normalizeTitle } from "@/lib/concepts/normalize";
 
+function logConceptPersistence(
+  event: string,
+  details: Record<string, unknown>,
+): void {
+  console.info("[tree-generate]", { stage: "concept-persistence", event, ...details });
+}
+
 function ensureConceptCandidate(
   node: LearningTreeResponse["nodes"][number],
 ): ConceptCandidate {
@@ -43,18 +50,32 @@ export function persistPhase2Concepts(
     tree: LearningTreeResponse;
     nodeKeyToDbId: Map<string, string>;
     reuseConcepts: boolean;
+    requestId?: string;
   },
 ): void {
-  const { treeId, tree, nodeKeyToDbId, reuseConcepts } = params;
+  const { treeId, tree, nodeKeyToDbId, reuseConcepts, requestId } = params;
+  const startedAt = Date.now();
   const nodeKeyToConceptId = new Map<string, string>();
+
+  if (requestId) {
+    logConceptPersistence("start", {
+      requestId,
+      treeId,
+      nodeCount: tree.nodes.length,
+      explicitEdgeCount: tree.edges?.length ?? 0,
+      reuseConcepts,
+    });
+  }
 
   for (const n of tree.nodes) {
     const dbNodeId = nodeKeyToDbId.get(n.id);
     if (!dbNodeId) continue;
 
+    const nodeStartedAt = Date.now();
     const cand = ensureConceptCandidate(n);
     let conceptId: string;
     let reused = false;
+    let outcome: "reused" | "new" | "new_with_merge_candidate" = "new";
 
     if (!reuseConcepts) {
       const slug = allocateUniqueSlug(cand.canonical_title, db);
@@ -66,6 +87,7 @@ export function persistPhase2Concepts(
       if (res.kind === "reused") {
         conceptId = res.concept.id;
         reused = true;
+        outcome = "reused";
         const extraAliases = [
           ...cand.aliases,
           ...(normalizeTitle(cand.canonical_title) !==
@@ -80,6 +102,7 @@ export function persistPhase2Concepts(
         conceptId = row.id;
         reused = false;
         if (res.kind === "ambiguous_similar") {
+          outcome = "new_with_merge_candidate";
           tryRecordMergeCandidate(
             db,
             row.id,
@@ -115,6 +138,18 @@ export function persistPhase2Concepts(
     } catch {
       /* UNIQUE 등 */
     }
+
+    if (requestId) {
+      logConceptPersistence("node_resolved", {
+        requestId,
+        nodeKey: n.id,
+        durationMs: Date.now() - nodeStartedAt,
+        aliasCount: cand.aliases.length,
+        reused,
+        outcome,
+        conceptId,
+      });
+    }
   }
 
   const edges = tree.edges ?? [];
@@ -126,6 +161,7 @@ export function persistPhase2Concepts(
     upsertConceptEdge(db, fromC, toC, e.relation_type, e.reason ?? null);
   }
 
+  let prerequisiteEdgeCount = 0;
   /* 노드 prerequisite 링크로 명시적 prerequisite 간선 보강 */
   for (const n of tree.nodes) {
     const toC = nodeKeyToConceptId.get(n.id);
@@ -134,7 +170,19 @@ export function persistPhase2Concepts(
       const fromC = nodeKeyToConceptId.get(preKey);
       if (fromC) {
         upsertConceptEdge(db, fromC, toC, "prerequisite", "learning tree structure");
+        prerequisiteEdgeCount += 1;
       }
     }
+  }
+
+  if (requestId) {
+    logConceptPersistence("complete", {
+      requestId,
+      durationMs: Date.now() - startedAt,
+      nodeCount: tree.nodes.length,
+      explicitEdgeCount: edges.length,
+      prerequisiteEdgeCount,
+      reuseConcepts,
+    });
   }
 }

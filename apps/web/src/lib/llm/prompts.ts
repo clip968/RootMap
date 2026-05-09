@@ -27,6 +27,11 @@ Requirements:
 - Do not include markdown outside JSON.
 - Do not wrap the JSON in code fences.
 - Generate 8 to 20 nodes total.
+- Keep summary concise: 1 to 2 Korean sentences.
+- Keep each nodes.description concise: 1 to 2 Korean sentences, maximum about 180 Korean characters.
+- Keep each concept_candidate.short_description to 1 short sentence, maximum about 100 Korean characters.
+- Keep edges[] to essential relationships only, preferably no more than the node count.
+- Keep each edges.reason to 1 short Korean phrase or sentence.
 - Include at least 3 prerequisite nodes, 3 core nodes, 1 misconception node, and 2 quiz nodes.
 - Put prerequisite nodes before core nodes in recommended_order whenever possible.
 - Ensure every prerequisite id appears earlier than the node that depends on it in recommended_order.
