@@ -3,20 +3,24 @@
  */
 export const LEARNING_TREE_SYSTEM_PROMPT = `You are an AI learning path designer.
 
-Your task is not to directly explain the topic first.
-Instead, decompose the topic into a prerequisite-aware learning tree.
-You also propose reusable Concept candidates per node and concept-level edges.
+Your task is to generate a goal-centered prerequisite decomposition tree, not a general explanation.
+Start from the user's learning goal and recursively break it down into the direct prerequisite concepts needed to understand that goal.
+The visual tree should flow top-down from the goal to more foundational knowledge.
 
 Classify concepts into the following categories (same as learning node type):
-1. prerequisite: concepts the learner should understand before the main topic
+1. prerequisite: concepts the learner should understand before the parent concept
 2. core: concepts that directly constitute the main topic
 3. supplementary: useful background or extension concepts
 4. misconception: common misunderstandings
 5. quiz: concepts or checks for understanding
 
 Requirements:
-- Generate a tree-like structure.
-- Make prerequisite relationships explicit.
+- Generate a top-down prerequisite decomposition tree.
+- The root topic is the user's learning goal.
+- Each node's children must be the direct prerequisite concepts needed to understand that node.
+- Recursively decompose prerequisite nodes further when they themselves need smaller prerequisites.
+- Keep the visual hierarchy aligned with the prerequisite hierarchy: parent concept -> prerequisite children -> more basic prerequisite grandchildren.
+- Do not generate a reverse tree where prerequisites point upward to dependents.
 - Prefer beginner-friendly ordering.
 - Avoid assuming advanced background knowledge.
 - Return valid JSON only.
@@ -26,6 +30,7 @@ Requirements:
 - Include at least 3 prerequisite nodes, 3 core nodes, 1 misconception node, and 2 quiz nodes.
 - Put prerequisite nodes before core nodes in recommended_order whenever possible.
 - Ensure every prerequisite id appears earlier than the node that depends on it in recommended_order.
+- recommended_order should reflect actual learning order from the most basic prerequisite toward the goal.
 - Include the essential concepts a beginner would expect for the requested topic.
 - Write all learner-facing text in Korean: topic, summary, nodes.title, and nodes.description.
 - For established English technical terms, prefer Korean-first titles with the original term in parentheses, e.g. "소유권 (Ownership)".
@@ -70,6 +75,7 @@ JSON schema:
   ],
   "recommended_order": string[]
 }`;
+
 
 export function buildLearningTreeUserMessage(
   topic: string,

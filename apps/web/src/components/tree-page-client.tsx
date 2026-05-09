@@ -122,14 +122,8 @@ function buildTreeBranches(
     }
   }
 
-  // LLM 응답에서 children이 듬성듬성 비어 있어도 prerequisites 관계로 트리 간선을 보강한다.
-  for (const node of nodes) {
-    for (const prerequisiteKey of node.prerequisites) {
-      if (nodeByKey.has(prerequisiteKey) && prerequisiteKey !== node.node_key) {
-        childKeysByKey.get(prerequisiteKey)!.add(node.node_key);
-      }
-    }
-  }
+  // children은 부모 목표/개념을 이해하기 위한 직접 선수지식으로 해석한다.
+  // prerequisites를 뒤집어 선수지식 -> 의존 개념 간선으로 보강하지 않는다.
 
   const normalizedChildKeysByKey = new Map<string, string[]>();
   const incomingCount = new Map(nodes.map((node) => [node.node_key, 0]));
@@ -409,6 +403,24 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     void loadDetail(nodeId);
   };
 
+  const closeDetailModal = useCallback(() => {
+    setSelectedId(null);
+    setDetail(null);
+    setDetailError(null);
+    setDetailLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedId) return;
+
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") closeDetailModal();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [closeDetailModal, selectedId]);
+
   const onProgressChange = async (
     nodeId: string,
     status: ProgressStatus,
@@ -588,7 +600,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6 lg:flex-row lg:gap-8">
+    <div className="flex flex-1 flex-col gap-6">
       <div className="min-w-0 flex-1 space-y-6 px-4 py-6 sm:px-6">
         <header className="space-y-2 border-b border-zinc-200 pb-6 dark:border-zinc-800">
           <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
@@ -895,178 +907,209 @@ export function TreePageClient({ treeId }: { treeId: string }) {
         )}
       </div>
 
-      <aside className="lg:w-[420px] lg:shrink-0 lg:border-l lg:border-zinc-200 lg:dark:border-zinc-800">
-        <div className="sticky top-0 max-h-[calc(100vh-2rem)] space-y-4 overflow-y-auto px-4 py-6 sm:px-6">
-          {!selectedId ? (
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              노드를 선택하면 설명이 여기에 표시됩니다.
-            </p>
-          ) : detailLoading ? (
-            <p className="text-sm text-zinc-500">설명을 불러오는 중…</p>
-          ) : detailError ? (
-            <div className="space-y-2">
-              <p className="text-sm text-red-700 dark:text-red-400">
-                {detailError}
-              </p>
+      {selectedId ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/60 px-4 py-6 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(ev) => {
+            if (ev.target === ev.currentTarget) closeDetailModal();
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="node-detail-title"
+            className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-3xl border border-zinc-200 bg-amber-50 shadow-2xl dark:border-zinc-700 dark:bg-zinc-950"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-amber-200 bg-amber-100/70 px-5 py-4 dark:border-zinc-800 dark:bg-zinc-900">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                  Node Note
+                </p>
+                <h2
+                  id="node-detail-title"
+                  className="text-lg font-semibold text-zinc-950 dark:text-zinc-50"
+                >
+                  {detail?.title ?? "노드 설명"}
+                </h2>
+              </div>
               <button
                 type="button"
-                onClick={() => selectedId && void loadDetail(selectedId)}
-                className="text-sm font-medium text-emerald-700 underline dark:text-emerald-400"
+                onClick={closeDetailModal}
+                className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                aria-label="노트 닫기"
               >
-                다시 시도
+                닫기
               </button>
             </div>
-          ) : detail ? (
-            <article className="space-y-4 text-sm">
-              <header>
-                <p className="text-xs uppercase tracking-wide text-zinc-500">
-                  {SECTION_LABEL[detail.type]}
+            <div className="max-h-[calc(92vh-5rem)] overflow-y-auto px-5 py-5 sm:px-7">
+              {detailLoading ? (
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                  설명을 불러오는 중…
                 </p>
-                <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-                  {detail.title}
-                </h2>
-              </header>
-              {detail.quality_warnings?.length ? (
-                <ul className="list-inside list-disc text-xs text-amber-800 dark:text-amber-200">
-                  {detail.quality_warnings.map((w) => (
-                    <li key={w}>{w}</li>
-                  ))}
-                </ul>
-              ) : null}
-              {detail.topic_context_line ? (
-                <p className="rounded-lg bg-zinc-100 px-3 py-2 text-xs leading-relaxed text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
-                  {detail.topic_context_line}
-                </p>
-              ) : null}
-              {detail.from_concept_store ? (
-                <p className="text-xs font-medium text-emerald-800 dark:text-emerald-200">
-                  Concept 저장소의 설명을 바탕으로 보여 줍니다.
-                </p>
-              ) : null}
-              <section>
-                <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                  왜 중요한가
-                </h3>
-                <p className="mt-1 text-zinc-700 dark:text-zinc-300">
-                  {detail.why_it_matters}
-                </p>
-              </section>
-              <section>
-                <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                  쉬운 설명
-                </h3>
-                <p className="mt-1 whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
-                  {detail.easy_explanation}
-                </p>
-              </section>
-              <section>
-                <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                  비유
-                </h3>
-                <p className="mt-1 text-zinc-700 dark:text-zinc-300">
-                  {detail.analogy || "—"}
-                </p>
-              </section>
-              <section>
-                <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                  예시
-                </h3>
-                <pre className="mt-1 overflow-x-auto whitespace-pre-wrap rounded-lg bg-zinc-100 p-3 text-xs text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
-                  {detail.example}
-                </pre>
-              </section>
-              <section>
-                <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                  자주 하는 오해
-                </h3>
-                <ul className="mt-1 list-inside list-disc text-zinc-700 dark:text-zinc-300">
-                  {detail.common_misconceptions.map((m) => (
-                    <li key={m}>{m}</li>
-                  ))}
-                </ul>
-              </section>
-              <section>
-                <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                  이해 점검
-                </h3>
-                {detail.check_questions.length === 0 ? (
-                  <p className="mt-1 text-xs text-zinc-500">항목 없음</p>
-                ) : (
-                <ul className="mt-2 space-y-3">
-                  {detail.check_questions.map((q, i) => (
-                    <li
-                      key={`${q.question}-${i}`}
-                      className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700"
-                    >
-                      <p className="font-medium text-zinc-800 dark:text-zinc-200">
-                        {q.question}
-                      </p>
-                      <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-                        {q.answer}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-                )}
-              </section>
-              {detail.prerequisite_concepts &&
-              detail.prerequisite_concepts.length > 0 ? (
-                <section>
-                  <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                    선수 개념 (저장소)
-                  </h3>
-                  <ul className="mt-1 list-inside list-disc text-zinc-700 dark:text-zinc-300">
-                    {detail.prerequisite_concepts.map((p) => (
-                      <li key={p.id}>{p.title}</li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
-              {detail.related_concepts && detail.related_concepts.length > 0 ? (
-                <section>
-                  <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                    관련 개념
-                  </h3>
-                  <ul className="mt-1 list-inside list-disc text-zinc-700 dark:text-zinc-300">
-                    {detail.related_concepts.map((p) => (
-                      <li key={p.id}>{p.title}</li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
-              {detail.used_in_other_trees &&
-              detail.used_in_other_trees.length > 0 ? (
-                <section>
-                  <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                    다른 학습 주제에서의 사용
-                  </h3>
-                  <ul className="mt-1 space-y-1 text-zinc-700 dark:text-zinc-300">
-                    {detail.used_in_other_trees.map((t) => (
-                      <li key={t.tree_id} className="text-xs">
-                        <span className="font-medium">{t.topic}</span>
-                        <span className="text-zinc-500">
-                          {" "}
-                          — {t.role_in_tree}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
-              {detail.next_nodes.length > 0 ? (
-                <section>
-                  <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                    다음에 볼 노드 (키)
-                  </h3>
-                  <p className="mt-1 text-xs text-zinc-500">
-                    {detail.next_nodes.join(", ")}
+              ) : detailError ? (
+                <div className="space-y-3 rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/30">
+                  <p className="text-sm text-red-700 dark:text-red-300">
+                    {detailError}
                   </p>
-                </section>
+                  <button
+                    type="button"
+                    onClick={() => selectedId && void loadDetail(selectedId)}
+                    className="text-sm font-medium text-emerald-700 underline dark:text-emerald-400"
+                  >
+                    다시 시도
+                  </button>
+                </div>
+              ) : detail ? (
+                <article className="space-y-5 text-sm leading-relaxed">
+                  <header className="rounded-2xl border border-amber-200 bg-white/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
+                    <p className="text-xs uppercase tracking-wide text-zinc-500">
+                      {SECTION_LABEL[detail.type]}
+                    </p>
+                    <h3 className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+                      {detail.title}
+                    </h3>
+                  </header>
+                  {detail.quality_warnings?.length ? (
+                    <ul className="list-inside list-disc rounded-xl bg-amber-100 px-4 py-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                      {detail.quality_warnings.map((w) => (
+                        <li key={w}>{w}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {detail.topic_context_line ? (
+                    <p className="rounded-xl bg-zinc-100 px-4 py-3 text-xs leading-relaxed text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                      {detail.topic_context_line}
+                    </p>
+                  ) : null}
+                  {detail.from_concept_store ? (
+                    <p className="text-xs font-medium text-emerald-800 dark:text-emerald-200">
+                      Concept 저장소의 설명을 바탕으로 보여 줍니다.
+                    </p>
+                  ) : null}
+                  <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
+                    <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
+                      왜 중요한가
+                    </h3>
+                    <p className="mt-1 text-zinc-700 dark:text-zinc-300">
+                      {detail.why_it_matters}
+                    </p>
+                  </section>
+                  <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
+                    <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
+                      쉬운 설명
+                    </h3>
+                    <p className="mt-1 whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
+                      {detail.easy_explanation}
+                    </p>
+                  </section>
+                  <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
+                    <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
+                      비유
+                    </h3>
+                    <p className="mt-1 text-zinc-700 dark:text-zinc-300">
+                      {detail.analogy || "—"}
+                    </p>
+                  </section>
+                  <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
+                    <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
+                      예시
+                    </h3>
+                    <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-xl bg-zinc-100 p-3 text-xs text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+                      {detail.example}
+                    </pre>
+                  </section>
+                  <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
+                    <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
+                      자주 하는 오해
+                    </h3>
+                    <ul className="mt-1 list-inside list-disc text-zinc-700 dark:text-zinc-300">
+                      {detail.common_misconceptions.map((m) => (
+                        <li key={m}>{m}</li>
+                      ))}
+                    </ul>
+                  </section>
+                  <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
+                    <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
+                      이해 점검
+                    </h3>
+                    {detail.check_questions.length === 0 ? (
+                      <p className="mt-1 text-xs text-zinc-500">항목 없음</p>
+                    ) : (
+                      <ul className="mt-2 space-y-3">
+                        {detail.check_questions.map((q, i) => (
+                          <li
+                            key={`${q.question}-${i}`}
+                            className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-700"
+                          >
+                            <p className="font-medium text-zinc-800 dark:text-zinc-200">
+                              {q.question}
+                            </p>
+                            <p className="mt-1 text-zinc-600 dark:text-zinc-400">
+                              {q.answer}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                  {detail.prerequisite_concepts &&
+                  detail.prerequisite_concepts.length > 0 ? (
+                    <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
+                      <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
+                        선수 개념 (저장소)
+                      </h3>
+                      <ul className="mt-1 list-inside list-disc text-zinc-700 dark:text-zinc-300">
+                        {detail.prerequisite_concepts.map((p) => (
+                          <li key={p.id}>{p.title}</li>
+                        ))}
+                      </ul>
+                    </section>
+                  ) : null}
+                  {detail.related_concepts && detail.related_concepts.length > 0 ? (
+                    <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
+                      <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
+                        관련 개념
+                      </h3>
+                      <ul className="mt-1 list-inside list-disc text-zinc-700 dark:text-zinc-300">
+                        {detail.related_concepts.map((p) => (
+                          <li key={p.id}>{p.title}</li>
+                        ))}
+                      </ul>
+                    </section>
+                  ) : null}
+                  {detail.used_in_other_trees &&
+                  detail.used_in_other_trees.length > 0 ? (
+                    <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
+                      <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
+                        다른 학습 주제에서의 사용
+                      </h3>
+                      <ul className="mt-1 space-y-1 text-zinc-700 dark:text-zinc-300">
+                        {detail.used_in_other_trees.map((t) => (
+                          <li key={t.tree_id} className="text-xs">
+                            <span className="font-medium">{t.topic}</span>
+                            <span className="text-zinc-500"> — {t.role_in_tree}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  ) : null}
+                  {detail.next_nodes.length > 0 ? (
+                    <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
+                      <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
+                        다음에 볼 노드 (키)
+                      </h3>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        {detail.next_nodes.join(", ")}
+                      </p>
+                    </section>
+                  ) : null}
+                </article>
               ) : null}
-            </article>
-          ) : null}
+            </div>
+          </section>
         </div>
-      </aside>
+      ) : null}
     </div>
   );
 }

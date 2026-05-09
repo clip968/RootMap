@@ -13,9 +13,9 @@ Phase 1~2의 UI는 `선수지식 / 핵심 개념 / 부가 지식 / 오개념 / �
 ### 1. 트리 구성 로직
 
 - `ApiLearningNode.node_key`를 기준으로 노드를 찾는다.
-- 우선 `children` 배열을 부모→자식 간선으로 사용한다.
-- `children`이 부족한 LLM 출력에 대비해 `prerequisites`도 역방향 간선으로 보강한다.
-  - 예: `lifetime_elision.prerequisites = ["borrow_checker"]`이면 `borrow_checker → lifetime_elision` 연결 추가
+- `children` 배열을 부모→직접 선수지식 자식 간선으로만 사용한다.
+- `prerequisites`는 학습 순서·검증용 메타데이터로 남기며, Tree View에서 선수지식→의존 개념 방향으로 뒤집어 렌더링하지 않는다.
+- LLM 프롬프트도 목표 지식 중심 top-down prerequisite decomposition tree를 만들도록 고정한다.
 - incoming edge가 없는 노드를 루트 후보로 삼아 주제 루트 아래에 붙인다.
 - 추천 순서(`recommended_order`)를 이용해 같은 depth의 노드 순서를 안정화한다.
 
@@ -29,7 +29,7 @@ Phase 1~2의 UI는 `선수지식 / 핵심 개념 / 부가 지식 / 오개념 / �
   - Concept 재사용 badge
   - 추천 badge
   - 이해 상태 select
-- 클릭 시 기존 상세 패널을 그대로 연다.
+- 클릭 시 기존 상세 패널 대신 노트형 modal/dialog를 연다.
 
 ### 3. 기존 섹션 보기 유지
 
@@ -46,13 +46,13 @@ Phase 1~2의 UI는 `선수지식 / 핵심 개념 / 부가 지식 / 오개념 / �
 ## 산출물
 
 - Tree View 빌더 함수
-- Tree View 렌더링 UI
+- 목표 지식 → 직접 선수지식 방향의 Tree View 렌더링 UI
 - 보기 방식 토글
 - 기존 섹션 보기 fallback
 
 ## 검증 기준
 
 - `/tree/[treeId]` 진입 시 Tree View가 기본 표시된다.
-- 각 노드 클릭, 상세 패널, 진행 상태 변경이 정상 동작한다.
+- 각 노드 클릭, 상세 모달, 진행 상태 변경이 정상 동작한다.
 - 추천/Concept 재사용 badge가 Tree View에서도 보인다.
 - 트리 관계가 없는 노드도 화면에서 사라지지 않는다.
