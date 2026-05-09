@@ -46,6 +46,7 @@ Phase 2.5 Tree View가 단순히 동작하는 수준을 넘어, 실제 학습 �
 - 마우스 휠은 Tree View DOM이 렌더링된 뒤 native wheel listener(`passive: false`, `capture: true`)에서 차단해 포인터가 Tree View 안에 있을 때 페이지 스크롤 대신 Tree View 확대·축소로만 동작하게 했다.
 - Tree View viewport에는 `overscroll-contain`을 적용해 트리 영역 조작이 페이지 스크롤로 전파되지 않게 보강하고, 기본 스크롤바는 숨겼다.
 - 축소된 트리가 잘려 보이지 않도록 viewport 높이, scale 보정 min-height, 내부 padding, 중앙 정렬 버튼을 추가했다.
+- 확대 상태에서도 트리의 좌측 끝이 스크롤 가능 영역 안에 남도록 Tree View wrapper와 가지 목록은 `justify-start`로 정렬하고, scale 기준은 `top left`로 고정했다.
 - 검증 명령:
   - `cd apps/web && npm run lint -- src/components/tree-page-client.tsx`
   - `cd apps/web && npm run build`

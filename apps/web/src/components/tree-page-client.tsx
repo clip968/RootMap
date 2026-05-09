@@ -547,7 +547,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
           <>
             <div className={`h-6 w-px ${tone.connector}`} />
             <ul
-              className={`flex items-start justify-center gap-4 pt-6 ${
+              className={`flex items-start justify-start gap-4 pt-6 ${
                 branch.children.length > 1
                   ? "border-t border-zinc-300 dark:border-zinc-700"
                   : ""
@@ -766,10 +766,10 @@ export function TreePageClient({ treeId }: { treeId: string }) {
               }`}
             >
               <div
-                className="inline-flex min-h-full min-w-full justify-center px-8 py-8 transition-transform"
+                className="inline-flex min-h-full min-w-full justify-start px-8 py-8 transition-transform"
                 style={{
                   transform: `scale(${treeScale})`,
-                  transformOrigin: "top center",
+                  transformOrigin: "top left",
                   width: scaledTreeWidth,
                   minHeight: scaledTreeMinHeight,
                 }}
@@ -788,7 +788,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                     <>
                       <div className="h-8 w-px bg-emerald-300 dark:bg-emerald-700" />
                       <ul
-                        className={`flex items-start justify-center gap-5 pt-6 ${
+                        className={`flex items-start justify-start gap-5 pt-6 ${
                           treeBranches.length > 1
                             ? "border-t border-zinc-300 dark:border-zinc-700"
                             : ""
