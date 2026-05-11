@@ -270,6 +270,21 @@ export function bulkInsertDocumentConcepts(
     .all();
 }
 
+/**
+ * 문서의 모든 청크를 chunkIndex 순서로 조회한다.
+ */
+export function getDocumentChunks(
+  documentId: string,
+): DocumentChunkRow[] {
+  const db = getDb();
+  return db
+    .select()
+    .from(documentChunks)
+    .where(eq(documentChunks.documentId, documentId))
+    .orderBy(documentChunks.chunkIndex)
+    .all();
+}
+
 export function createDocumentLearningTreeLink(
   documentId: string,
   treeId: string,
