@@ -7,11 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "check": "npm run lint && npm run db:smoke && npm run llm:smoke-parse && npm run phase1:smoke && npm run phase2:smoke && npm run build",
+    "check": "npm run lint && npm run db:smoke && npm run document:upload-smoke && npm run llm:smoke-parse && npm run phase1:smoke && npm run phase2:smoke && npm run build",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:smoke": "DATABASE_URL=file:./data/smoke.db tsx scripts/smoke-learning-repo.ts",
+    "document:upload-smoke": "DATABASE_URL=file:./data/document-upload-smoke.db tsx scripts/smoke-document-upload.ts",
     "llm:smoke-parse": "tsx scripts/smoke-llm-parse.ts",
     "phase1:smoke": "tsx scripts/smoke-phase1-mvp.ts",
     "phase2:smoke": "tsx scripts/smoke-phase2-concepts.ts"

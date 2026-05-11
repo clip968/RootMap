@@ -9,7 +9,11 @@ export type ApiErrorCode =
   | "NOT_FOUND"
   | "FORBIDDEN"
   | "INVALID_STATUS"
-  | "INVALID_REQUEST";
+  | "INVALID_REQUEST"
+  | "UNSUPPORTED_FILE_TYPE"
+  | "FILE_TOO_LARGE"
+  | "EMPTY_FILE"
+  | "DOCUMENT_UPLOAD_FAILED";
 
 export interface ApiErrorBody {
   error: {
