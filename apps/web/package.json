@@ -7,12 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "check": "npm run lint && npm run db:smoke && npm run document:upload-smoke && npm run llm:smoke-parse && npm run phase1:smoke && npm run phase2:smoke && npm run build",
+    "check": "npm run lint && npm run db:smoke && npm run document:upload-smoke && npm run document:extract-smoke && npm run llm:smoke-parse && npm run phase1:smoke && npm run phase2:smoke && npm run build",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:smoke": "DATABASE_URL=file:./data/smoke.db tsx scripts/smoke-learning-repo.ts",
     "document:upload-smoke": "DATABASE_URL=file:./data/document-upload-smoke.db tsx scripts/smoke-document-upload.ts",
+    "document:extract-smoke": "DATABASE_URL=file:./data/document-extract-smoke.db tsx scripts/smoke-document-extract.ts",
     "llm:smoke-parse": "tsx scripts/smoke-llm-parse.ts",
     "phase1:smoke": "tsx scripts/smoke-phase1-mvp.ts",
     "phase2:smoke": "tsx scripts/smoke-phase2-concepts.ts"
@@ -21,6 +22,7 @@
     "better-sqlite3": "^12.9.0",
     "drizzle-orm": "^0.45.2",
     "next": "16.2.4",
+    "pdfjs-dist": "^5.7.284",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "zod": "^4.4.3"
@@ -34,6 +36,7 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
+    "pdf-lib": "^1.17.1",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5"

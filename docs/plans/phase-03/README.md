@@ -31,7 +31,7 @@ RootMap을 단순 주제 입력 기반 서비스에서 문서 기반 학습 서�
 
 - [x] 01. [01-document-schema-and-storage.md](./01-document-schema-and-storage.md) - `documents`, `document_pages`, `document_chunks`, `document_concepts`, `document_learning_trees` DDL·저장소 기반
 - [x] 02. [02-document-upload-and-validation-api.md](./02-document-upload-and-validation-api.md) - 문서 업로드 API, 파일 형식·크기·권한·보안 검증
-- [ ] 03. [03-text-extraction-and-chunking.md](./03-text-extraction-and-chunking.md) - PDF/TXT/MD 텍스트 추출, 페이지 저장, 청크 분할
+- [x] 03. [03-text-extraction-and-chunking.md](./03-text-extraction-and-chunking.md) - PDF/TXT/MD 텍스트 추출, 페이지 저장, 청크 분할
 - [ ] 04. [04-document-llm-schemas-and-prompts.md](./04-document-llm-schemas-and-prompts.md) - 청크별 추출·문서 통합·문서 트리·노드 설명 LLM 스키마/프롬프트
 - [ ] 05. [05-document-processing-pipeline.md](./05-document-processing-pipeline.md) - `POST /api/documents/:documentId/process`, 상태 전이, 실패 처리, 트리 생성 orchestration
 - [ ] 06. [06-document-concept-resolution-and-persistence.md](./06-document-concept-resolution-and-persistence.md) - Concept Store 매칭, 신규 Concept 생성, `document_concepts` 출처 저장

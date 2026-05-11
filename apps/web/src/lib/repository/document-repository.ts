@@ -138,6 +138,34 @@ export function updateDocumentStatus(
   return result.changes > 0;
 }
 
+export function updateDocumentExtractedInfo(
+  documentId: string,
+  pageCount: number,
+  extractedTextLength: number,
+): boolean {
+  const db = getDb();
+  const result = db
+    .update(documents)
+    .set({
+      pageCount,
+      extractedTextLength,
+      updatedAt: nowIso(),
+    })
+    .where(eq(documents.id, documentId))
+    .run();
+  return result.changes > 0;
+}
+
+export function getDocumentById(documentId: string): DocumentRow | null {
+  const db = getDb();
+  const rows = db
+    .select()
+    .from(documents)
+    .where(eq(documents.id, documentId))
+    .all();
+  return rows[0] ?? null;
+}
+
 export function bulkInsertDocumentPages(
   documentId: string,
   pages: DocumentPageInput[],
