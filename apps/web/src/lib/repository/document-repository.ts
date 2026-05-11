@@ -549,6 +549,29 @@ export function getDocumentLearningTreeForUser(
 }
 
 /**
+ * Phase 3 Task 11: 특정 문서의 청크 텍스트를 반환한다.
+ * 노드 상세 지연 생성 시 LLM 컨텍스트로 사용된다.
+ */
+export function getChunkTextsForConcept(
+  documentId: string,
+  _conceptTitle: string,
+  limit = 3,
+): Array<{ chunk_id: string; content: string }> {
+  const db = getDb();
+  const rows = db
+    .select({
+      chunkId: documentChunks.id,
+      content: documentChunks.text,
+    })
+    .from(documentChunks)
+    .where(eq(documentChunks.documentId, documentId))
+    .limit(limit)
+    .all();
+
+  return rows.map((r) => ({ chunk_id: r.chunkId, content: r.content }));
+}
+
+/**
  * evidence 조회는 document_concepts.id에서 시작하지만, 반드시 연결된 document의 user_id를 함께 확인한다.
  */
 export function getDocumentConceptEvidenceForUser(

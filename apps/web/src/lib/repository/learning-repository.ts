@@ -442,6 +442,35 @@ export function getNodeById(nodeId: string): LearningNodeRow | null {
   return mapNodeRow(row);
 }
 
+/**
+ * Phase 3 Task 11: 특정 노드의 description/difficulty를 업데이트한다.
+ * 점진적 트리 생성에서 사용자가 노드를 클릭하면 지연 생성된
+ * 상세 정보를 저장한다.
+ */
+export function updateNodeDetail(
+  treeId: string,
+  nodeId: string,
+  detail: {
+    description: string;
+    difficulty: number;
+  },
+): void {
+  const db = getDb();
+  db.update(learningNodes)
+    .set({
+      description: detail.description,
+      difficulty: detail.difficulty,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(
+      and(
+        eq(learningNodes.treeId, treeId),
+        eq(learningNodes.id, nodeId),
+      ),
+    )
+    .run();
+}
+
 export function saveNodeDetail(
   nodeId: string,
   detailJson: NodeDetailResponse,

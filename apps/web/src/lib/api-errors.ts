@@ -18,7 +18,9 @@ export type ApiErrorCode =
   | "FILE_TOO_LARGE"
   | "EMPTY_FILE"
   | "DOCUMENT_UPLOAD_FAILED"
-  | "PROCESSING_FAILED";
+  | "PROCESSING_FAILED"
+  | "INVALID_OPERATION"
+  | "DETAIL_GENERATION_FAILED";
 
 export interface ApiErrorBody {
   error: {
