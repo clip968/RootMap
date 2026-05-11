@@ -83,8 +83,11 @@ export function StartTopicForm() {
   };
 
   return (
-    /* 상단 고정 툴바(~3rem)를 제외한 영역을 꽉 채워 세로 중앙 정렬 */
+    /*
+      화면: 상단 AppShell 툴바 높이를 빼고 세로 중앙에 히어로 + 입력 카드 + 예시 칩
+     */
     <div className="flex min-h-[calc(100dvh-3rem)] w-full flex-col items-center justify-center px-4 py-10">
+      {/** 마케팅/안내 문구 */}
       <div className="mb-8 max-w-2xl space-y-3 text-center">
         <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
           RootMap
@@ -97,6 +100,7 @@ export function StartTopicForm() {
         </p>
       </div>
 
+      {/** 주제 입력 · 생성 옵션 · 제출 */}
       <div className="w-full max-w-2xl rounded-3xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
         <label htmlFor="topic" className="sr-only">
           주제
@@ -170,6 +174,7 @@ export function StartTopicForm() {
         </div>
       </div>
 
+      {/** 한 번에 주제 채우기용 */}
       <div className="mt-6 w-full max-w-2xl space-y-2">
         <p className="text-center text-xs font-medium uppercase tracking-wide text-zinc-500 sm:text-left">
           예시 주제

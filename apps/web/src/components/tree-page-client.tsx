@@ -1,5 +1,20 @@
 "use client";
 
+/**
+ * `/tree/[treeId]` 페이지의 클라이언트 본문.
+ *
+ * 데이터 흐름 요약:
+ * - 마운트 시 `GET /api/trees/:id`로 트리 본문, 이어서 `GET .../recommendations`로 추천 목록
+ * - 노드 클릭 시 `POST /api/nodes/:nodeId/detail`로 확장 설명(모달)
+ * - 이해 정도 변경 시 `PATCH /api/nodes/:id/progress` 후 추천 재조회
+ * - "다시 생성"은 홈과 동일하게 `POST /api/trees/generate` 후 새 `tree_id`로 라우팅
+ *
+ * UI:
+ * - Tree 보기: API `children` 링크로 재귀 가지 + 순환/공유 시 "참조" 배지
+ * - 섹션 보기: 노드 타입별(선수지식/핵심/…) 리스트
+ * - 트리 뷰포트: 휠로 zoom, 빈 영역 드래그로 패닝
+ */
+
 import type { ApiTreeResponse } from "@/lib/tree/bundle-to-api";
 import type { ApiNodeDetailResponse } from "@/lib/services/node-detail";
 import type {
@@ -12,6 +27,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+/** 섹션·Tree 정렬에 쓰는 노드 타입 순서(화면 표시 순 고정) */
 const SECTION_ORDER: NodeType[] = [
   "prerequisite",
   "core",
@@ -20,6 +36,7 @@ const SECTION_ORDER: NodeType[] = [
   "quiz",
 ];
 
+/** 노드 타입 → 섹션/카드 제목에 쓰는 짧은 한글 */
 const SECTION_LABEL: Record<NodeType, string> = {
   prerequisite: "선수지식",
   core: "핵심 개념",
@@ -28,12 +45,14 @@ const SECTION_LABEL: Record<NodeType, string> = {
   quiz: "이해 점검",
 };
 
+/** 진행 상태 Enum → `<select>` 옵션 라벨 */
 const PROGRESS_LABEL: Record<ProgressStatus, string> = {
   known: "안다",
   partial: "조금 안다",
   unknown: "모른다",
 };
 
+/** 트리 캔버스 zoom 한계(너무 작게/크게 못 하게) */
 const MIN_TREE_SCALE = 0.2;
 const MAX_TREE_SCALE = 1;
 const TREE_SCALE_STEP = 0.05;
@@ -48,6 +67,7 @@ function formatTreeScale(value: number): string {
 
 type TreeViewMode = "tree" | "sections";
 
+/** 트리 "다시 생성" 배너에서 경과 시간만큼 로테이션하는 안내 문구(start-topic-form과 동일 취지) */
 function generationStageMessage(elapsedSeconds: number): string {
   if (elapsedSeconds < 5) return "주제를 분석하고 학습 목표를 정리하는 중입니다.";
   if (elapsedSeconds < 20) return "학습 경로와 선수지식 Tree를 생성하는 중입니다.";
@@ -55,6 +75,10 @@ function generationStageMessage(elapsedSeconds: number): string {
   return "생성 결과를 검증하고 Tree로 저장하는 중입니다.";
 }
 
+/**
+ * 트리 UI 한 줄(재귀 `renderTreeBranch`가 이 구조를 소비).
+ * - `isReference`: 같은 노드가 이미 위쪽에서 펼쳐졌거나 순환 경로상이면 자식 없이 링크만 표시
+ */
 interface TreeBranch {
   key: string;
   node: ApiLearningNode;
@@ -62,6 +86,7 @@ interface TreeBranch {
   isReference: boolean;
 }
 
+/** 타입별 Tailwind 팔레트 — 카드 테두리/배지/세로 연결선 */
 const NODE_TYPE_TONE: Record<NodeType, { card: string; badge: string; connector: string }> = {
   prerequisite: {
     card: "border-blue-200 bg-blue-50/80 dark:border-blue-900 dark:bg-blue-950/25",
@@ -90,10 +115,18 @@ const NODE_TYPE_TONE: Record<NodeType, { card: string; badge: string; connector:
   },
 };
 
+/** `compareNodeKeys`에서 recommended_order 동률일 때 타입 섹션 순으로 재정렬 */
 const TYPE_ORDER_INDEX = new Map<NodeType, number>(
   SECTION_ORDER.map((type, index) => [type, index]),
 );
 
+/**
+ * 플랫 노드 배열 → 루트에서 아래로만 펼치는 가지 구조.
+ *
+ * - 간선: API의 `node.children` 만 사용(LLM이 준 “배우는 순서” 방향). `prerequisites` 역간선은 만들지 않음.
+ * - 루트: 부모에서 가리키지 않는 노드들.
+ * - 사이클·다중 부모: `expanded`와 `path`로 이미 방문한 노드는 참조 노드로 잘라 무한 재귀 방지.
+ */
 function buildTreeBranches(
   nodes: ApiLearningNode[],
   recommendedOrder: string[],
@@ -190,8 +223,10 @@ function buildTreeBranches(
   return branches;
 }
 
+/** `tree/[treeId]/page.tsx`에서 넘기는 URL 세그먼트 */
 export function TreePageClient({ treeId }: { treeId: string }) {
   const router = useRouter();
+  /** 서버에서 복원한 트리 전체(ApiTreeResponse). 없으면 로딩/에러 분기 */
   const [tree, setTree] = useState<ApiTreeResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [recommendations, setRecommendations] = useState<
@@ -199,18 +234,23 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   >([]);
   const [recoError, setRecoError] = useState<string | null>(null);
 
+  /** 선택한 학습 노드(DB uuid) — 상세 모달·하이라이트 */
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ApiNodeDetailResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
+  /** 같은 주제로 새 트리를 만들 때(현재 페이지에 머무르지 않고 새 id로 이동) */
   const [regenLoading, setRegenLoading] = useState(false);
   const [regenElapsedSeconds, setRegenElapsedSeconds] = useState(0);
   const [regenError, setRegenError] = useState<string | null>(null);
   const [reuseConcepts, setReuseConcepts] = useState(true);
   const [viewMode, setViewMode] = useState<TreeViewMode>("tree");
+  /** 트리 캔버스 CSS transform scale (0.2~1) */
   const [treeScale, setTreeScale] = useState(0.55);
+  /** 스크롤 가능한 트리 컨테이너 — 패닝·휠 zoom 리스너 부착 대상 */
   const treeViewportRef = useRef<HTMLDivElement | null>(null);
+  /** 포인터 캡처 드래그 중 시작 스크롤 위치 저장 */
   const dragStateRef = useRef<{
     pointerId: number;
     startX: number;
@@ -219,6 +259,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     scrollTop: number;
   } | null>(null);
   const [isTreeDragging, setIsTreeDragging] = useState(false);
+  /** PATCH progress 중인 노드 id — 해당 행만 셀렉트 비활성 */
   const [progressBusy, setProgressBusy] = useState<string | null>(null);
 
   const loadTree = useCallback(async () => {
@@ -251,6 +292,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     );
   }, [treeId]);
 
+  /** `treeId` 변경 시 트리→추천 순으로 로드(언마운트 시 in-flight 무시) */
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -263,11 +305,13 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     };
   }, [treeId, loadTree, loadRecommendations]);
 
+  /** 추천 목록에 든 노드 id — 카드 테두리·배지 하이라이트용 Set */
   const recommendSet = useMemo(
     () => new Set(recommendations.map((r) => r.node_id)),
     [recommendations],
   );
 
+  /** 섹션 보기: 타입별로 노드 그룹핑 */
   const grouped = useMemo(() => {
     if (!tree) return null;
     const m = new Map<NodeType, ApiLearningNode[]>();
@@ -278,14 +322,20 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     return m;
   }, [tree]);
 
+  /** Tree 보기: 순환 안전한 재귀 가지 */
   const treeBranches = useMemo(() => {
     if (!tree) return [];
     return buildTreeBranches(tree.nodes, tree.recommended_order);
   }, [tree]);
 
+  /** scale이 작을수록 내부 박스 너비/최소 높이를 크게 잡아 스크롤 영역 확보 */
   const scaledTreeWidth = `${100 / treeScale}%`;
   const scaledTreeMinHeight = `max(100%, ${100 / treeScale}%)`;
 
+  /**
+   * 트리 패닝: 버튼·링크가 아닌 빈 배경에서만 드래그 시작.
+   * `setPointerCapture`로 커서가 뷰포트 밖으로 나가도 move 이벤트 수신.
+   */
   const onTreePointerDown = (ev: React.PointerEvent<HTMLDivElement>) => {
     const viewport = treeViewportRef.current;
     if (!viewport) return;
@@ -330,6 +380,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   };
 
 
+  /** 트리 구조 변경·모드 전환 후 첫 프레임에 스크롤 위치를 중앙 상단으로 */
   const centerTreeViewport = () => {
     const viewport = treeViewportRef.current;
     if (!viewport) return;
@@ -343,6 +394,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     return () => window.cancelAnimationFrame(frame);
   }, [treeBranches.length, viewMode]);
 
+  /** 트리 뷰포트에서 휠 = 페이지 스크롤이 아니라 확대/축소(캡처 단계에서 가로챔) */
   useEffect(() => {
     if (viewMode !== "tree") return;
     const viewport = treeViewportRef.current;

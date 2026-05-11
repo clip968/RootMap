@@ -118,3 +118,117 @@ export interface ApiRecommendationItem {
   title: string;
   reason: string;
 }
+
+// ──────────────────────────────────────────────
+// Phase 3 문서 기반 LLM 응답 타입 (명세 §7·§11)
+// ──────────────────────────────────────────────
+
+/** 문서 개념 유형 */
+export type DocumentConceptType =
+  | "document_topic"
+  | "prerequisite"
+  | "document_core"
+  | "method"
+  | "background"
+  | "misconception"
+  | "evaluation";
+
+/** 출처 유형 */
+export type DocumentSourceType = "explicit" | "inferred" | "generated";
+
+/** 문서 기반 트리 노드 유형 */
+export type DocumentNodeType =
+  | "prerequisite"
+  | "document_core"
+  | "supplementary"
+  | "misconception"
+  | "quiz";
+
+/** 청크별 개념 추출 — 단일 후보 */
+export interface ChunkConceptCandidate {
+  canonical_title: string;
+  aliases: string[];
+  type: DocumentConceptType;
+  short_description: string;
+  importance: number;
+  difficulty: number;
+  source_type: "explicit";
+  evidence_snippet: string;
+}
+
+/** 청크별 개념 추출 — LLM 응답 최상위 */
+export interface ChunkConceptExtractionResponse {
+  document_id: string;
+  chunk_id: string;
+  section_title: string;
+  concept_candidates: ChunkConceptCandidate[];
+}
+
+/** 문서 통합 개념 — 단일 개념 */
+export interface ConsolidatedConcept {
+  canonical_title: string;
+  aliases: string[];
+  type: DocumentConceptType;
+  importance: number;
+  difficulty: number;
+  source_type: "explicit" | "inferred";
+  evidence: Array<{
+    chunk_id: string;
+    page_start: number | null;
+    page_end: number | null;
+    section_title: string;
+  }>;
+}
+
+/** 문서 전체 개념 통합 — LLM 응답 */
+export interface DocumentConsolidationResponse {
+  document_title: string;
+  main_topic: string;
+  summary: string;
+  concepts: ConsolidatedConcept[];
+}
+
+/** 문서 기반 트리 노드 */
+export interface DocumentTreeNode {
+  id: string;
+  title: string;
+  type: DocumentNodeType;
+  description: string;
+  difficulty: number;
+  prerequisites: string[];
+  children: string[];
+  source_type: DocumentSourceType;
+  evidence: Array<{
+    page_start: number | null;
+    page_end: number | null;
+    section_title: string;
+  }>;
+  concept_candidate: ConceptCandidate;
+}
+
+/** 문서 기반 학습 트리 — LLM 응답 */
+export interface DocumentTreeResponse {
+  topic: string;
+  document_id: string;
+  summary: string;
+  nodes: DocumentTreeNode[];
+  edges: LlmConceptEdge[];
+  recommended_order: string[];
+}
+
+/** 문서 기반 노드 상세 설명 — LLM 응답 */
+export interface DocumentNodeDetailResponse {
+  node_id: string;
+  title: string;
+  source_type: DocumentSourceType;
+  why_it_matters_for_document: string;
+  document_context_summary: string;
+  easy_explanation: string;
+  example: string;
+  common_misconceptions: string[];
+  check_questions: Array<{
+    question: string;
+    answer: string;
+  }>;
+  next_nodes: string[];
+}

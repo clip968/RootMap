@@ -2,8 +2,19 @@ import { LlmParseError, LlmValidationError } from "@/lib/llm/errors";
 import {
   learningTreeResponseSchema,
   nodeDetailResponseSchema,
+  chunkConceptExtractionResponseSchema,
+  documentConsolidationResponseSchema,
+  documentTreeResponseSchema,
+  documentNodeDetailResponseSchema,
 } from "@/lib/llm/schemas";
-import type { LearningTreeResponse, NodeDetailResponse } from "@/types/learning";
+import type {
+  LearningTreeResponse,
+  NodeDetailResponse,
+  ChunkConceptExtractionResponse,
+  DocumentConsolidationResponse,
+  DocumentTreeResponse,
+  DocumentNodeDetailResponse,
+} from "@/types/learning";
 
 export function stripLlmFences(raw: string): string {
   let s = raw.trim();
@@ -62,6 +73,73 @@ export function parseNodeDetailResponse(
   const result = nodeDetailResponseSchema.safeParse(parsed);
   if (!result.success) {
     throw new LlmValidationError("응답 형식이 올바르지 않습니다.", result.error.issues);
+  }
+  const data = result.data;
+  if (data.node_id !== expectedNodeId) {
+    throw new LlmValidationError(
+      `응답의 node_id가 요청과 일치하지 않습니다. (expected ${expectedNodeId})`,
+    );
+  }
+  return data;
+}
+
+// ──────────────────────────────────────────────
+// Phase 3 문서 기반 파서
+// ──────────────────────────────────────────────
+
+export function parseChunkConceptExtractionResponse(
+  rawModelText: string,
+): ChunkConceptExtractionResponse {
+  const parsed = parseJsonObject(rawModelText);
+  const result = chunkConceptExtractionResponseSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new LlmValidationError(
+      "청크 개념 추출 응답 형식이 올바르지 않습니다.",
+      result.error.issues,
+    );
+  }
+  return result.data;
+}
+
+export function parseDocumentConsolidationResponse(
+  rawModelText: string,
+): DocumentConsolidationResponse {
+  const parsed = parseJsonObject(rawModelText);
+  const result = documentConsolidationResponseSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new LlmValidationError(
+      "문서 개념 통합 응답 형식이 올바르지 않습니다.",
+      result.error.issues,
+    );
+  }
+  return result.data;
+}
+
+export function parseDocumentTreeResponse(
+  rawModelText: string,
+): DocumentTreeResponse {
+  const parsed = parseJsonObject(rawModelText);
+  const result = documentTreeResponseSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new LlmValidationError(
+      "문서 기반 학습 트리 응답 형식이 올바르지 않습니다.",
+      result.error.issues,
+    );
+  }
+  return result.data;
+}
+
+export function parseDocumentNodeDetailResponse(
+  rawModelText: string,
+  expectedNodeId: string,
+): DocumentNodeDetailResponse {
+  const parsed = parseJsonObject(rawModelText);
+  const result = documentNodeDetailResponseSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new LlmValidationError(
+      "문서 기반 노드 설명 응답 형식이 올바르지 않습니다.",
+      result.error.issues,
+    );
   }
   const data = result.data;
   if (data.node_id !== expectedNodeId) {

@@ -10,6 +10,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 interface AppShellProps {
+  /** `layout.tsx`에서 넘기는 자식 — 보통 각 경로의 `page.tsx` 전체 */
   children: React.ReactNode;
 }
 
