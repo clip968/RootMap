@@ -492,8 +492,40 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     [treeId],
   );
 
-  const onSelectNode = (nodeId: string) => {
+  const onSelectNode = async (nodeId: string) => {
     setSelectedId(nodeId);
+
+    // Phase 3 Task 11: 문서 트리의 빈 description 노드는 지연 생성
+    if (isDocumentTree && tree) {
+      const apiNode = tree.nodes.find((n) => n.id === nodeId);
+      if (apiNode && !apiNode.description) {
+        try {
+          const genRes = await fetch(`/api/trees/${treeId}/nodes/${nodeId}/generate-detail`, {
+            method: "POST",
+          });
+          if (genRes.ok) {
+            const genData = await genRes.json().catch(() => ({}));
+            // description 업데이트 (캐시 응답에도 포함)
+            if (genData.description || genData.detail) {
+              const newDesc = genData.description || genData.detail?.document_context_summary || genData.detail?.easy_explanation || "";
+              setTree((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      nodes: prev.nodes.map((n) =>
+                        n.id === nodeId ? { ...n, description: newDesc, has_detail: true } : n,
+                      ),
+                    }
+                  : prev,
+              );
+            }
+          }
+        } catch {
+          // generate-detail 실패는 무시 (기존 detail API fallback)
+        }
+      }
+    }
+
     void loadDetail(nodeId);
   };
 
@@ -693,7 +725,11 @@ export function TreePageClient({ treeId }: { treeId: string }) {
               {n.title}
             </span>
             <span className="mt-1 line-clamp-3 block text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
-              {n.description}
+              {n.description || (isDocumentTree ? (
+                <span className="italic text-zinc-400">노드를 클릭하면 상세 설명이 생성됩니다</span>
+              ) : (
+                <span className="text-zinc-400">설명 없음</span>
+              ))}
             </span>
             {renderDocumentNodeContext(n, "tree")}
             {n.concept_tree_count != null && n.concept_tree_count > 1 ? (
@@ -1086,7 +1122,11 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                               ) : null}
                             </span>
                             <p className="mt-1 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">
-                              {n.description}
+                              {n.description || (isDocumentTree ? (
+                                <span className="italic text-zinc-400">노드를 클릭하면 상세 설명이 생성됩니다</span>
+                              ) : (
+                                <span className="text-zinc-400">설명 없음</span>
+                              ))}
                             </p>
                             {renderDocumentNodeContext(n, "section")}
                             {n.concept_tree_count != null &&
