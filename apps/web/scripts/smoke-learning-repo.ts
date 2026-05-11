@@ -4,8 +4,12 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { eq } from "drizzle-orm";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { getDb, resetDbSingleton } from "../src/db/client";
+import { concepts, documentConcepts } from "../src/db/schema";
+import { resolveAndSaveDocumentConcepts } from "../src/lib/document/processor";
+import { allocateUniqueSlug, insertConceptFromCandidate } from "../src/lib/repository/concept-repository";
 import {
   createLearningNodes,
   createLearningTree,
@@ -26,7 +30,7 @@ import {
   getDocumentForUser,
   updateDocumentStatus,
 } from "../src/lib/repository/document-repository";
-import type { LearningTreeResponse, NodeDetailResponse } from "../src/types/learning";
+import type { ConsolidatedConcept, LearningTreeResponse, NodeDetailResponse } from "../src/types/learning";
 
 const dbRel = path.join("data", "smoke.db");
 const dbAbs = path.join(process.cwd(), dbRel);
@@ -122,17 +126,19 @@ if (extractedDocument?.processingStatus !== "text_extracted") {
 bulkInsertDocumentPages(documentId, [
   { pageNumber: 1, text: "RootMap 문서 기반 학습" },
 ]);
-bulkInsertDocumentChunks(documentId, [
+const chunks = bulkInsertDocumentChunks(documentId, [
   {
     chunkIndex: 0,
     pageStart: 1,
     pageEnd: 1,
     sectionTitle: "개요",
-    text: "RootMap은 문서를 학습 트리로 바꾼다.",
+    text: "RootMap은 문서를 학습 트리로 바꾼다. Softmax normalizes attention scores. A page fault is different from a page.",
     tokenCount: 12,
     metadata: { headingLevel: 1 },
   },
 ]);
+const chunkId = chunks[0]?.id;
+if (!chunkId) throw new Error("document chunk missing");
 const docConcepts = bulkInsertDocumentConcepts(documentId, [
   {
     conceptId: null,
@@ -154,6 +160,102 @@ const docConcepts = bulkInsertDocumentConcepts(documentId, [
   },
 ]);
 if (docConcepts.length !== 1) throw new Error("document concepts insert");
+
+const softmaxConcept = insertConceptFromCandidate(
+  db,
+  {
+    canonical_title: "Softmax",
+    aliases: ["softmax", "softmax function"],
+    domain: "machine_learning",
+    short_description: "attention score를 확률처럼 정규화하는 함수",
+    is_reusable: true,
+  },
+  allocateUniqueSlug("Softmax", db),
+);
+const pageConcept = insertConceptFromCandidate(
+  db,
+  {
+    canonical_title: "Page",
+    aliases: [],
+    domain: "operating_systems",
+    short_description: "메모리를 고정 크기로 나눈 단위",
+    is_reusable: true,
+  },
+  allocateUniqueSlug("Page", db),
+);
+const resolvedConcepts: ConsolidatedConcept[] = [
+  {
+    canonical_title: "소프트맥스",
+    aliases: ["Softmax"],
+    type: "prerequisite",
+    importance: 4,
+    difficulty: 2,
+    source_type: "explicit",
+    evidence: [
+      {
+        chunk_id: chunkId,
+        page_start: 1,
+        page_end: 1,
+        section_title: "개요",
+      },
+    ],
+  },
+  {
+    canonical_title: "Page Fault",
+    aliases: [],
+    type: "document_core",
+    importance: 5,
+    difficulty: 3,
+    source_type: "explicit",
+    evidence: [
+      {
+        chunk_id: chunkId,
+        page_start: 1,
+        page_end: 1,
+        section_title: "개요",
+      },
+    ],
+  },
+  {
+    canonical_title: "Memory Address",
+    aliases: [],
+    type: "prerequisite",
+    importance: 3,
+    difficulty: 2,
+    source_type: "inferred",
+    evidence: [],
+  },
+];
+
+const resolvedRows = resolveAndSaveDocumentConcepts(documentId, resolvedConcepts);
+if (resolvedRows.length !== 3) throw new Error("resolved document concepts count");
+
+const savedDocumentConcepts = db
+  .select()
+  .from(documentConcepts)
+  .where(eq(documentConcepts.documentId, documentId))
+  .all();
+const softmaxDocumentConcept = savedDocumentConcepts.find((concept) => concept.conceptTitle === "소프트맥스");
+if (softmaxDocumentConcept?.conceptId !== softmaxConcept.id) {
+  throw new Error("document concept should reuse Softmax by alias");
+}
+const softmaxEvidence = softmaxDocumentConcept.evidence as Array<{ snippet?: string }>;
+if (!softmaxEvidence[0]?.snippet?.includes("Softmax")) {
+  throw new Error("explicit document concept should keep chunk evidence snippet");
+}
+const pageFaultDocumentConcept = savedDocumentConcepts.find((concept) => concept.conceptTitle === "Page Fault");
+if (!pageFaultDocumentConcept?.conceptId || pageFaultDocumentConcept.conceptId === pageConcept.id) {
+  throw new Error("Page Fault must be stored as a distinct Concept from Page");
+}
+const inferredDocumentConcept = savedDocumentConcepts.find((concept) => concept.conceptTitle === "Memory Address");
+if (!inferredDocumentConcept?.conceptId || inferredDocumentConcept.sourceType !== "inferred") {
+  throw new Error("inferred document concept should be connected and keep source_type");
+}
+if ((inferredDocumentConcept.evidence as unknown[]).length !== 0) {
+  throw new Error("inferred document concept should not keep direct evidence");
+}
+const softmaxRows = db.select().from(concepts).where(eq(concepts.title, "Softmax")).all();
+if (softmaxRows.length !== 1) throw new Error("Softmax alias match should not create duplicate Concept");
 
 createDocumentLearningTreeLink(documentId, treeId);
 const linkedDocument = getDocumentForUser(documentId, DEFAULT_USER_ID);

@@ -18,7 +18,7 @@ import {
   bulkInsertDocumentConcepts,
   createDocumentLearningTreeLink,
 } from "@/lib/repository/document-repository";
-import type { DocumentConceptInput, DocumentChunkRow } from "@/lib/repository/document-repository";
+import type { DocumentConceptInput, DocumentConceptRow, DocumentChunkRow } from "@/lib/repository/document-repository";
 import { extractPdfPages } from "./extract-pdf";
 import { splitTextIntoUnits } from "./extract-text";
 import { chunkFromPdfPages, chunkUnits } from "./chunker";
@@ -28,7 +28,14 @@ import { generateDocumentTree } from "@/lib/llm/generate-document-tree";
 import { LlmExhaustedRetriesError } from "@/lib/llm/errors";
 import { getDb } from "@/db/client";
 import { learningTrees, learningNodes, userNodeProgress } from "@/db/schema";
-import type { LearningTreeResponse, LearningTreeNode } from "@/types/learning";
+import {
+  addAliasesIfNew,
+  allocateUniqueSlug,
+  insertConceptFromCandidate,
+  resolveConceptForReuse,
+  tryRecordMergeCandidate,
+} from "@/lib/repository/concept-repository";
+import type { ConceptCandidate, LearningTreeResponse, LearningTreeNode } from "@/types/learning";
 import type {
   ConsolidatedConcept,
   DocumentTreeResponse,
@@ -56,6 +63,7 @@ const MAX_PAGES = 80;
 const MAX_TEXT_LENGTH = 120_000;
 const MIN_EXTRACTED_TEXT_LENGTH = 50;
 const MIN_QUALITY_CONCEPT_COUNT = 3;
+const DOCUMENT_EVIDENCE_SNIPPET_MAX = 360;
 
 // ──────────────────────────────────────────────
 // 유틸리티
@@ -261,28 +269,116 @@ async function consolidateConcepts(
 }
 
 // ──────────────────────────────────────────────
-// document_concepts 저장
+// document_concepts 저장 및 Concept Store 연결
 // ──────────────────────────────────────────────
 
-function saveDocumentConcepts(
+function clampDocumentScore(value: number): number {
+  return Math.min(5, Math.max(1, Math.trunc(value)));
+}
+
+function uniqueNonEmpty(values: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const trimmed = value.trim();
+    const key = trimmed.toLowerCase();
+    if (!trimmed || seen.has(key)) continue;
+    seen.add(key);
+    out.push(trimmed);
+  }
+  return out;
+}
+
+function conceptCandidateFromDocumentConcept(concept: ConsolidatedConcept): ConceptCandidate {
+  return {
+    canonical_title: concept.canonical_title.trim(),
+    aliases: uniqueNonEmpty(concept.aliases),
+    domain: null,
+    short_description: `${concept.canonical_title.trim()} 문서 기반 추출 개념`,
+    is_reusable: true,
+  };
+}
+
+function snippetFromChunk(chunk: DocumentChunkRow | undefined): string {
+  if (!chunk) return "";
+  return chunk.text.replace(/\s+/g, " ").trim().slice(0, DOCUMENT_EVIDENCE_SNIPPET_MAX);
+}
+
+function buildDocumentEvidence(
   documentId: string,
-  consolidatedConcepts: ConsolidatedConcept[],
-): void {
-  const inputs: DocumentConceptInput[] = consolidatedConcepts.map((c) => ({
-    conceptTitle: c.canonical_title,
-    conceptType: c.type,
-    importance: c.importance,
-    difficulty: c.difficulty,
-    sourceType: c.source_type,
-    evidence: c.evidence.map((e) => ({
+  concept: ConsolidatedConcept,
+  chunksById: Map<string, DocumentChunkRow>,
+): DocumentConceptInput["evidence"] {
+  // inferred 개념은 문서 이해를 위해 추론된 선수지식이므로 직접 출처를 붙이지 않는다.
+  if (concept.source_type === "inferred") return [];
+
+  return concept.evidence.map((e) => {
+    const chunk = chunksById.get(e.chunk_id);
+    return {
       documentId,
       chunkId: e.chunk_id,
       pageStart: e.page_start,
       pageEnd: e.page_end,
       sectionTitle: e.section_title,
-      snippet: "",
-    })),
-  }));
+      snippet: snippetFromChunk(chunk),
+    };
+  });
+}
+
+function formatMatchedConceptsForPrompt(rows: DocumentConceptRow[]): string {
+  const lines = rows
+    .filter((row) => row.conceptId)
+    .map(
+      (row) =>
+        `- ${row.conceptTitle} -> concept_id=${row.conceptId}, type=${row.conceptType}, source_type=${row.sourceType}`,
+    );
+  return lines.length > 0 ? lines.join("\n") : "";
+}
+
+export function resolveAndSaveDocumentConcepts(
+  documentId: string,
+  consolidatedConcepts: ConsolidatedConcept[],
+): DocumentConceptRow[] {
+  const db = getDb();
+  const chunksById = new Map(getDocumentChunks(documentId).map((chunk) => [chunk.id, chunk]));
+
+  const inputs: DocumentConceptInput[] = consolidatedConcepts.map((concept) => {
+    const candidate = conceptCandidateFromDocumentConcept(concept);
+    const resolution = resolveConceptForReuse(db, candidate);
+    let conceptId: string;
+
+    if (resolution.kind === "reused") {
+      conceptId = resolution.concept.id;
+      // alias로 재사용된 경우 이후 검색도 쉬워지도록 문서 표기와 alias를 기존 Concept에 보강한다.
+      addAliasesIfNew(db, conceptId, uniqueNonEmpty([concept.canonical_title, ...concept.aliases]));
+    } else {
+      const created = insertConceptFromCandidate(
+        db,
+        candidate,
+        allocateUniqueSlug(candidate.canonical_title, db),
+      );
+      conceptId = created.id;
+      if (resolution.kind === "ambiguous_similar") {
+        tryRecordMergeCandidate(
+          db,
+          created.id,
+          resolution.similar.id,
+          0.6,
+          "문서 기반 개념이 기존 Concept과 유사하지만 동일 개념인지 확정할 수 없습니다.",
+        );
+      }
+    }
+
+    return {
+      conceptId,
+      conceptTitle: concept.canonical_title,
+      conceptType: concept.type,
+      importance: clampDocumentScore(concept.importance),
+      difficulty: clampDocumentScore(concept.difficulty),
+      sourceType: concept.source_type,
+      evidence: buildDocumentEvidence(documentId, concept, chunksById),
+    };
+  });
 
   const saved = bulkInsertDocumentConcepts(documentId, inputs);
   console.info("[document-processor]", {
@@ -290,6 +386,7 @@ function saveDocumentConcepts(
     documentId,
     savedCount: saved.length,
   });
+  return saved;
 }
 
 // ──────────────────────────────────────────────
@@ -301,6 +398,7 @@ async function generateDocumentLearningTree(
   documentTitle: string,
   summary: string,
   consolidatedConceptsJson: string,
+  matchedConceptsContext: string,
 ): Promise<DocumentTreeResponse> {
   console.info("[document-processor]", {
     stage: "tree_generation_start",
@@ -312,6 +410,7 @@ async function generateDocumentLearningTree(
     documentTitle,
     documentSummary: summary,
     consolidatedConceptsJson,
+    matchedConceptsContext,
     requestId: `doc-${documentId}-tree`,
   });
 
@@ -628,7 +727,7 @@ export async function processDocument(
   // ══════════════════════════════════════════
   // Step 6: document_concepts 저장
   // ══════════════════════════════════════════
-  saveDocumentConcepts(documentId, consolidated.consolidatedConcepts);
+  const documentConceptRows = resolveAndSaveDocumentConcepts(documentId, consolidated.consolidatedConcepts);
 
   // ══════════════════════════════════════════
   // Step 7: 문서 기반 학습 트리 생성 via LLM
@@ -640,6 +739,7 @@ export async function processDocument(
       documentTitle,
       consolidated.summary,
       consolidated.consolidatedJson,
+      formatMatchedConceptsForPrompt(documentConceptRows),
     );
   } catch (err) {
     const msg = err instanceof LlmExhaustedRetriesError
