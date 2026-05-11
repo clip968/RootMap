@@ -9,7 +9,7 @@ __pycache__/
 # Local agent run data
 .agent/forge-runs/
 .agent/forge-config/
-scripts
+/scripts
 templates
 .agents
 .agent

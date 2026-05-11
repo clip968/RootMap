@@ -58,7 +58,7 @@ JSON schema:
       "title": string,
       "type": "prerequisite" | "core" | "supplementary" | "misconception" | "quiz",
       "description": string,
-      "difficulty": number,
+      "difficulty": number (integer 1-5),
       "prerequisites": string[],
       "children": string[],
       "concept_candidate": {
@@ -208,13 +208,13 @@ JSON schema:
       "aliases": string[],
       "type": "document_topic" | "prerequisite" | "document_core" | "method" | "background" | "misconception" | "evaluation",
       "short_description": string,
-      "importance": number,
-      "difficulty": number,
+      "importance": number (integer 1-5),
+      "difficulty": number (integer 1-5),
       "source_type": "explicit",
       "evidence_snippet": string
     }
   ]
-}`;
+`;
 
 export function buildDocumentChunkConceptUserMessage(input: {
   documentTitle: string;
@@ -273,8 +273,8 @@ JSON schema:
       "canonical_title": string,
       "aliases": string[],
       "type": "document_topic" | "prerequisite" | "document_core" | "method" | "background" | "misconception" | "evaluation",
-      "importance": number,
-      "difficulty": number,
+      "importance": number (integer 1-5),
+      "difficulty": number (integer 1-5),
       "source_type": "explicit" | "inferred",
       "evidence": [
         {
@@ -341,7 +341,7 @@ JSON schema:
       "title": string,
       "type": "prerequisite" | "document_core" | "supplementary" | "misconception" | "quiz",
       "description": string,
-      "difficulty": number,
+      "difficulty": number (integer 1-5),
       "prerequisites": string[],
       "children": string[],
       "source_type": "explicit" | "inferred" | "generated",
