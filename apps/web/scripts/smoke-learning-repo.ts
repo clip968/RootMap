@@ -27,9 +27,16 @@ import {
   bulkInsertDocumentPages,
   createDocument,
   createDocumentLearningTreeLink,
+  getDocumentConceptEvidenceForUser,
+  getDocumentLearningTreeForUser,
   getDocumentForUser,
+  listDocumentConceptsForUser,
   updateDocumentStatus,
 } from "../src/lib/repository/document-repository";
+import { GET as getDocumentRoute } from "../src/app/api/documents/[documentId]/route";
+import { GET as getDocumentConceptsRoute } from "../src/app/api/documents/[documentId]/concepts/route";
+import { GET as getDocumentTreeRoute } from "../src/app/api/documents/[documentId]/tree/route";
+import { GET as getDocumentEvidenceRoute } from "../src/app/api/document-concepts/[documentConceptId]/evidence/route";
 import type { ConsolidatedConcept, LearningTreeResponse, NodeDetailResponse } from "../src/types/learning";
 
 const dbRel = path.join("data", "smoke.db");
@@ -261,11 +268,116 @@ createDocumentLearningTreeLink(documentId, treeId);
 const linkedDocument = getDocumentForUser(documentId, DEFAULT_USER_ID);
 if (!linkedDocument) throw new Error("linked document disappeared");
 
-resetDbSingleton();
-try {
-  fs.unlinkSync(dbAbs);
-} catch {
-  /* noop */
+updateDocumentStatus(documentId, "tree_generated");
+
+const documentConceptSummaries = listDocumentConceptsForUser(
+  documentId,
+  DEFAULT_USER_ID,
+);
+const pageFaultSummary = documentConceptSummaries.find(
+  (concept) => concept.concept_title === "Page Fault",
+);
+if (!pageFaultSummary) throw new Error("document concepts list missing Page Fault");
+if (pageFaultSummary.source_type !== "explicit") {
+  throw new Error("document concepts list should expose source_type");
+}
+if (pageFaultSummary.evidence_count !== 1) {
+  throw new Error("document concepts list should expose evidence_count");
 }
 
-console.log("db:smoke OK");
+const linkedTree = getDocumentLearningTreeForUser(documentId, DEFAULT_USER_ID);
+if (linkedTree?.tree.id !== treeId) {
+  throw new Error("document tree lookup should return linked tree");
+}
+
+const evidencePayload = getDocumentConceptEvidenceForUser(
+  pageFaultDocumentConcept.id,
+  DEFAULT_USER_ID,
+);
+if (evidencePayload?.document_concept_id !== pageFaultDocumentConcept.id) {
+  throw new Error("document concept evidence should be scoped by user");
+}
+if (evidencePayload.evidence[0]?.page_start !== 1) {
+  throw new Error("document concept evidence should expose page_start");
+}
+
+const otherUserId = "00000000-0000-0000-0000-000000000099";
+if (listDocumentConceptsForUser(documentId, otherUserId).length !== 0) {
+  throw new Error("other users must not list document concepts");
+}
+if (getDocumentLearningTreeForUser(documentId, otherUserId) !== null) {
+  throw new Error("other users must not read document tree");
+}
+if (getDocumentConceptEvidenceForUser(pageFaultDocumentConcept.id, otherUserId) !== null) {
+  throw new Error("other users must not read document evidence");
+}
+
+async function verifyDocumentQueryRoutes(): Promise<void> {
+  const documentRouteResponse = await getDocumentRoute(new Request("http://rootmap.test"), {
+    params: Promise.resolve({ documentId }),
+  });
+  const documentRouteBody = await documentRouteResponse.json() as {
+    document_id?: string;
+    processing_status?: string;
+  };
+  if (
+    documentRouteBody.document_id !== documentId ||
+    documentRouteBody.processing_status !== "tree_generated"
+  ) {
+    throw new Error("document metadata API should return document status");
+  }
+
+  const conceptsRouteResponse = await getDocumentConceptsRoute(new Request("http://rootmap.test"), {
+    params: Promise.resolve({ documentId }),
+  });
+  const conceptsRouteBody = await conceptsRouteResponse.json() as {
+    concepts?: Array<{ concept_title: string; evidence_count: number }>;
+  };
+  if (!conceptsRouteBody.concepts?.some((concept) => concept.concept_title === "Page Fault" && concept.evidence_count === 1)) {
+    throw new Error("document concepts API should return concept summaries");
+  }
+
+  const treeRouteResponse = await getDocumentTreeRoute(new Request("http://rootmap.test"), {
+    params: Promise.resolve({ documentId }),
+  });
+  const treeRouteBody = await treeRouteResponse.json() as {
+    document_id?: string;
+    tree_id?: string;
+  };
+  if (treeRouteBody.document_id !== documentId || treeRouteBody.tree_id !== treeId) {
+    throw new Error("document tree API should return the linked tree");
+  }
+
+  const evidenceRouteResponse = await getDocumentEvidenceRoute(new Request("http://rootmap.test"), {
+    params: Promise.resolve({ documentConceptId: pageFaultDocumentConcept.id }),
+  });
+  const evidenceRouteBody = await evidenceRouteResponse.json() as {
+    document_concept_id?: string;
+    evidence?: Array<{ snippet: string }>;
+  };
+  if (
+    evidenceRouteBody.document_concept_id !== pageFaultDocumentConcept.id ||
+    !evidenceRouteBody.evidence?.[0]?.snippet.includes("page fault")
+  ) {
+    throw new Error("document evidence API should return the stored evidence");
+  }
+}
+
+function cleanupSmokeDb(): void {
+  resetDbSingleton();
+  try {
+    fs.unlinkSync(dbAbs);
+  } catch {
+    /* noop */
+  }
+}
+
+verifyDocumentQueryRoutes()
+  .then(() => {
+    cleanupSmokeDb();
+    console.log("db:smoke OK");
+  })
+  .catch((error: unknown) => {
+    cleanupSmokeDb();
+    throw error;
+  });

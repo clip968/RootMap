@@ -1,5 +1,9 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
+import {
+  getLearningTree,
+  type LearningTreeBundle,
+} from "@/lib/repository/learning-repository";
 import {
   documentChunks,
   documentConcepts,
@@ -40,6 +44,28 @@ export type DocumentRow = typeof documents.$inferSelect;
 export type DocumentPageRow = typeof documentPages.$inferSelect;
 export type DocumentChunkRow = typeof documentChunks.$inferSelect;
 export type DocumentConceptRow = typeof documentConcepts.$inferSelect;
+
+export interface DocumentConceptSummary {
+  document_concept_id: string;
+  concept_id: string | null;
+  concept_title: string;
+  concept_type: DocumentConceptType;
+  importance: number | null;
+  difficulty: number | null;
+  source_type: DocumentSourceType;
+  evidence_count: number;
+}
+
+export interface DocumentConceptEvidenceResponse {
+  document_concept_id: string;
+  concept_title: string;
+  evidence: Array<{
+    page_start: number | null;
+    page_end: number | null;
+    section_title: string | null;
+    snippet: string;
+  }>;
+}
 
 export interface CreateDocumentInput {
   userId: string;
@@ -315,4 +341,124 @@ export function createDocumentLearningTreeLink(
     .all()[0];
   if (!existing) throw new Error("document_learning_trees insert failed");
   return existing.id;
+}
+
+const DOCUMENT_CONCEPT_TYPE_ORDER: Record<DocumentConceptType, number> = {
+  document_topic: 0,
+  document_core: 1,
+  prerequisite: 2,
+  method: 3,
+  background: 4,
+  misconception: 5,
+  evaluation: 6,
+};
+
+function evidenceCount(evidence: unknown): number {
+  return Array.isArray(evidence) ? evidence.length : 0;
+}
+
+/**
+ * 문서 분석 결과 화면의 개념 목록용 DTO를 만든다.
+ * 먼저 document ownership을 확인하므로 다른 사용자의 document_id는 빈 목록처럼 처리된다.
+ */
+export function listDocumentConceptsForUser(
+  documentId: string,
+  userId: string,
+): DocumentConceptSummary[] {
+  const document = getDocumentForUser(documentId, userId);
+  if (!document) return [];
+
+  const db = getDb();
+  const rows = db
+    .select()
+    .from(documentConcepts)
+    .where(eq(documentConcepts.documentId, documentId))
+    .all();
+
+  return rows
+    .map((row) => ({
+      document_concept_id: row.id,
+      concept_id: row.conceptId,
+      concept_title: row.conceptTitle,
+      concept_type: row.conceptType as DocumentConceptType,
+      importance: row.importance,
+      difficulty: row.difficulty,
+      source_type: row.sourceType as DocumentSourceType,
+      evidence_count: evidenceCount(row.evidence),
+    }))
+    .sort((a, b) => {
+      const typeDiff =
+        DOCUMENT_CONCEPT_TYPE_ORDER[a.concept_type] -
+        DOCUMENT_CONCEPT_TYPE_ORDER[b.concept_type];
+      if (typeDiff !== 0) return typeDiff;
+
+      const importanceDiff = (b.importance ?? 0) - (a.importance ?? 0);
+      if (importanceDiff !== 0) return importanceDiff;
+
+      const difficultyDiff = (a.difficulty ?? 99) - (b.difficulty ?? 99);
+      if (difficultyDiff !== 0) return difficultyDiff;
+
+      return a.concept_title.localeCompare(b.concept_title);
+    });
+}
+
+/**
+ * document_learning_trees에 연결된 최신 트리를 사용자 소유권까지 확인해 반환한다.
+ * 문서 소유권과 tree.user_id를 모두 확인해 임의 tree_id 우회 조회를 막는다.
+ */
+export function getDocumentLearningTreeForUser(
+  documentId: string,
+  userId: string,
+): LearningTreeBundle | null {
+  const document = getDocumentForUser(documentId, userId);
+  if (!document) return null;
+
+  const db = getDb();
+  const link = db
+    .select({ treeId: documentLearningTrees.treeId })
+    .from(documentLearningTrees)
+    .where(eq(documentLearningTrees.documentId, documentId))
+    .orderBy(desc(documentLearningTrees.createdAt))
+    .all()[0];
+  if (!link) return null;
+
+  return getLearningTree(link.treeId, userId);
+}
+
+/**
+ * evidence 조회는 document_concepts.id에서 시작하지만, 반드시 연결된 document의 user_id를 함께 확인한다.
+ */
+export function getDocumentConceptEvidenceForUser(
+  documentConceptId: string,
+  userId: string,
+): DocumentConceptEvidenceResponse | null {
+  const db = getDb();
+  const row = db
+    .select({
+      id: documentConcepts.id,
+      conceptTitle: documentConcepts.conceptTitle,
+      evidence: documentConcepts.evidence,
+    })
+    .from(documentConcepts)
+    .innerJoin(documents, eq(documents.id, documentConcepts.documentId))
+    .where(
+      and(
+        eq(documentConcepts.id, documentConceptId),
+        eq(documents.userId, userId),
+      ),
+    )
+    .all()[0];
+  if (!row) return null;
+
+  const evidence = Array.isArray(row.evidence) ? row.evidence : [];
+  return {
+    document_concept_id: row.id,
+    concept_title: row.conceptTitle,
+    evidence: evidence.map((item) => ({
+      page_start: item.pageStart,
+      page_end: item.pageEnd,
+      section_title: item.sectionTitle,
+      snippet: item.snippet,
+    })),
+  };
 }
