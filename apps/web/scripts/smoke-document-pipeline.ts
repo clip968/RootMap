@@ -173,8 +173,10 @@ async function main(): Promise<void> {
     logStage("setup_document_complete", { documentId });
 
     logStage("process_document_start", { documentId });
+    const pipelineStart = Date.now();
     const result = await processDocument(documentId, DEFAULT_USER_ID);
-    logStage("process_document_complete", { documentId, treeId: result.treeId });
+    const pipelineDuration = Date.now() - pipelineStart;
+    logStage("process_document_complete", { documentId, treeId: result.treeId, durationMs: pipelineDuration });
 
     logStage("assert_document_status_start", { documentId });
     const document = getDocumentForUser(documentId, DEFAULT_USER_ID);
@@ -207,13 +209,22 @@ async function main(): Promise<void> {
       nodeCount: bundle.nodes.length,
     });
 
+    // ── 구조 생성 시간 측정 (quality warning, survival 아님) ──
+    const STRUCTURE_TARGET_MS = 30_000; // 30초 이내 목표
+    const isWithinTime = pipelineDuration <= STRUCTURE_TARGET_MS;
+
     // ── 품질 검증 (hard fail 아님, warning-only) ──
     const nodeTypes = bundle.nodes.map((n) => n.type);
 
     console.info("");
-    console.info("─── document:pipeline-smoke quality report ───");
+    console.info(`─── document:pipeline-smoke quality report (target: structure < ${STRUCTURE_TARGET_MS}ms) ───`);
     let qualityFails = 0;
 
+    qualityFails += checkQuality(
+      "구조 생성 시간 <= 기준",
+      isWithinTime,
+      `시간이 ${pipelineDuration}ms로 목표 ${STRUCTURE_TARGET_MS}ms를 초과했습니다`
+    );
     qualityFails += checkQuality(
       "document 개념 수 >= 최소 기준",
       concepts.length >= QUALITY_MIN_CONCEPTS,
@@ -221,12 +232,12 @@ async function main(): Promise<void> {
     );
     qualityFails += checkQuality(
       "explicit 개념 존재 (evidence 포함)",
-      concepts.some((c) => c.sourceType === "explicit" && c.evidenceCount > 0),
+      concepts.some((c) => c.source_type === "explicit" && c.evidence_count > 0),
       "문서에 직접 등장한 explicit 개념이 없거나 evidence가 연결되지 않았습니다",
     );
     qualityFails += checkQuality(
       "inferred 선수지식 개념 존재",
-      concepts.some((c) => c.sourceType === "inferred"),
+      concepts.some((c) => c.source_type === "inferred"),
       "추론된 선수지식(inferred) 개념이 없습니다",
     );
     qualityFails += checkQuality(

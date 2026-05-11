@@ -63,6 +63,7 @@ JSON schema:
 }`;
 
 function buildGenerateNodeDetailUserMessage(options: {
+  nodeId: string;
   documentTitle: string;
   documentSummary: string;
   nodeTitle: string;
@@ -74,7 +75,8 @@ function buildGenerateNodeDetailUserMessage(options: {
   const { documentTitle, documentSummary, nodeTitle, nodeType, sourceType, consolidatedConceptsJson, chunkTexts } = options;
 
   let msg = `Document: "${documentTitle}"\nDocument summary: ${documentSummary}\n\n`;
-  msg += `Node to explain:\n- Title: "${nodeTitle}"\n- Type: ${nodeType}\n- Source: ${sourceType}\n\n`;
+  msg += `Node to explain:\n- Node ID: "${options.nodeId}"\n- Title: "${nodeTitle}"\n- Type: ${nodeType}\n- Source: ${sourceType}\n\n`;
+  msg += `IMPORTANT: The "node_id" field in your JSON response MUST be exactly "${options.nodeId}".\n\n`;
   msg += `Consolidated concepts from this document:\n${consolidatedConceptsJson}\n\n`;
 
   if (chunkTexts.length > 0) {

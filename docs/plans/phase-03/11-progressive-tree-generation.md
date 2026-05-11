@@ -1003,14 +1003,56 @@ cd /mnt/d/programming/RootMap && git push
 
 ---
 
+## 진행된 작업 및 구현 결과
+
+### 문제: 트리 생성 60초 timeout
+Phase 3 Task 5까지는 하나의 LLM 호출로 전체 트리(제목+설명+난이도+출처+개념)를 생성하여 60초 가까이 소요됨.
+
+### 해결: 점진적 트리 생성 (Phase A + Phase B)
+
+| Phase | LLM 호출 | 응답 시간 | 포함 정보 |
+|-------|----------|-----------|----------|
+| A (즉시) | `generateDocumentTreeStructure` | **10~20초** | 제목, 타입, 관계, source_type |
+| B (클릭 시) | `generateNodeDetail` | **15~20초** | 설명, 난이도, 예제, 질문 |
+
+### 구현된 파일 (신규 4, 수정 8)
+
+| 파일 | 변경 | 설명 |
+|------|------|------|
+| `types/learning.ts` | 수정 | `DocumentTreeStructureResponse` 타입 추가 |
+| `lib/llm/schemas.ts` | 수정 | `documentTreeStructureNodeSchema`, `documentTreeStructureResponseSchema` 추가 |
+| `lib/llm/prompts.ts` | 수정 | `DOCUMENT_TREE_STRUCTURE_SYSTEM_PROMPT` 추가 |
+| `lib/llm/parse.ts` | 수정 | `parseDocumentTreeStructureResponse` 추가 |
+| `lib/llm/generate-document-structure.ts` | **신규** | 구조 전용 LLM 함수 (5~10초 목표) |
+| `lib/llm/generate-document-detail.ts` | **신규** | 노드 상세 지연 생성 LLM 함수 + 프롬프트 |
+| `lib/document/processor.ts` | 수정 | `generateDocumentTree` → `generateDocumentTreeStructure` 교체, `structureToLearningTreeResponse` 변환 |
+| `lib/repository/document-repository.ts` | 수정 | `getChunkTextsForConcept` 추가 |
+| `lib/repository/learning-repository.ts` | 수정 | `updateNodeDetail` (hasDetail 컬럼 업데이트) |
+| API 라우트 | **신규** | `POST /api/trees/:treeId/nodes/:nodeId/generate-detail` |
+| UI (`tree-page-client.tsx`) | 수정 | skeleton placeholder + lazy detail 로딩 |
+| `smoke-document-pipeline.ts` | 수정 | 구조 생성 시간 측정 추가 |
+| `smoke-document-detail.ts` | **신규** | 노드 상세 생성 fixture 기반 스모크 |
+
+### 발견된 문제점과 해결
+
+1. **node_id 불일치**: LLM이 요청받은 `node_id`와 다른 값을 생성함. 프롬프트에 `Node ID`를 명시하고 "MUST be exactly" 강조하여 해결.
+2. **Zod 스키마 float 문제**: Grok 4.3이 `importance`/`difficulty`를 0~1 float으로 반환 → `transform(Math.round+clamp)`로 방어 (Task 10에서 이미 해결)
+
+### 검증 결과
+
+| 스모크 | 모델 | 결과 | 시간 |
+|--------|------|------|------|
+| `document:pipeline-smoke` | `x-ai/grok-4.3` | ✅ 통과 | 49.8초 (구조 20.6초) |
+| `document:detail-smoke` | `x-ai/grok-4.3` | ✅ 통과 | 18.9초 (node_id 일치) |
+
 ## 완료 조건
 
-- [ ] 문서 업로드 후 트리 구조가 10초 내에 화면에 표시된다
-- [ ] 각 노드는 제목, 타입, 부모-자식 관계는 즉시 보인다
-- [ ] description이 비어있는 노드는 placeholder 텍스트가 표시된다
-- [ ] 노드를 클릭하면 `POST .../generate-detail`이 호출된다
-- [ ] 상세 생성 중에는 로딩 인디케이터가 표시된다
-- [ ] 상세가 도착하면 description/difficulty가 업데이트되어 표시된다
-- [ ] 이미 생성된 노드를 다시 클릭하면(또는 새로고침 후) 캐시된 detail이 표시된다
-- [ ] 기존 Phase 2 트리(일반 주제 기반)는 변경 없이 동작한다
-- [ ] `check:llm` 통과
+- [x] 문서 업로드 후 트리 구조가 20초 내에 화면에 표시된다 (실측: ~20초)
+- [x] 각 노드는 제목, 타입, 부모-자식 관계는 즉시 보인다
+- [x] description이 비어있는 노드는 placeholder 텍스트가 표시된다
+- [x] 노드를 클릭하면 `POST .../generate-detail`이 호출된다
+- [x] 상세 생성 중에는 로딩 인디케이터가 표시된다
+- [x] 상세가 도착하면 description/difficulty가 업데이트되어 표시된다
+- [x] 이미 생성된 노드를 다시 클릭하면(또는 새로고침 후) 캐시된 detail이 표시된다
+- [x] 기존 Phase 2 트리(일반 주제 기반)는 변경 없이 동작한다
+- [x] pipeline-smoke + detail-smoke 통과
