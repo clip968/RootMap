@@ -24,7 +24,7 @@ import { splitTextIntoUnits } from "./extract-text";
 import { chunkFromPdfPages, chunkUnits } from "./chunker";
 import { generateChunkConcepts } from "@/lib/llm/generate-document-chunk-concepts";
 import { generateDocumentConsolidation } from "@/lib/llm/generate-document-consolidation";
-import { generateDocumentTree } from "@/lib/llm/generate-document-tree";
+import { generateDocumentTreeStructure } from "@/lib/llm/generate-document-structure";
 import { LlmExhaustedRetriesError } from "@/lib/llm/errors";
 import { getDb } from "@/db/client";
 import { learningTrees, learningNodes, userNodeProgress } from "@/db/schema";
@@ -35,9 +35,11 @@ import {
   resolveConceptForReuse,
   tryRecordMergeCandidate,
 } from "@/lib/repository/concept-repository";
-import type { ConceptCandidate, LearningTreeResponse, LearningTreeNode } from "@/types/learning";
+import type { ConceptCandidate, LearningTreeNode } from "@/types/learning";
 import type {
   ConsolidatedConcept,
+  DocumentTreeStructureResponse,
+  LearningTreeResponse,
   DocumentTreeResponse,
 } from "@/types/learning";
 
@@ -106,6 +108,45 @@ export async function runWithConcurrency<T, R>(
     Array.from({ length: Math.min(limit, items.length) }, () => runWorker()),
   );
   return results;
+}
+
+/**
+ * Phase 3 Task 11: DocumentTreeStructureResponse → LearningTreeResponse
+ *
+ * description/difficulty/evidence/concept_candidate가 없는 구조 전용 응답을
+ * DB 저장용 LearningTreeResponse로 변환한다.
+ * - description은 빈 문자열 (노드 클릭 시 지연 생성)
+ * - difficulty는 기본값 3
+ * - concept_candidate는 title 기반으로 생성
+ */
+function structureToLearningTreeResponse(
+  structure: DocumentTreeStructureResponse,
+): LearningTreeResponse {
+  return {
+    topic: structure.topic,
+    summary: structure.summary,
+    recommended_order: structure.recommended_order,
+    edges: structure.edges,
+    nodes: structure.nodes.map((n) => ({
+      id: n.id,
+      title: n.title,
+      type:
+        n.type === "document_core"
+          ? "core"
+          : (n.type as LearningTreeNode["type"]),
+      description: "",
+      difficulty: 3,
+      prerequisites: n.prerequisites,
+      children: n.children,
+      concept_candidate: {
+        canonical_title: n.title,
+        aliases: [],
+        domain: null,
+        short_description: "",
+        is_reusable: true,
+      },
+    })),
+  };
 }
 
 /**
@@ -440,38 +481,30 @@ async function generateDocumentLearningTree(
   summary: string,
   consolidatedConceptsJson: string,
   matchedConceptsContext: string,
-): Promise<DocumentTreeResponse> {
+): Promise<LearningTreeResponse> {
   console.info("[document-processor]", {
     stage: "tree_generation_start",
     documentId,
   });
 
-  const { tree, qualityWarnings } = await generateDocumentTree({
+  const treeStructure = await generateDocumentTreeStructure({
     documentId,
     documentTitle,
     documentSummary: summary,
     consolidatedConceptsJson,
     matchedConceptsContext,
-    requestId: `doc-${documentId}-tree`,
+    requestId: `doc-${documentId}-structure`,
   });
-
-  if (qualityWarnings.length > 0) {
-    console.warn("[document-processor]", {
-      stage: "tree_generation_quality_warnings",
-      documentId,
-      warnings: qualityWarnings,
-    });
-  }
 
   console.info("[document-processor]", {
-    stage: "tree_generation_complete",
+    stage: "tree_structure_generation_complete",
     documentId,
-    nodeCount: tree.nodes.length,
-    edgeCount: tree.edges.length,
-    qualityWarningCount: qualityWarnings.length,
+    nodeCount: treeStructure.nodes.length,
+    edgeCount: treeStructure.edges.length,
+    durationMs: 0, // 실제 시간은 generate 함수 내부에서 기록
   });
 
-  return tree;
+  return structureToLearningTreeResponse(treeStructure);
 }
 
 // ──────────────────────────────────────────────
@@ -479,7 +512,7 @@ async function generateDocumentLearningTree(
 // ──────────────────────────────────────────────
 
 function persistDocumentTree(
-  docTree: DocumentTreeResponse,
+  llmTree: LearningTreeResponse,
   documentId: string,
   userId: string,
   documentConceptRows: DocumentConceptRow[],
@@ -495,14 +528,13 @@ function persistDocumentTree(
 
   return db.transaction((tx) => {
     // 1. learning_trees 행 생성
-    const learningTree = toLearningTreeResponse(docTree);
     const tr = tx
       .insert(learningTrees)
       .values({
         userId,
-        topic: docTree.topic,
-        summary: docTree.summary,
-        treeJson: learningTree,
+        topic: llmTree.topic,
+        summary: llmTree.summary,
+        treeJson: llmTree,
         createdAt: now,
         updatedAt: now,
       })
@@ -513,7 +545,7 @@ function persistDocumentTree(
 
     // 2. learning_nodes 행 생성 (source/evidence는 document_concepts에서 조회 시 합친다)
     const nodeIds: string[] = [];
-    for (const n of docTree.nodes) {
+    for (const n of llmTree.nodes) {
       const matchedConceptId =
         conceptIdByTitle.get(n.title.trim().replace(/\s+/g, " ").toLowerCase()) ??
         null;
@@ -523,7 +555,7 @@ function persistDocumentTree(
           treeId,
           nodeKey: n.id,
           title: n.title,
-          type: n.type === "document_core" ? "core" : (n.type as LearningTreeNode["type"]),
+          type: n.type,
           description: n.description,
           difficulty: n.difficulty,
           prerequisites: n.prerequisites,
@@ -785,7 +817,7 @@ export async function processDocument(
   // ══════════════════════════════════════════
   // Step 7: 문서 기반 학습 트리 생성 via LLM
   // ══════════════════════════════════════════
-  let docTree: DocumentTreeResponse;
+  let docTree: LearningTreeResponse;
   try {
     docTree = await generateDocumentLearningTree(
       documentId,
