@@ -36,7 +36,7 @@ RootMap을 단순 주제 입력 기반 서비스에서 문서 기반 학습 서�
 - [x] 05. [05-document-processing-pipeline.md](./05-document-processing-pipeline.md) - `POST /api/documents/:documentId/process`, 상태 전이, 실패 처리, 트리 생성 orchestration
 - [x] 06. [06-document-concept-resolution-and-persistence.md](./06-document-concept-resolution-and-persistence.md) - Concept Store 매칭, 신규 Concept 생성, `document_concepts` 출처 저장
 - [x] 07. [07-document-apis-and-query-contracts.md](./07-document-apis-and-query-contracts.md) - 문서 조회, 개념 목록, 문서 트리, evidence 조회 API
-- [ ] 08. [08-document-upload-and-result-ui.md](./08-document-upload-and-result-ui.md) - 문서 업로드 화면, 처리 상태 UI, 문서 분석 결과 화면
+- [x] 08. [08-document-upload-and-result-ui.md](./08-document-upload-and-result-ui.md) - 문서 업로드 화면, 처리 상태 UI, 문서 분석 결과 화면
 - [ ] 09. [09-document-tree-and-node-detail-ui.md](./09-document-tree-and-node-detail-ui.md) - 문서 기반 트리 표시, source type/evidence/snippet, 노드 상세 확장
 - [ ] 10. [10-document-recommendations-quality-and-tests.md](./10-document-recommendations-quality-and-tests.md) - 문서 기반 추천, 오류·품질 기준, 테스트 케이스, 완료 조건 검증
 
