@@ -29,7 +29,7 @@ RootMap을 단순 주제 입력 기반 서비스에서 문서 기반 학습 서�
 
 > 작업을 완료할 때마다 해당 항목을 `[x]`로 바꿔 진행 상황을 추적한다.
 
-- [ ] 01. [01-document-schema-and-storage.md](./01-document-schema-and-storage.md) - `documents`, `document_pages`, `document_chunks`, `document_concepts`, `document_learning_trees` DDL·저장소 기반
+- [x] 01. [01-document-schema-and-storage.md](./01-document-schema-and-storage.md) - `documents`, `document_pages`, `document_chunks`, `document_concepts`, `document_learning_trees` DDL·저장소 기반
 - [ ] 02. [02-document-upload-and-validation-api.md](./02-document-upload-and-validation-api.md) - 문서 업로드 API, 파일 형식·크기·권한·보안 검증
 - [ ] 03. [03-text-extraction-and-chunking.md](./03-text-extraction-and-chunking.md) - PDF/TXT/MD 텍스트 추출, 페이지 저장, 청크 분할
 - [ ] 04. [04-document-llm-schemas-and-prompts.md](./04-document-llm-schemas-and-prompts.md) - 청크별 추출·문서 통합·문서 트리·노드 설명 LLM 스키마/프롬프트

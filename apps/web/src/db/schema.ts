@@ -225,6 +225,161 @@ export const conceptMergeCandidates = sqliteTable(
   ],
 );
 
+/** Phase 3 Document Store */
+export const documents = sqliteTable("documents", {
+  id: text("id")
+    .primaryKey()
+    .notNull()
+    .$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").notNull(),
+  title: text("title"),
+  originalFilename: text("original_filename").notNull(),
+  fileType: text("file_type").notNull(),
+  fileSizeBytes: integer("file_size_bytes").notNull(),
+  pageCount: integer("page_count"),
+  extractedTextLength: integer("extracted_text_length"),
+  processingStatus: text("processing_status").notNull().default("uploaded"),
+  processingError: text("processing_error"),
+  metadata: text("metadata", { mode: "json" })
+    .notNull()
+    .$type<Record<string, unknown>>()
+    .$defaultFn(() => ({})),
+  createdAt: text("created_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+  updatedAt: text("updated_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+});
+
+export const documentPages = sqliteTable(
+  "document_pages",
+  {
+    id: text("id")
+      .primaryKey()
+      .notNull()
+      .$defaultFn(() => crypto.randomUUID()),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    pageNumber: integer("page_number").notNull(),
+    text: text("text"),
+    createdAt: text("created_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (t) => [
+    uniqueIndex("document_pages_document_page_uidx").on(
+      t.documentId,
+      t.pageNumber,
+    ),
+  ],
+);
+
+export const documentChunks = sqliteTable(
+  "document_chunks",
+  {
+    id: text("id")
+      .primaryKey()
+      .notNull()
+      .$defaultFn(() => crypto.randomUUID()),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    chunkIndex: integer("chunk_index").notNull(),
+    pageStart: integer("page_start"),
+    pageEnd: integer("page_end"),
+    sectionTitle: text("section_title"),
+    text: text("text").notNull(),
+    tokenCount: integer("token_count"),
+    metadata: text("metadata", { mode: "json" })
+      .notNull()
+      .$type<Record<string, unknown>>()
+      .$defaultFn(() => ({})),
+    createdAt: text("created_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (t) => [
+    uniqueIndex("document_chunks_document_index_uidx").on(
+      t.documentId,
+      t.chunkIndex,
+    ),
+  ],
+);
+
+export const documentConcepts = sqliteTable(
+  "document_concepts",
+  {
+    id: text("id")
+      .primaryKey()
+      .notNull()
+      .$defaultFn(() => crypto.randomUUID()),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    conceptId: text("concept_id").references(() => concepts.id, {
+      onDelete: "set null",
+    }),
+    conceptTitle: text("concept_title").notNull(),
+    conceptType: text("concept_type").notNull(),
+    importance: integer("importance"),
+    difficulty: integer("difficulty"),
+    sourceType: text("source_type").notNull(),
+    evidence: text("evidence", { mode: "json" })
+      .notNull()
+      .$type<
+        Array<{
+          documentId: string;
+          chunkId: string | null;
+          pageStart: number | null;
+          pageEnd: number | null;
+          sectionTitle: string | null;
+          snippet: string;
+        }>
+      >()
+      .$defaultFn(() => []),
+    createdAt: text("created_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+    updatedAt: text("updated_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (t) => [
+    uniqueIndex("document_concepts_document_concept_type_uidx").on(
+      t.documentId,
+      t.conceptId,
+      t.conceptType,
+    ),
+  ],
+);
+
+export const documentLearningTrees = sqliteTable(
+  "document_learning_trees",
+  {
+    id: text("id")
+      .primaryKey()
+      .notNull()
+      .$defaultFn(() => crypto.randomUUID()),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => learningTrees.id, { onDelete: "cascade" }),
+    createdAt: text("created_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (t) => [
+    uniqueIndex("document_learning_trees_document_tree_uidx").on(
+      t.documentId,
+      t.treeId,
+    ),
+  ],
+);
+
 export const userConceptProgress = sqliteTable(
   "user_concept_progress",
   {

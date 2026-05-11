@@ -17,6 +17,15 @@ import {
   saveNodeDetail,
   updateNodeProgress,
 } from "../src/lib/repository/learning-repository";
+import {
+  bulkInsertDocumentChunks,
+  bulkInsertDocumentConcepts,
+  bulkInsertDocumentPages,
+  createDocument,
+  createDocumentLearningTreeLink,
+  getDocumentForUser,
+  updateDocumentStatus,
+} from "../src/lib/repository/document-repository";
 import type { LearningTreeResponse, NodeDetailResponse } from "../src/types/learning";
 
 const dbRel = path.join("data", "smoke.db");
@@ -87,6 +96,68 @@ if (!updateNodeProgress(DEFAULT_USER_ID, nodeId, "known")) {
 }
 const prog = getProgressByTree(DEFAULT_USER_ID, treeId);
 if (prog[0]?.status !== "known") throw new Error("progress not updated");
+
+const documentId = createDocument({
+  userId: DEFAULT_USER_ID,
+  title: "문서 스모크",
+  originalFilename: "smoke.md",
+  fileType: "md",
+  fileSizeBytes: 128,
+  pageCount: 1,
+  extractedTextLength: 36,
+  metadata: { source: "smoke" },
+});
+const document = getDocumentForUser(documentId, DEFAULT_USER_ID);
+if (!document) throw new Error("document not found for user");
+if (document.processingStatus !== "uploaded") {
+  throw new Error("document default status");
+}
+
+updateDocumentStatus(documentId, "text_extracted");
+const extractedDocument = getDocumentForUser(documentId, DEFAULT_USER_ID);
+if (extractedDocument?.processingStatus !== "text_extracted") {
+  throw new Error("document status not updated");
+}
+
+bulkInsertDocumentPages(documentId, [
+  { pageNumber: 1, text: "RootMap 문서 기반 학습" },
+]);
+bulkInsertDocumentChunks(documentId, [
+  {
+    chunkIndex: 0,
+    pageStart: 1,
+    pageEnd: 1,
+    sectionTitle: "개요",
+    text: "RootMap은 문서를 학습 트리로 바꾼다.",
+    tokenCount: 12,
+    metadata: { headingLevel: 1 },
+  },
+]);
+const docConcepts = bulkInsertDocumentConcepts(documentId, [
+  {
+    conceptId: null,
+    conceptTitle: "문서 기반 학습",
+    conceptType: "document_core",
+    importance: 5,
+    difficulty: 2,
+    sourceType: "explicit",
+    evidence: [
+      {
+        documentId,
+        chunkId: null,
+        pageStart: 1,
+        pageEnd: 1,
+        sectionTitle: "개요",
+        snippet: "문서를 학습 트리로 바꾼다.",
+      },
+    ],
+  },
+]);
+if (docConcepts.length !== 1) throw new Error("document concepts insert");
+
+createDocumentLearningTreeLink(documentId, treeId);
+const linkedDocument = getDocumentForUser(documentId, DEFAULT_USER_ID);
+if (!linkedDocument) throw new Error("linked document disappeared");
 
 resetDbSingleton();
 try {
