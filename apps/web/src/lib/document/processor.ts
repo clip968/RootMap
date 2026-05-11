@@ -441,9 +441,16 @@ function persistDocumentTree(
   docTree: DocumentTreeResponse,
   documentId: string,
   userId: string,
+  documentConceptRows: DocumentConceptRow[],
 ): string {
   const now = nowIso();
   const db = getDb();
+  const conceptIdByTitle = new Map(
+    documentConceptRows.map((row) => [
+      row.conceptTitle.trim().replace(/\s+/g, " ").toLowerCase(),
+      row.conceptId,
+    ]),
+  );
 
   return db.transaction((tx) => {
     // 1. learning_trees 행 생성
@@ -463,9 +470,12 @@ function persistDocumentTree(
     const treeId = tr[0]?.id;
     if (!treeId) throw new Error("learning_trees insert failed");
 
-    // 2. learning_nodes 행 생성 (문서 source_type/evidence는 description에 포함)
+    // 2. learning_nodes 행 생성 (source/evidence는 document_concepts에서 조회 시 합친다)
     const nodeIds: string[] = [];
     for (const n of docTree.nodes) {
+      const matchedConceptId =
+        conceptIdByTitle.get(n.title.trim().replace(/\s+/g, " ").toLowerCase()) ??
+        null;
       const nr = tx
         .insert(learningNodes)
         .values({
@@ -477,6 +487,8 @@ function persistDocumentTree(
           difficulty: n.difficulty,
           prerequisites: n.prerequisites,
           children: n.children,
+          // 문서 트리 노드도 Concept Store id를 갖게 해 이후 상세/추천/재사용 UI에서 같은 개념으로 추적한다.
+          conceptId: matchedConceptId,
           createdAt: now,
           updatedAt: now,
         })
@@ -754,7 +766,7 @@ export async function processDocument(
   // ══════════════════════════════════════════
   let treeId: string;
   try {
-    treeId = persistDocumentTree(docTree, documentId, userId);
+    treeId = persistDocumentTree(docTree, documentId, userId, documentConceptRows);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "학습 트리 저장 중 오류가 발생했습니다.";
     updateDocumentStatus(documentId, "failed", `트리 저장 실패: ${msg}`);

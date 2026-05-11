@@ -90,10 +90,31 @@ export interface ApiLearningNode {
   is_reused_concept: boolean | null;
   /** 이 Concept가 포함된 서로 다른 학습 트리 개수(현재 트리 포함) */
   concept_tree_count: number | null;
+  /**
+   * Phase 3: 문서에서 만든 트리일 때만 붙는 출처 정보.
+   * 일반 주제 트리에는 이 값이 없으므로 기존 화면/계약은 그대로 동작한다.
+   */
+  document_context?: {
+    document_id: string;
+    document_title: string;
+    document_concept_id: string;
+    concept_type: DocumentConceptType;
+    source_type: DocumentSourceType;
+    evidence_count: number;
+    evidence: Array<{
+      page_start: number | null;
+      page_end: number | null;
+      section_title: string | null;
+      snippet: string;
+    }>;
+  };
 }
 
 export interface ApiTreePayload {
   tree_id: string;
+  /** Phase 3: 문서 기반 트리이면 원본 문서 id가 내려온다. */
+  document_id?: string;
+  document_title?: string;
   topic: string;
   summary: string;
   nodes: ApiLearningNode[];

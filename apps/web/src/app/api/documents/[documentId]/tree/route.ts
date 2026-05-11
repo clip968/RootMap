@@ -3,6 +3,7 @@ import { jsonError } from "@/lib/api-errors";
 import {
   getDocumentForUser,
   getDocumentLearningTreeForUser,
+  getDocumentTreeContextForUser,
 } from "@/lib/repository/document-repository";
 import { bundleToApiTreeResponse } from "@/lib/tree/bundle-to-api";
 import { NextResponse } from "next/server";
@@ -30,8 +31,13 @@ export async function GET(_req: Request, ctx: Ctx) {
     return jsonError("NOT_FOUND", "문서 기반 학습 트리를 찾을 수 없습니다.", 404);
   }
 
+  const documentContext = getDocumentTreeContextForUser(
+    bundle.tree.id,
+    DEFAULT_USER_ID,
+  );
+
   return NextResponse.json({
     document_id: documentId,
-    ...bundleToApiTreeResponse(bundle),
+    ...bundleToApiTreeResponse(bundle, { documentContext }),
   });
 }

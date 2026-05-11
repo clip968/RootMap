@@ -20,6 +20,7 @@ import type { ApiNodeDetailResponse } from "@/lib/services/node-detail";
 import type {
   ApiLearningNode,
   ApiRecommendationItem,
+  DocumentSourceType,
   NodeType,
   ProgressStatus,
 } from "@/types/learning";
@@ -66,6 +67,38 @@ function formatTreeScale(value: number): string {
 }
 
 type TreeViewMode = "tree" | "sections";
+type DocumentEvidenceItem = NonNullable<
+  ApiLearningNode["document_context"]
+>["evidence"][number];
+
+export function documentSourceTypeLabel(sourceType: DocumentSourceType): string {
+  if (sourceType === "explicit") return "문서에 직접 등장";
+  if (sourceType === "inferred") return "문서 이해를 위해 추론";
+  return "AI가 생성한 설명/점검";
+}
+
+export function formatDocumentEvidenceLocation(
+  evidence: Pick<DocumentEvidenceItem, "page_start" | "page_end" | "section_title">,
+): string {
+  const page =
+    evidence.page_start == null
+      ? ""
+      : evidence.page_end != null && evidence.page_end !== evidence.page_start
+        ? `p.${evidence.page_start}-${evidence.page_end}`
+        : `p.${evidence.page_start}`;
+  if (evidence.section_title && page) return `${evidence.section_title}, ${page}`;
+  return evidence.section_title || page || "문서 위치 미상";
+}
+
+function documentSourceTypeTone(sourceType: DocumentSourceType): string {
+  if (sourceType === "explicit") {
+    return "bg-teal-100 text-teal-900 dark:bg-teal-950/60 dark:text-teal-200";
+  }
+  if (sourceType === "inferred") {
+    return "bg-indigo-100 text-indigo-900 dark:bg-indigo-950/60 dark:text-indigo-200";
+  }
+  return "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
+}
 
 /** 트리 "다시 생성" 배너에서 경과 시간만큼 로테이션하는 안내 문구(start-topic-form과 동일 취지) */
 function generationStageMessage(elapsedSeconds: number): string {
@@ -553,6 +586,54 @@ export function TreePageClient({ treeId }: { treeId: string }) {
       setRegenLoading(false);
     }
   };
+
+  const isDocumentTree = Boolean(tree?.document_id);
+
+  const renderDocumentNodeContext = (
+    node: ApiLearningNode,
+    variant: "tree" | "section",
+  ) => {
+    const ctx = node.document_context;
+    if (!ctx) return null;
+    const firstEvidence = ctx.evidence[0];
+
+    return (
+      <div
+        className={`mt-2 space-y-1 rounded-xl border border-teal-100 bg-white/65 px-3 py-2 text-xs dark:border-teal-900/60 dark:bg-zinc-950/50 ${
+          variant === "section" ? "max-w-2xl" : ""
+        }`}
+      >
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span
+            className={`rounded-full px-2 py-0.5 font-medium ${documentSourceTypeTone(
+              ctx.source_type,
+            )}`}
+          >
+            {documentSourceTypeLabel(ctx.source_type)}
+          </span>
+          {firstEvidence ? (
+            <span className="text-zinc-500 dark:text-zinc-400">
+              {formatDocumentEvidenceLocation(firstEvidence)}
+            </span>
+          ) : (
+            <span className="text-zinc-500 dark:text-zinc-400">
+              직접 출처 없음
+            </span>
+          )}
+        </div>
+        {firstEvidence?.snippet ? (
+          <p className="line-clamp-2 leading-relaxed text-zinc-600 dark:text-zinc-300">
+            {firstEvidence.snippet}
+          </p>
+        ) : ctx.source_type === "inferred" ? (
+          <p className="leading-relaxed text-zinc-600 dark:text-zinc-300">
+            문서에 직접 나온 표현이 아니라, 이 문서를 이해하려고 보강한 선수지식입니다.
+          </p>
+        ) : null}
+      </div>
+    );
+  };
+
   const renderTreeBranch = (branch: TreeBranch, pathKey: string) => {
     const n = branch.node;
     const highlighted = recommendSet.has(n.id);
@@ -598,6 +679,15 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                   참조
                 </span>
               ) : null}
+              {n.document_context ? (
+                <span
+                  className={`rounded-full px-2 py-0.5 ${documentSourceTypeTone(
+                    n.document_context.source_type,
+                  )}`}
+                >
+                  {documentSourceTypeLabel(n.document_context.source_type)}
+                </span>
+              ) : null}
             </span>
             <span className="mt-2 block font-semibold leading-snug text-zinc-950 dark:text-zinc-50">
               {n.title}
@@ -605,6 +695,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
             <span className="mt-1 line-clamp-3 block text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
               {n.description}
             </span>
+            {renderDocumentNodeContext(n, "tree")}
             {n.concept_tree_count != null && n.concept_tree_count > 1 ? (
               <span className="mt-2 block text-xs text-zinc-500 dark:text-zinc-400">
                 다른 학습 주제에서도 쓰임 · 총 {n.concept_tree_count}개 트리
@@ -686,6 +777,18 @@ export function TreePageClient({ treeId }: { treeId: string }) {
             {tree.topic}
           </h1>
           <p className="text-zinc-600 dark:text-zinc-400">{tree.summary}</p>
+          {isDocumentTree ? (
+            <div className="flex flex-wrap gap-2 pt-1 text-xs">
+              <span className="rounded-full bg-teal-100 px-2.5 py-1 font-medium text-teal-900 dark:bg-teal-950/60 dark:text-teal-200">
+                문서 기반 학습 트리
+              </span>
+              {tree.document_title ? (
+                <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                  원본: {tree.document_title}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
           <div className="flex flex-wrap gap-2 pt-2">
             <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs text-zinc-700 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200">
               <input
@@ -806,6 +909,22 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                     {SECTION_LABEL[type]}
                   </span>
                 ))}
+                {isDocumentTree ? (
+                  <>
+                    {(["explicit", "inferred", "generated"] as DocumentSourceType[]).map(
+                      (sourceType) => (
+                        <span
+                          key={sourceType}
+                          className={`rounded-full px-2 py-0.5 ${documentSourceTypeTone(
+                            sourceType,
+                          )}`}
+                        >
+                          {documentSourceTypeLabel(sourceType)}
+                        </span>
+                      ),
+                    )}
+                  </>
+                ) : null}
               </div>
               <div className="flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs dark:border-zinc-800 dark:bg-zinc-900/70">
                 <span className="font-medium text-zinc-600 dark:text-zinc-300">
@@ -954,10 +1073,22 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                                   새 개념
                                 </span>
                               ) : null}
+                              {n.document_context ? (
+                                <span
+                                  className={`rounded px-1.5 py-0.5 text-xs font-medium ${documentSourceTypeTone(
+                                    n.document_context.source_type,
+                                  )}`}
+                                >
+                                  {documentSourceTypeLabel(
+                                    n.document_context.source_type,
+                                  )}
+                                </span>
+                              ) : null}
                             </span>
                             <p className="mt-1 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">
                               {n.description}
                             </p>
+                            {renderDocumentNodeContext(n, "section")}
                             {n.concept_tree_count != null &&
                             n.concept_tree_count > 1 ? (
                               <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">
@@ -1066,6 +1197,22 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                     <h3 className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
                       {detail.title}
                     </h3>
+                    {detail.document_context ? (
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                        <span
+                          className={`rounded-full px-2.5 py-1 font-medium ${documentSourceTypeTone(
+                            detail.document_context.source_type as DocumentSourceType,
+                          )}`}
+                        >
+                          {documentSourceTypeLabel(
+                            detail.document_context.source_type as DocumentSourceType,
+                          )}
+                        </span>
+                        <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-zinc-700 dark:bg-zinc-950 dark:text-zinc-300">
+                          원본: {detail.document_context.document_title}
+                        </span>
+                      </div>
+                    ) : null}
                   </header>
                   {detail.quality_warnings?.length ? (
                     <ul className="list-inside list-disc rounded-xl bg-amber-100 px-4 py-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
@@ -1084,6 +1231,47 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                       Concept 저장소의 설명을 바탕으로 보여 줍니다.
                     </p>
                   ) : null}
+                  {detail.document_context ? (
+                    <section className="rounded-2xl border border-teal-100 bg-white/80 p-4 dark:border-teal-900/60 dark:bg-zinc-900/70">
+                      <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
+                        이 문서에서의 역할
+                      </h3>
+                      <p className="mt-1 text-zinc-700 dark:text-zinc-300">
+                        {detail.why_it_matters_for_document ??
+                          detail.topic_context_line ??
+                          detail.why_it_matters}
+                      </p>
+                      {detail.document_context_summary || detail.analogy ? (
+                        <p className="mt-3 rounded-xl bg-teal-50 px-3 py-2 text-xs leading-relaxed text-teal-900 dark:bg-teal-950/30 dark:text-teal-100">
+                          {detail.document_context_summary ?? detail.analogy}
+                        </p>
+                      ) : null}
+                      {detail.document_context.evidence.length > 0 ? (
+                        <div className="mt-3 space-y-2">
+                          <h4 className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
+                            관련 문서 문단
+                          </h4>
+                          {detail.document_context.evidence.map((e, i) => (
+                            <div
+                              key={`${e.section_title ?? "section"}-${i}`}
+                              className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-950"
+                            >
+                              <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                                {formatDocumentEvidenceLocation(e)}
+                              </p>
+                              <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-zinc-700 dark:text-zinc-300">
+                                {e.snippet}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-3 rounded-xl bg-indigo-50 px-3 py-2 text-xs leading-relaxed text-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-100">
+                          문서에 직접 나온 문단은 없습니다. 문서를 이해하기 위해 추가한 선수지식으로 표시합니다.
+                        </p>
+                      )}
+                    </section>
+                  ) : null}
                   <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
                     <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
                       왜 중요한가
@@ -1100,14 +1288,16 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                       {detail.easy_explanation}
                     </p>
                   </section>
-                  <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
-                    <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                      비유
-                    </h3>
-                    <p className="mt-1 text-zinc-700 dark:text-zinc-300">
-                      {detail.analogy || "—"}
-                    </p>
-                  </section>
+                  {!detail.document_context ? (
+                    <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
+                      <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
+                        비유
+                      </h3>
+                      <p className="mt-1 text-zinc-700 dark:text-zinc-300">
+                        {detail.analogy || "—"}
+                      </p>
+                    </section>
+                  ) : null}
                   <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
                     <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
                       예시

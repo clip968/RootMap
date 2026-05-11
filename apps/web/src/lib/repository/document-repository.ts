@@ -67,6 +67,30 @@ export interface DocumentConceptEvidenceResponse {
   }>;
 }
 
+export interface DocumentTreeNodeContext {
+  document_id: string;
+  document_title: string;
+  document_concept_id: string;
+  concept_id: string | null;
+  concept_title: string;
+  concept_type: DocumentConceptType;
+  source_type: DocumentSourceType;
+  evidence_count: number;
+  evidence: Array<{
+    page_start: number | null;
+    page_end: number | null;
+    section_title: string | null;
+    snippet: string;
+  }>;
+}
+
+export interface DocumentTreeContext {
+  document_id: string;
+  document_title: string;
+  by_concept_id: Map<string, DocumentTreeNodeContext>;
+  by_normalized_title: Map<string, DocumentTreeNodeContext>;
+}
+
 export interface CreateDocumentInput {
   userId: string;
   title?: string | null;
@@ -355,6 +379,105 @@ const DOCUMENT_CONCEPT_TYPE_ORDER: Record<DocumentConceptType, number> = {
 
 function evidenceCount(evidence: unknown): number {
   return Array.isArray(evidence) ? evidence.length : 0;
+}
+
+function normalizeConceptTitle(title: string): string {
+  return title.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function toDocumentTreeNodeContext(
+  document: DocumentRow,
+  row: DocumentConceptRow,
+): DocumentTreeNodeContext {
+  const evidence = Array.isArray(row.evidence) ? row.evidence : [];
+  return {
+    document_id: document.id,
+    document_title: document.title || document.originalFilename,
+    document_concept_id: row.id,
+    concept_id: row.conceptId,
+    concept_title: row.conceptTitle,
+    concept_type: row.conceptType as DocumentConceptType,
+    source_type: row.sourceType as DocumentSourceType,
+    evidence_count: evidence.length,
+    evidence: evidence.map((item) => ({
+      page_start: item.pageStart,
+      page_end: item.pageEnd,
+      section_title: item.sectionTitle,
+      snippet: item.snippet,
+    })),
+  };
+}
+
+/**
+ * 트리 id가 문서 기반 트리인지 확인하고, 맞다면 노드 UI에 붙일 문서 출처 맵을 만든다.
+ * 노드에 concept_id가 없는 과거 데이터도 제목으로 fallback 매칭할 수 있게 두 맵을 함께 둔다.
+ */
+export function getDocumentTreeContextForUser(
+  treeId: string,
+  userId: string,
+): DocumentTreeContext | null {
+  const db = getDb();
+  const document = db
+    .select({
+      id: documents.id,
+      userId: documents.userId,
+      title: documents.title,
+      originalFilename: documents.originalFilename,
+      fileType: documents.fileType,
+      fileSizeBytes: documents.fileSizeBytes,
+      pageCount: documents.pageCount,
+      extractedTextLength: documents.extractedTextLength,
+      processingStatus: documents.processingStatus,
+      processingError: documents.processingError,
+      metadata: documents.metadata,
+      createdAt: documents.createdAt,
+      updatedAt: documents.updatedAt,
+    })
+    .from(documentLearningTrees)
+    .innerJoin(documents, eq(documents.id, documentLearningTrees.documentId))
+    .where(
+      and(
+        eq(documentLearningTrees.treeId, treeId),
+        eq(documents.userId, userId),
+      ),
+    )
+    .orderBy(desc(documentLearningTrees.createdAt))
+    .all()[0];
+  if (!document) return null;
+
+  const conceptRows = db
+    .select()
+    .from(documentConcepts)
+    .where(eq(documentConcepts.documentId, document.id))
+    .all();
+
+  const byConceptId = new Map<string, DocumentTreeNodeContext>();
+  const byTitle = new Map<string, DocumentTreeNodeContext>();
+  for (const row of conceptRows) {
+    const ctx = toDocumentTreeNodeContext(document, row);
+    if (ctx.concept_id) byConceptId.set(ctx.concept_id, ctx);
+    byTitle.set(normalizeConceptTitle(ctx.concept_title), ctx);
+  }
+
+  return {
+    document_id: document.id,
+    document_title: document.title || document.originalFilename,
+    by_concept_id: byConceptId,
+    by_normalized_title: byTitle,
+  };
+}
+
+export function findDocumentContextForNode(
+  context: DocumentTreeContext | null,
+  nodeTitle: string,
+  conceptId: string | null,
+): DocumentTreeNodeContext | null {
+  if (!context) return null;
+  if (conceptId) {
+    const byConcept = context.by_concept_id.get(conceptId);
+    if (byConcept) return byConcept;
+  }
+  return context.by_normalized_title.get(normalizeConceptTitle(nodeTitle)) ?? null;
 }
 
 /**

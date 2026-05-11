@@ -2,12 +2,18 @@ import {
   generateNodeDetail,
   type GenerateNodeDetailInput,
 } from "@/lib/llm/generate-node-detail";
+import { generateDocumentNodeDetail } from "@/lib/llm/generate-document-node-detail";
 import { getDb } from "@/db/client";
 import type { LearningTreeBundle, LearningNodeRow } from "@/lib/repository/learning-repository";
 import {
   getLearningTree,
   saveNodeDetail,
 } from "@/lib/repository/learning-repository";
+import {
+  findDocumentContextForNode,
+  getDocumentTreeContextForUser,
+  type DocumentTreeNodeContext,
+} from "@/lib/repository/document-repository";
 import { DEFAULT_USER_ID } from "@/db/constants";
 import {
   getConceptById,
@@ -34,6 +40,17 @@ export interface ApiNodeDetailResponse {
   concept_id: string | null;
   topic_context_line?: string;
   from_concept_store?: boolean;
+  document_context?: {
+    document_id: string;
+    document_title: string;
+    document_concept_id: string;
+    concept_type: string;
+    source_type: string;
+    evidence_count: number;
+    evidence: DocumentTreeNodeContext["evidence"];
+  };
+  why_it_matters_for_document?: string;
+  document_context_summary?: string;
   prerequisite_concepts?: Array<{ id: string; title: string }>;
   related_concepts?: Array<{ id: string; title: string }>;
   used_in_other_trees?: Array<{
@@ -115,6 +132,9 @@ function toApiBody(
       | "concept_id"
       | "topic_context_line"
       | "from_concept_store"
+      | "document_context"
+      | "why_it_matters_for_document"
+      | "document_context_summary"
       | "prerequisite_concepts"
       | "related_concepts"
       | "used_in_other_trees"
@@ -137,10 +157,46 @@ function toApiBody(
     concept_id: extras.concept_id ?? null,
     topic_context_line: extras.topic_context_line,
     from_concept_store: extras.from_concept_store,
+    document_context: extras.document_context,
+    why_it_matters_for_document: extras.why_it_matters_for_document,
+    document_context_summary: extras.document_context_summary,
     prerequisite_concepts: extras.prerequisite_concepts,
     related_concepts: extras.related_concepts,
     used_in_other_trees: extras.used_in_other_trees,
   };
+}
+
+function documentContextToApi(ctx: DocumentTreeNodeContext): ApiNodeDetailResponse["document_context"] {
+  return {
+    document_id: ctx.document_id,
+    document_title: ctx.document_title,
+    document_concept_id: ctx.document_concept_id,
+    concept_type: ctx.concept_type,
+    source_type: ctx.source_type,
+    evidence_count: ctx.evidence_count,
+    evidence: ctx.evidence,
+  };
+}
+
+function formatDocumentEvidenceForPrompt(ctx: DocumentTreeNodeContext): string {
+  if (ctx.evidence.length === 0) {
+    return ctx.source_type === "inferred"
+      ? "문서에 직접 등장한 문단은 없습니다. 이 개념은 문서를 이해하기 위해 추론된 선수지식입니다."
+      : "문서에 직접 연결된 문단 정보가 없습니다.";
+  }
+
+  return ctx.evidence
+    .map((e, index) => {
+      const page =
+        e.page_start == null
+          ? "page unknown"
+          : e.page_end != null && e.page_end !== e.page_start
+            ? `p.${e.page_start}-${e.page_end}`
+            : `p.${e.page_start}`;
+      const section = e.section_title ? `${e.section_title}, ` : "";
+      return `${index + 1}. ${section}${page}\n${e.snippet}`;
+    })
+    .join("\n\n");
 }
 
 function responseFromStoredConcept(
@@ -187,17 +243,75 @@ export async function getOrCreateNodeDetail(params: {
     throw new Error("NODE_NOT_IN_TREE");
   }
 
+  const documentTreeContext = getDocumentTreeContextForUser(
+    treeId,
+    DEFAULT_USER_ID,
+  );
+  const documentNodeContext = findDocumentContextForNode(
+    documentTreeContext,
+    nodeRow.title,
+    nodeRow.conceptId,
+  );
+
   const extrasBase = (): Partial<ApiNodeDetailResponse> => {
-    if (!nodeRow.conceptId) return { concept_id: null };
-    const graph = buildPanelGraph(nodeRow.conceptId, treeId);
+    const conceptId = nodeRow.conceptId ?? documentNodeContext?.concept_id ?? null;
+    const documentExtras: Partial<ApiNodeDetailResponse> =
+      documentNodeContext ?
+        {
+          document_context: documentContextToApi(documentNodeContext),
+          topic_context_line:
+            documentNodeContext.source_type === "inferred"
+              ? `「${nodeRow.title}」는 「${documentNodeContext.document_title}」를 이해하기 위해 추론된 선수지식입니다.`
+              : `「${nodeRow.title}」는 「${documentNodeContext.document_title}」에서 확인된 문서 기반 개념입니다.`,
+        }
+      : {};
+    if (!conceptId) return { concept_id: null, ...documentExtras };
+    const graph = buildPanelGraph(conceptId, treeId);
     return {
-      concept_id: nodeRow.conceptId,
-      topic_context_line: topicContextLine(bundle.tree.topic, nodeRow.title),
+      concept_id: conceptId,
+      topic_context_line:
+        documentExtras.topic_context_line ??
+        topicContextLine(bundle.tree.topic, nodeRow.title),
       prerequisite_concepts: graph.prerequisite_concepts,
       related_concepts: graph.related_concepts,
       used_in_other_trees: graph.used_in_other_trees,
+      ...documentExtras,
     };
   };
+
+  if (!nodeRow.detailJson && documentNodeContext) {
+    const { detail, qualityWarnings } = await generateDocumentNodeDetail({
+      documentTitle: documentNodeContext.document_title,
+      nodeId: nodeRow.nodeKey,
+      conceptTitle: nodeRow.title,
+      sourceType: documentNodeContext.source_type,
+      evidenceText: formatDocumentEvidenceForPrompt(documentNodeContext),
+      prerequisites: nodeRow.prerequisites.join(", ") || "없음",
+      requestId: `doc-node-${treeId}-${nodeRow.nodeKey}`,
+    });
+    const genericDetail: NodeDetailResponse = {
+      node_id: nodeRow.nodeKey,
+      title: detail.title,
+      type: nodeRow.type,
+      why_it_matters: detail.why_it_matters_for_document,
+      easy_explanation: detail.easy_explanation,
+      analogy: detail.document_context_summary,
+      example: detail.example,
+      common_misconceptions: detail.common_misconceptions,
+      check_questions: detail.check_questions,
+      next_nodes: detail.next_nodes,
+    };
+    const saved = saveNodeDetail(nodeId, genericDetail);
+    if (!saved) {
+      throw new Error("DETAIL_SAVE_FAILED");
+    }
+    return toApiBody(nodeId, nodeRow.nodeKey, genericDetail, qualityWarnings, {
+      ...extrasBase(),
+      from_concept_store: false,
+      why_it_matters_for_document: detail.why_it_matters_for_document,
+      document_context_summary: detail.document_context_summary,
+    });
+  }
 
   if (!nodeRow.detailJson && nodeRow.conceptId) {
     const c = getConceptById(getDb(), nodeRow.conceptId);

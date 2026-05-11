@@ -1,6 +1,7 @@
 import { jsonError } from "@/lib/api-errors";
 import { DEFAULT_USER_ID } from "@/db/constants";
 import { getLearningTree } from "@/lib/repository/learning-repository";
+import { getDocumentTreeContextForUser } from "@/lib/repository/document-repository";
 import { bundleToApiTreeResponse } from "@/lib/tree/bundle-to-api";
 import { NextResponse } from "next/server";
 
@@ -18,5 +19,6 @@ export async function GET(_req: Request, ctx: Ctx) {
       404,
     );
   }
-  return NextResponse.json(bundleToApiTreeResponse(bundle));
+  const documentContext = getDocumentTreeContextForUser(treeId, DEFAULT_USER_ID);
+  return NextResponse.json(bundleToApiTreeResponse(bundle, { documentContext }));
 }
