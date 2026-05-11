@@ -63,6 +63,7 @@ const MAX_PAGES = 80;
 const MAX_TEXT_LENGTH = 120_000;
 const MIN_EXTRACTED_TEXT_LENGTH = 50;
 const MIN_QUALITY_CONCEPT_COUNT = 3;
+const DEFAULT_CHUNK_CONCURRENCY = 3;
 const DOCUMENT_EVIDENCE_SNIPPET_MAX = 360;
 
 // ──────────────────────────────────────────────
@@ -75,6 +76,36 @@ function storageAbsPath(key: string): string {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function getDocumentChunkConcurrency(): number {
+  const raw = process.env.DOCUMENT_CHUNK_CONCURRENCY;
+  if (!raw) return DEFAULT_CHUNK_CONCURRENCY;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CHUNK_CONCURRENCY;
+}
+
+export async function runWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const limit = Math.max(1, Math.floor(concurrency));
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function runWorker(): Promise<void> {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex++;
+      results[currentIndex] = await worker(items[currentIndex]!, currentIndex);
+    }
+  }
+
+  // 청크별 LLM 호출은 서로 독립적이므로 제한된 worker 수만큼 병렬 처리한다.
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, () => runWorker()),
+  );
+  return results;
 }
 
 /**
@@ -139,8 +170,7 @@ async function extractConceptsFromChunks(
     chunkCount: chunks.length,
   });
 
-  // 모든 청크 추출 결과를 모을 배열
-  const allCandidates: Array<{
+  type ChunkCandidateBatch = {
     chunk_id: string;
     section_title: string;
     candidates: Array<{
@@ -151,10 +181,11 @@ async function extractConceptsFromChunks(
       difficulty: number;
       evidence_snippet: string;
     }>;
-  }> = [];
+  };
 
-  // 청크별로 순차 처리 (LLM 비용/비율 제한 고려)
-  for (const chunk of chunks) {
+  const concurrency = getDocumentChunkConcurrency();
+
+  const allCandidates = await runWithConcurrency(chunks, concurrency, async (chunk): Promise<ChunkCandidateBatch> => {
     const sectionTitle = chunk.sectionTitle ?? "";
     try {
       const { extraction } = await generateChunkConcepts({
@@ -166,7 +197,7 @@ async function extractConceptsFromChunks(
         requestId: `doc-${documentId}-chunk-${chunk.chunkIndex}`,
       });
 
-      allCandidates.push({
+      return {
         chunk_id: chunk.id,
         section_title: sectionTitle,
         candidates: extraction.concept_candidates.map((c) => ({
@@ -177,7 +208,7 @@ async function extractConceptsFromChunks(
           difficulty: c.difficulty,
           evidence_snippet: c.evidence_snippet,
         })),
-      });
+      };
     } catch (err) {
       // LLM 재시도 소진 시 해당 청크는 건너뛰고 로그만 남김
       console.warn("[document-processor]", {
@@ -188,21 +219,31 @@ async function extractConceptsFromChunks(
         error: err instanceof Error ? err.message : "알 수 없는 오류",
       });
       // 빈 결과로 계속 진행
-      allCandidates.push({
+      return {
         chunk_id: chunk.id,
         section_title: sectionTitle,
         candidates: [],
-      });
+      };
     }
-  }
+  });
+
+  const totalCandidates = allCandidates.reduce((s, c) => s + c.candidates.length, 0);
 
   console.info("[document-processor]", {
     stage: "chunk_concept_extraction_complete",
     documentId,
+    concurrency,
     totalChunks: chunks.length,
     processedChunks: allCandidates.length,
-    totalCandidates: allCandidates.reduce((s, c) => s + c.candidates.length, 0),
+    totalCandidates,
   });
+
+  if (totalCandidates === 0) {
+    throw new DocumentProcessorError(
+      "CONCEPT_EXTRACTION_FAILED",
+      "문서에서 학습 개념 후보를 추출하지 못했습니다. 잠시 후 다시 시도하거나 더 명확한 문서를 업로드해 주세요.",
+    );
+  }
 
   // JSON 직렬화 (LLM consolidation 입력용)
   return JSON.stringify(allCandidates);

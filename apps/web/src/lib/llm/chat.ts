@@ -25,6 +25,20 @@ function jsonObjectModeEnabled(): boolean {
   return process.env.OPENROUTER_JSON_MODE !== "false";
 }
 
+export function getOpenRouterTimeoutMs(): number {
+  const raw = process.env.OPENROUTER_TIMEOUT_MS;
+  if (!raw) return 60_000;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60_000;
+}
+
+export function getOpenRouterMaxAttempts(): number {
+  const raw = process.env.OPENROUTER_MAX_ATTEMPTS;
+  if (!raw) return 3;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 3;
+}
+
 /**
  * OpenRouter Chat Completions. 서버 전용(환경 변수 사용).
  *
@@ -52,23 +66,41 @@ export async function createChatCompletion(messages: ChatMessage[]): Promise<{
     body.response_format = { type: "json_object" };
   }
 
-  const res = await fetch(`${getBaseUrl()}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      ...(process.env.OPENROUTER_SITE_URL
-        ? { "HTTP-Referer": process.env.OPENROUTER_SITE_URL }
-        : {}),
-      ...(process.env.OPENROUTER_APP_NAME
-        ? { "X-OpenRouter-Title": process.env.OPENROUTER_APP_NAME }
-        : {}),
-    },
-    body: JSON.stringify(body),
-  });
+  const timeoutMs = getOpenRouterTimeoutMs();
+  const controller = new AbortController();
+  // standalone smoke와 서버 라우트 모두에서 LLM 호출 하나가 무기한 대기하지 않도록 제한한다.
+  const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
 
-  const status = res.status;
-  const json = (await res.json()) as OpenRouterChatCompletionResponse;
+  let res: Response;
+  let status = 0;
+  let json: OpenRouterChatCompletionResponse;
+  try {
+    res = await fetch(`${getBaseUrl()}/chat/completions`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        ...(process.env.OPENROUTER_SITE_URL
+          ? { "HTTP-Referer": process.env.OPENROUTER_SITE_URL }
+          : {}),
+        ...(process.env.OPENROUTER_APP_NAME
+          ? { "X-OpenRouter-Title": process.env.OPENROUTER_APP_NAME }
+          : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    status = res.status;
+    json = (await res.json()) as OpenRouterChatCompletionResponse;
+  } catch (err) {
+    if (controller.signal.aborted) {
+      throw new LlmTransportError(`LLM 요청 시간이 ${timeoutMs}ms를 초과했습니다.`, 0);
+    }
+    const message = err instanceof Error ? err.message : "알 수 없는 네트워크 오류";
+    throw new LlmTransportError(`LLM 요청 실패: ${message}`, 0);
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
 
   if (!res.ok) {
     const msg =

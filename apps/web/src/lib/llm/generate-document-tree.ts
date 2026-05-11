@@ -6,7 +6,7 @@
  * - 노드 10~25개, 선수지식 3개 이상, 문서 핵심 개념 5개 이상
  * - 파싱/검증/transport 오류는 최대 3회 재시도
  */
-import { createChatCompletion } from "@/lib/llm/chat";
+import { createChatCompletion, getOpenRouterMaxAttempts } from "@/lib/llm/chat";
 import {
   LlmExhaustedRetriesError,
   LlmParseError,
@@ -22,8 +22,6 @@ import {
   documentTreeQualityWarnings,
 } from "@/lib/llm/schemas";
 import type { DocumentTreeResponse } from "@/types/learning";
-
-const MAX_ATTEMPTS = 3;
 
 function shouldAbortRetries(err: unknown): boolean {
   return err instanceof LlmTransportError && err.status === 401;
@@ -74,17 +72,18 @@ export async function generateDocumentTree(
     requestId,
   } = options;
   const requestId_ = requestId ?? `tree-${documentId}`;
+  const maxAttempts = getOpenRouterMaxAttempts();
 
   let lastError: unknown;
 
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const attemptNumber = attempt + 1;
     const attemptStartedAt = Date.now();
 
     logGenerate("attempt_start", {
       requestId: requestId_,
       attempt: attemptNumber,
-      maxAttempts: MAX_ATTEMPTS,
+      maxAttempts,
       documentId,
     });
 

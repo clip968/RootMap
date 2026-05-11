@@ -5,7 +5,7 @@
  * - JSON 파싱 + Zod 검증 + 품질 검사
  * - 파싱/검증/transport 오류는 최대 3회 재시도 (401은 즉시 중단)
  */
-import { createChatCompletion } from "@/lib/llm/chat";
+import { createChatCompletion, getOpenRouterMaxAttempts } from "@/lib/llm/chat";
 import {
   LlmExhaustedRetriesError,
   LlmParseError,
@@ -18,8 +18,6 @@ import {
   DOCUMENT_CHUNK_CONCEPT_SYSTEM_PROMPT,
 } from "@/lib/llm/prompts";
 import type { ChunkConceptExtractionResponse } from "@/types/learning";
-
-const MAX_ATTEMPTS = 3;
 
 function shouldAbortRetries(err: unknown): boolean {
   return err instanceof LlmTransportError && err.status === 401;
@@ -63,17 +61,18 @@ export async function generateChunkConcepts(
   const { documentTitle, chunkId, sectionTitle, chunkText, chunkMetadata, requestId } =
     options;
   const requestId_ = requestId ?? `chunk-${chunkId}`;
+  const maxAttempts = getOpenRouterMaxAttempts();
 
   let lastError: unknown;
 
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const attemptNumber = attempt + 1;
     const attemptStartedAt = Date.now();
 
     logGenerate("attempt_start", {
       requestId: requestId_,
       attempt: attemptNumber,
-      maxAttempts: MAX_ATTEMPTS,
+      maxAttempts,
       chunkId,
     });
 

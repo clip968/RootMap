@@ -2,9 +2,14 @@ import { jsonError } from "@/lib/api-errors";
 import { DEFAULT_USER_ID } from "@/db/constants";
 import { recommendNextNodes } from "@/lib/recommendation/recommend-next";
 import {
+  findDocumentContextForNode,
+  getDocumentTreeContextForUser,
+} from "@/lib/repository/document-repository";
+import {
   getConceptProgressMapForUser,
   getLearningTree,
 } from "@/lib/repository/learning-repository";
+import type { DocumentNodeType } from "@/types/learning";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -22,6 +27,21 @@ export async function GET(_req: Request, ctx: Ctx) {
     );
   }
 
+  const documentContext = getDocumentTreeContextForUser(treeId, DEFAULT_USER_ID);
+  const recommendedOrderIndex = new Map(
+    bundle.tree.treeJson.recommended_order.map((nodeKey, index) => [
+      nodeKey,
+      index,
+    ]),
+  );
+  const toDocumentNodeType = (
+    conceptType: string,
+  ): DocumentNodeType | undefined => {
+    if (conceptType === "document_core") return "document_core";
+    if (conceptType === "misconception") return "misconception";
+    if (conceptType === "prerequisite") return "prerequisite";
+    return undefined;
+  };
   const inputs = bundle.nodes.map((n) => ({
     id: n.id,
     node_key: n.nodeKey,
@@ -29,6 +49,19 @@ export async function GET(_req: Request, ctx: Ctx) {
     type: n.type,
     difficulty: n.difficulty ?? 0,
     prerequisites: n.prerequisites,
+    ...(() => {
+      const context = findDocumentContextForNode(
+        documentContext,
+        n.title,
+        n.conceptId,
+      );
+      if (!context) return {};
+      return {
+        source_type: context.source_type,
+        document_type: toDocumentNodeType(context.concept_type),
+        recommended_order_index: recommendedOrderIndex.get(n.nodeKey),
+      };
+    })(),
   }));
 
   const progressMap = new Map(

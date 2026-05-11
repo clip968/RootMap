@@ -254,6 +254,7 @@ const pageFaultDocumentConcept = savedDocumentConcepts.find((concept) => concept
 if (!pageFaultDocumentConcept?.conceptId || pageFaultDocumentConcept.conceptId === pageConcept.id) {
   throw new Error("Page Fault must be stored as a distinct Concept from Page");
 }
+const pageFaultDocumentConceptId = pageFaultDocumentConcept.id;
 const inferredDocumentConcept = savedDocumentConcepts.find((concept) => concept.conceptTitle === "Memory Address");
 if (!inferredDocumentConcept?.conceptId || inferredDocumentConcept.sourceType !== "inferred") {
   throw new Error("inferred document concept should be connected and keep source_type");
@@ -291,10 +292,10 @@ if (linkedTree?.tree.id !== treeId) {
 }
 
 const evidencePayload = getDocumentConceptEvidenceForUser(
-  pageFaultDocumentConcept.id,
+  pageFaultDocumentConceptId,
   DEFAULT_USER_ID,
 );
-if (evidencePayload?.document_concept_id !== pageFaultDocumentConcept.id) {
+if (evidencePayload?.document_concept_id !== pageFaultDocumentConceptId) {
   throw new Error("document concept evidence should be scoped by user");
 }
 if (evidencePayload.evidence[0]?.page_start !== 1) {
@@ -308,7 +309,7 @@ if (listDocumentConceptsForUser(documentId, otherUserId).length !== 0) {
 if (getDocumentLearningTreeForUser(documentId, otherUserId) !== null) {
   throw new Error("other users must not read document tree");
 }
-if (getDocumentConceptEvidenceForUser(pageFaultDocumentConcept.id, otherUserId) !== null) {
+if (getDocumentConceptEvidenceForUser(pageFaultDocumentConceptId, otherUserId) !== null) {
   throw new Error("other users must not read document evidence");
 }
 
@@ -349,14 +350,14 @@ async function verifyDocumentQueryRoutes(): Promise<void> {
   }
 
   const evidenceRouteResponse = await getDocumentEvidenceRoute(new Request("http://rootmap.test"), {
-    params: Promise.resolve({ documentConceptId: pageFaultDocumentConcept.id }),
+    params: Promise.resolve({ documentConceptId: pageFaultDocumentConceptId }),
   });
   const evidenceRouteBody = await evidenceRouteResponse.json() as {
     document_concept_id?: string;
     evidence?: Array<{ snippet: string }>;
   };
   if (
-    evidenceRouteBody.document_concept_id !== pageFaultDocumentConcept.id ||
+    evidenceRouteBody.document_concept_id !== pageFaultDocumentConceptId ||
     !evidenceRouteBody.evidence?.[0]?.snippet.includes("page fault")
   ) {
     throw new Error("document evidence API should return the stored evidence");

@@ -5,7 +5,7 @@
  * - source_type = explicit / inferred 구분
  * - 파싱/검증/transport 오류는 최대 3회 재시도
  */
-import { createChatCompletion } from "@/lib/llm/chat";
+import { createChatCompletion, getOpenRouterMaxAttempts } from "@/lib/llm/chat";
 import {
   LlmExhaustedRetriesError,
   LlmParseError,
@@ -21,8 +21,6 @@ import {
   documentConsolidationQualityWarnings,
 } from "@/lib/llm/schemas";
 import type { DocumentConsolidationResponse } from "@/types/learning";
-
-const MAX_ATTEMPTS = 3;
 
 function shouldAbortRetries(err: unknown): boolean {
   return err instanceof LlmTransportError && err.status === 401;
@@ -63,17 +61,18 @@ export async function generateDocumentConsolidation(
 ): Promise<GenerateConsolidationResult> {
   const { documentTitle, conceptCandidatesJson, requestId } = options;
   const requestId_ = requestId ?? "consolidation";
+  const maxAttempts = getOpenRouterMaxAttempts();
 
   let lastError: unknown;
 
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const attemptNumber = attempt + 1;
     const attemptStartedAt = Date.now();
 
     logGenerate("attempt_start", {
       requestId: requestId_,
       attempt: attemptNumber,
-      maxAttempts: MAX_ATTEMPTS,
+      maxAttempts,
       candidatesLength: conceptCandidatesJson.length,
     });
 
