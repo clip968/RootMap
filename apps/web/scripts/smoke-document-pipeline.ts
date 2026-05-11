@@ -19,6 +19,12 @@ import {
   listDocumentConceptsForUser,
 } from "../src/lib/repository/document-repository";
 
+/** 다음 상수는 Phase 3 최소 품질 기준 (docs/plans/phase-03/10-*.md §5) */
+const QUALITY_MIN_CONCEPTS = 5;
+const QUALITY_MIN_NODES = 10;
+const QUALITY_MIN_PREREQ_NODES = 3;
+const QUALITY_MIN_CORE_NODES = 5;
+
 loadEnvConfig(process.cwd());
 process.env.OPENROUTER_TIMEOUT_MS ??= "90000";
 process.env.OPENROUTER_MAX_ATTEMPTS ??= "1";
@@ -59,6 +65,16 @@ logStage("migrate_complete");
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
+}
+
+/** 품질 검증: hard fail 없이 경고를 로그로 남기고 개수를 반환한다 */
+function checkQuality(label: string, condition: boolean, detail: string): number {
+  if (!condition) {
+    console.warn(`  ⚠ [quality] ${label}: ${detail}`);
+    return 1;
+  }
+  console.info(`  ✓ [quality] ${label}`);
+  return 0;
 }
 
 function requireOpenRouterEnv(): void {
@@ -190,6 +206,48 @@ async function main(): Promise<void> {
       treeId: bundle.tree.id,
       nodeCount: bundle.nodes.length,
     });
+
+    // ── 품질 검증 (hard fail 아님, warning-only) ──
+    const nodeTypes = bundle.nodes.map((n) => n.type);
+
+    console.info("");
+    console.info("─── document:pipeline-smoke quality report ───");
+    let qualityFails = 0;
+
+    qualityFails += checkQuality(
+      "document 개념 수 >= 최소 기준",
+      concepts.length >= QUALITY_MIN_CONCEPTS,
+      `${concepts.length}개 < ${QUALITY_MIN_CONCEPTS}개 (모델이 충분한 개념을 추출하지 못했습니다)`,
+    );
+    qualityFails += checkQuality(
+      "explicit 개념 존재 (evidence 포함)",
+      concepts.some((c) => c.sourceType === "explicit" && c.evidenceCount > 0),
+      "문서에 직접 등장한 explicit 개념이 없거나 evidence가 연결되지 않았습니다",
+    );
+    qualityFails += checkQuality(
+      "inferred 선수지식 개념 존재",
+      concepts.some((c) => c.sourceType === "inferred"),
+      "추론된 선수지식(inferred) 개념이 없습니다",
+    );
+    qualityFails += checkQuality(
+      "트리 노드 수 >= 최소 기준",
+      bundle.nodes.length >= QUALITY_MIN_NODES,
+      `${bundle.nodes.length}개 < ${QUALITY_MIN_NODES}개 (모델이 충분한 학습 트리를 생성하지 못했습니다)`,
+    );
+    qualityFails += checkQuality(
+      "prerequisite 노드 존재",
+      nodeTypes.includes("prerequisite"),
+      "선수지식(prerequisite) 노드가 없습니다",
+    );
+    qualityFails += checkQuality(
+      "core 노드 존재 (document_core)",
+      nodeTypes.includes("core"),
+      "핵심 개념(core) 노드가 없습니다",
+    );
+
+    const qualityResult = qualityFails === 0 ? "ALL PASS" : `${qualityFails} warning(s)`;
+    console.info(`─── quality result: ${qualityResult} ───`);
+    console.info("");
 
     console.log("document:pipeline-smoke OK");
   } catch (err) {
