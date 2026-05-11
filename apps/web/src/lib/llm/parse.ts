@@ -5,6 +5,7 @@ import {
   chunkConceptExtractionResponseSchema,
   documentConsolidationResponseSchema,
   documentTreeResponseSchema,
+  documentTreeStructureResponseSchema,
   documentNodeDetailResponseSchema,
 } from "@/lib/llm/schemas";
 import type {
@@ -13,6 +14,7 @@ import type {
   ChunkConceptExtractionResponse,
   DocumentConsolidationResponse,
   DocumentTreeResponse,
+  DocumentTreeStructureResponse,
   DocumentNodeDetailResponse,
 } from "@/types/learning";
 
@@ -148,4 +150,34 @@ export function parseDocumentNodeDetailResponse(
     );
   }
   return data;
+}
+
+/**
+ * Phase 3 Task 11: 경량 트리 구조 전용 파싱
+ */
+export function parseDocumentTreeStructureResponse(
+  raw: string,
+): DocumentTreeStructureResponse {
+  const cleaned = stripLlmFences(raw);
+  const sliced = sliceBalancedJsonObject(cleaned);
+  if (!sliced) {
+    throw new LlmParseError("트리 구조 응답에서 JSON 객체를 찾을 수 없습니다.");
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(sliced);
+  } catch {
+    throw new LlmParseError("트리 구조 응답이 올바른 JSON이 아닙니다.");
+  }
+
+  const result = documentTreeStructureResponseSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new LlmValidationError(
+      "트리 구조 응답 스키마 검증 실패",
+      result.error.issues,
+    );
+  }
+
+  return result.data;
 }

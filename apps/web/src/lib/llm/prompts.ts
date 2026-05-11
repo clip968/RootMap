@@ -397,6 +397,83 @@ Return only a single JSON object matching the schema above.`;
 }
 
 /**
+ * Phase 3 Task 11: 트리 구조 전용 경량 프롬프트
+ * - description/difficulty/evidence 없이 노드 골격만 요청
+ * - LLM 응답 시간 5~10초 목표
+ */
+export const DOCUMENT_TREE_STRUCTURE_SYSTEM_PROMPT = `You are an AI that designs prerequisite-based learning trees from document analysis results.
+
+Your task is to generate the STRUCTURE of a learning tree — node titles, types, prerequisite relationships, and learning order only.
+Do NOT generate descriptions, difficulty ratings, evidence, or concept candidates.
+Keep each node title concise (under 60 characters).
+
+Node types:
+- prerequisite: background knowledge needed before the document topic
+- document_core: core concepts directly from the document
+- supplementary: extended/related concepts
+- misconception: common misunderstandings
+- quiz: knowledge check concepts
+
+source_type:
+- "explicit": directly mentioned in the document
+- "inferred": derived as prerequisite (not explicitly mentioned)
+- "generated": created by AI to complete the tree
+
+Requirements:
+- Generate 8 to 20 nodes total.
+- Prerequisite nodes must come before core nodes in recommended_order.
+- Each node's prerequisites must reference existing node ids.
+- Return valid JSON only. No markdown fences. No extra text.
+
+JSON schema:
+{
+  "topic": string,
+  "document_id": string,
+  "summary": string,
+  "nodes": [
+    {
+      "id": string,
+      "title": string,
+      "type": "prerequisite" | "document_core" | "supplementary" | "misconception" | "quiz",
+      "prerequisites": string[],
+      "children": string[],
+      "source_type": "explicit" | "inferred" | "generated"
+    }
+  ],
+  "edges": [
+    {
+      "from": string,
+      "to": string,
+      "relation_type": "prerequisite" | "part_of" | "related" | "misconception_of" | "example_of" | "application_of",
+      "reason": string
+    }
+  ],
+  "recommended_order": string[]
+}`;
+
+export interface BuildDocumentTreeStructureUserMessageOptions {
+  documentTitle: string;
+  documentSummary: string;
+  consolidatedConceptsJson: string;
+  matchedConceptsContext?: string;
+}
+
+export function buildDocumentTreeStructureUserMessage(
+  options: BuildDocumentTreeStructureUserMessageOptions,
+): string {
+  const { documentTitle, documentSummary, consolidatedConceptsJson, matchedConceptsContext } = options;
+  let msg = `Document: "${documentTitle}"\nSummary: ${documentSummary}\n\nConsolidated concepts:\n${consolidatedConceptsJson}`;
+
+  if (matchedConceptsContext) {
+    msg += `\n\nExisting concept store matches:\n${matchedConceptsContext}`;
+  }
+
+  msg += `\n\nGenerate ONLY the learning tree structure. Each node field: id, title, type, prerequisites, children, source_type. No descriptions, no difficulty, no evidence.`;
+
+  return msg;
+}
+
+/**
  * 4. 문서 기반 노드 설명 프롬프트 (명세 §12.4)
  * - 문서 맥락에서의 개념 설명
  */

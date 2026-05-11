@@ -5,6 +5,7 @@ import type {
   ChunkConceptExtractionResponse,
   DocumentConsolidationResponse,
   DocumentTreeResponse,
+  DocumentTreeStructureResponse,
   DocumentNodeDetailResponse,
 } from "@/types/learning";
 
@@ -502,6 +503,120 @@ export const documentTreeResponseSchema = z
           short_description: n.concept_candidate.short_description ?? "",
           is_reusable: n.concept_candidate.is_reusable ?? true,
         },
+      })),
+      edges: data.edges.map((e) => ({
+        from: e.from,
+        to: e.to,
+        relation_type: e.relation_type,
+        reason: e.reason,
+      })),
+      recommended_order: data.recommended_order,
+    }),
+  );
+
+/**
+ * 3-1. 문서 기반 트리 구조 전용 스키마 (Phase 3 Task 11)
+ * description/difficulty/evidence/concept_candidate 없이
+ * 노드 골격만 LLM에 요청 — 응답 시간 60초→10초 단축 목표
+ */
+export const documentTreeStructureNodeSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  type: documentNodeTypeSchema,
+  prerequisites: z.array(z.string()),
+  children: z.array(z.string()),
+  source_type: documentSourceTypeSchema,
+});
+
+export const documentTreeStructureResponseSchema = z
+  .object({
+    topic: z.string().min(1),
+    document_id: z.string().min(1),
+    summary: z.string(),
+    nodes: z.array(documentTreeStructureNodeSchema),
+    edges: z.array(llmConceptEdgeSchema).default([]),
+    recommended_order: z.array(z.string()),
+  })
+  .superRefine((data, ctx) => {
+    const ids = new Set<string>();
+    for (const node of data.nodes) {
+      if (ids.has(node.id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `중복된 노드 id: ${node.id}`,
+          path: ["nodes"],
+        });
+      }
+      ids.add(node.id);
+    }
+
+    if (ids.size === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "노드가 비어 있습니다.",
+        path: ["nodes"],
+      });
+      return;
+    }
+
+    const checkRefs = (arr: string[], nodeIdx: number, field: string) => {
+      for (const ref of arr) {
+        if (ref && !ids.has(ref)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `존재하지 않는 노드 id 참조: ${ref}`,
+            path: ["nodes", nodeIdx, field],
+          });
+        }
+      }
+    };
+
+    data.nodes.forEach((node, i) => {
+      checkRefs(node.prerequisites, i, "prerequisites");
+      checkRefs(node.children, i, "children");
+    });
+
+    for (let i = 0; i < data.recommended_order.length; i++) {
+      const id = data.recommended_order[i];
+      if (id && !ids.has(id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `recommended_order에 존재하지 않는 노드 id: ${id}`,
+          path: ["recommended_order", i],
+        });
+      }
+    }
+
+    for (let i = 0; i < data.edges.length; i++) {
+      const e = data.edges[i]!;
+      if (!ids.has(e.from)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `edges[${i}].from이 노드 id에 없습니다: ${e.from}`,
+          path: ["edges", i, "from"],
+        });
+      }
+      if (!ids.has(e.to)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `edges[${i}].to가 노드 id에 없습니다: ${e.to}`,
+          path: ["edges", i, "to"],
+        });
+      }
+    }
+  })
+  .transform(
+    (data): DocumentTreeStructureResponse => ({
+      topic: data.topic,
+      document_id: data.document_id,
+      summary: data.summary,
+      nodes: data.nodes.map((n) => ({
+        id: n.id,
+        title: n.title,
+        type: n.type,
+        prerequisites: n.prerequisites,
+        children: n.children,
+        source_type: n.source_type,
       })),
       edges: data.edges.map((e) => ({
         from: e.from,

@@ -209,6 +209,27 @@ export interface DocumentConsolidationResponse {
   concepts: ConsolidatedConcept[];
 }
 
+/** Phase 3 Task 11: 점진적 트리 생성을 위한 경량 구조 전용 노드 타입.
+ *  description/difficulty/evidence/concept_candidate 없이
+ *  노드의 제목·타입·부모-자식 관계만 담는다. */
+export interface DocumentTreeStructureNode {
+  id: string;
+  title: string;
+  type: DocumentNodeType;
+  prerequisites: string[];
+  children: string[];
+  source_type: DocumentSourceType;
+}
+
+export interface DocumentTreeStructureResponse {
+  topic: string;
+  document_id: string;
+  summary: string;
+  nodes: DocumentTreeStructureNode[];
+  edges: LlmConceptEdge[];
+  recommended_order: string[];
+}
+
 /** 문서 기반 트리 노드 */
 export interface DocumentTreeNode {
   id: string;
