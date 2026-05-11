@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 
+/**
+ * API 에러 응답 표준 형식: `{ error: { code, message } }`
+ * 프론트는 `code`로 분기·`message`를 그대로 사용자에게 보여줄 수 있음
+ */
 /** 공통 API 에러 코드 (Phase 1 명세·계획 문서) */
 export type ApiErrorCode =
   | "INVALID_TOPIC"
@@ -22,6 +26,7 @@ export interface ApiErrorBody {
   };
 }
 
+/** 일관된 JSON 에러 응답 — `NextResponse.json` 래퍼 */
 export function jsonError(
   code: ApiErrorCode,
   message: string,

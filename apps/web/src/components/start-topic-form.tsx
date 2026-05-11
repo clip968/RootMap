@@ -1,9 +1,14 @@
+/**
+ * 홈(`/`)에서 쓰는 주제 입력 폼.
+ * POST `/api/trees/generate`로 LLM 기반 학습 트리를 만들고, 성공 시 `/tree/[id]`로 이동한다.
+ */
 "use client";
 
 import type { ApiTreeResponse } from "@/lib/tree/bundle-to-api";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+/** 빠른 시연용 클릭 가능한 예시 문구들 */
 const EXAMPLE_TOPICS = [
   "Transformer",
   "Rust lifetime",
@@ -12,6 +17,10 @@ const EXAMPLE_TOPICS = [
   "운영체제 스케줄링",
 ];
 
+/**
+ * 생성이 오래 걸릴 때 단조롭지 않게 단계 메시지를 바꾼다(실제 파이프라인 단계와 1:1 대응은 아님).
+ * 경과 시간만 보여주는 것보다 사용자에게 진행 중임을 알려 주는 용도.
+ */
 function generationStageMessage(elapsedSeconds: number): string {
   if (elapsedSeconds < 5) return "주제를 분석하고 학습 목표를 정리하는 중입니다.";
   if (elapsedSeconds < 20) return "학습 경로와 선수지식 Tree를 생성하는 중입니다.";
@@ -22,11 +31,17 @@ function generationStageMessage(elapsedSeconds: number): string {
 export function StartTopicForm() {
   const router = useRouter();
   const [topic, setTopic] = useState("");
+  /**
+   * true: Phase 2 Concept 스토어와 매칭해 기존 개념을 재사용(중복 완화, 약간 더 느릴 수 있음).
+   * API 본문 필드명은 스네이크 케이스 `reuse_concepts`.
+   */
   const [reuseConcepts, setReuseConcepts] = useState(true);
   const [loading, setLoading] = useState(false);
+  /** 생성 시작 후 경과 초 — 로딩 메시지와 타이머 표시에 사용 */
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  /** loading 동안 1초마다 경과 시간만 갱신(서버 진행률과는 무관한 클라이언트 표시용). */
   useEffect(() => {
     if (!loading) return;
     const startedAt = Date.now();
@@ -62,11 +77,13 @@ export function StartTopicForm() {
       const treeId = (data as ApiTreeResponse).tree_id;
       if (treeId) router.push(`/tree/${treeId}`);
     } finally {
+      /* 성공/실패와 관계없이 버튼을 다시 누를 수 있게(실패 시 같은 화면에 남음). */
       setLoading(false);
     }
   };
 
   return (
+    /* 상단 고정 툴바(~3rem)를 제외한 영역을 꽉 채워 세로 중앙 정렬 */
     <div className="flex min-h-[calc(100dvh-3rem)] w-full flex-col items-center justify-center px-4 py-10">
       <div className="mb-8 max-w-2xl space-y-3 text-center">
         <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
@@ -90,6 +107,7 @@ export function StartTopicForm() {
           value={topic}
           onChange={(e) => setTopic(e.target.value)}
           onKeyDown={(e) => {
+            /* textarea에서는 Enter가 줄바꿈이므로, Ctrl/⌘+Enter만 제출 */
             if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
               e.preventDefault();
               void submit();

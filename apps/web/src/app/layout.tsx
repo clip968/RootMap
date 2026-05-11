@@ -1,3 +1,7 @@
+/**
+ * Next.js 루트 레이아웃: 폰트·메타데이터·전역 스타일.
+ * 모든 페이지는 `<AppShell>` 안에서 렌더되어 동일한 히스토리 사이드바/상단 바를 가진다.
+ */
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AppShell } from "@/components/app-shell";

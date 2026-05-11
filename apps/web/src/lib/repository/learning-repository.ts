@@ -22,6 +22,14 @@ import type {
   ProgressStatus,
 } from "@/types/learning";
 
+/**
+ * 학습 트리 저장소(Repository).
+ *
+ * - Phase 1: `learning_trees`에 트리 JSON 전체 + `learning_nodes`에 정규화된 노드, `user_node_progress`에 이해 상태
+ * - Phase 2: 트랜잭션 안에서 `persistPhase2Concepts`로 concepts / edges / learning_tree_concepts 연결
+ * - 읽기: `getLearningTree`가 트리 한 건에 필요한 조인 결과를 `LearningTreeBundle`로 묶음
+ */
+
 export { DEFAULT_USER_ID } from "@/db/constants";
 
 export interface LearningTreeRow {
@@ -55,7 +63,7 @@ export interface LearningTreeBundle {
   tree: LearningTreeRow;
   nodes: LearningNodeRow[];
   progress: ApiProgressEntry[];
-  /** concept id -> 서로 다른 학습 트리 개수 */
+  /** concept id → 그 Concept이 등장한 서로 다른 트리 개수(추천 UI·관리 화면용) */
   conceptTreeCounts: Map<string, number>;
 }
 
@@ -190,7 +198,15 @@ function logLearningPersistence(
 }
 
 /**
- * 트리·노드·진행·Phase 2 Concept 연결을 한 트랜잭션으로 저장한다.
+ * 한 번의 트랜잭션 안에서 새 트리 레코드부터 Phase 2 Concept까지 모두 저장합니다.
+ *
+ * 순서 중요:
+ * 1) `learning_trees` 삽입 — LLM이 준 `treeJson` 전체를 그대로 보관(스냅샷)
+ * 2) 각 LLM 노드 id(`node_key`)마다 `learning_nodes` 행 생성 — DB auto id와 매핑
+ * 3) 모든 노드에 대해 `user_node_progress` 기본값 `unknown`
+ * 4) `persistPhase2Concepts` — 노드에 concept_id 채우고 글로벌 Concept/Edge 테이블 갱신
+ *
+ * @returns 새 트리의 UUID
  */
 export function createFullLearningTree(
   topic: string,
@@ -205,6 +221,7 @@ export function createFullLearningTree(
   const requestId = options?.requestId;
   const transactionStartedAt = Date.now();
   return db.transaction((tx) => {
+    /** (1) 트리 메타 + JSON 스냅샷 */
     const treeInsertStartedAt = Date.now();
     const tr = tx
       .insert(learningTrees)
@@ -229,6 +246,7 @@ export function createFullLearningTree(
     }
 
     const nodeInsertStartedAt = Date.now();
+    /** LLM 노드 id 문자열 → DB `learning_nodes.id` — 이후 Concept 연결·prerequisite 보강에 사용 */
     const nodeKeyToDbId = new Map<string, string>();
     const nodeIds: string[] = [];
     for (const n of treeJson.nodes) {
@@ -263,6 +281,7 @@ export function createFullLearningTree(
 
     const progressInsertStartedAt = Date.now();
     if (nodeIds.length > 0) {
+      /** 트리를 처음 본 사용자의 각 노드 이해 상태 — 기본 unknown */
       tx.insert(userNodeProgress)
         .values(
           nodeIds.map((nodeId) => ({
@@ -284,6 +303,9 @@ export function createFullLearningTree(
     }
 
     const conceptPersistenceStartedAt = Date.now();
+    /**
+     * 같은 트랜잭션 `tx`를 넘겨야 트리/노드와 Concept 데이터가 함께 커밋/롤백됨
+     */
     persistPhase2Concepts(tx, {
       treeId,
       tree: treeJson,
@@ -369,6 +391,10 @@ export function initializeNodeProgress(
     .run();
 }
 
+/**
+ * 단일 트리 id로 화면/API에 필요한 데이터를 모읍니다.
+ * 존재하지 않거나 다른 사용자 소유면 `null`.
+ */
 export function getLearningTree(
   treeId: string,
   userId: string = DEFAULT_USER_ID,

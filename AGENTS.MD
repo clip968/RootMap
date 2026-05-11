@@ -46,3 +46,5 @@ Do not read long specs, `.agent/*`, or Senior/Worker skills during greetings, or
 
 ### 주의
 체크리스트는 진행 상황을 추적하기 위한 단일 기준이다. 작업 내용이 계획 문서와 달라졌다면 먼저 해당 계획 문서를 업데이트한 뒤 README 체크리스트도 필요한 경우 함께 갱신한다.
+
+모든 코드에는 사용자가 이해할 수 있게 세부적인 주석을 달아야한다.

@@ -1,3 +1,7 @@
+/**
+ * 전역 레이아웃 래퍼: 상단 바 + 좌측 "생성한 Tree" 히스토리 사이드바 + 페이지 본문.
+ * `layout.tsx`에서 모든 페이지를 감싸므로, 트리 상세(`/tree/...`)와 홈(`/`)이 같은 네비게이션을 공유한다.
+ */
 "use client";
 
 import type { ApiTreeHistoryItem } from "@/types/learning";
@@ -9,6 +13,7 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
+/** API가 돌려주는 ISO 날짜 문자열을 짧은 한국어 표기(월·일·시·분)로 바꾼다. 파싱 실패 시 빈 문자열. */
 function formatHistoryDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
@@ -22,11 +27,17 @@ function formatHistoryDate(value: string): string {
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
+  /** 데스크톱(md+)에서는 기본으로 펼친 상태. 닫으면 좁은 화면에서는 aside가 `hidden` 처리됨. */
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [history, setHistory] = useState<ApiTreeHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
+  /**
+   * 히스토리 목록을 서버에서 다시 가져온다.
+   * - 의존성에 `pathname`을 넣어: 다른 트리로 이동·생성 직후에도 목록이 갱신되도록 한다.
+   * - `cancelled`: 빠른 연속 네비게이션 시 언마운트된 뒤 setState가 호출되지 않게 한다.
+   */
   useEffect(() => {
     let cancelled = false;
 
@@ -63,6 +74,11 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="flex min-h-dvh bg-zinc-50 text-zinc-950 dark:bg-black dark:text-zinc-50">
+      {/*
+        사이드바 반응형 요약:
+        - 기본 클래스에 `hidden`이 있어, md 미만에서는 상단 버튼으로 열 때만 `md:block` 분기로 보임.
+        - sidebarOpen이 false면 너비 0 + md에서도 hidden → 본문만 넓게.
+      */}
       <aside
         id="rootmap-history-sidebar"
         className={`${
@@ -112,6 +128,7 @@ export function AppShell({ children }: AppShellProps) {
               <nav className="space-y-1" aria-label="생성한 Tree 히스토리">
                 {history.map((item) => {
                   const href = `/tree/${item.tree_id}`;
+                  /** 현재 URL과 동일하면 시각적으로 "선택된 히스토리" 스타일 적용. */
                   const active = pathname === href;
                   return (
                     <Link
@@ -138,6 +155,7 @@ export function AppShell({ children }: AppShellProps) {
         </div>
       </aside>
 
+      {/* min-w-0: flex 자식이 긴 콘텐츠로 가로로 늘어나 뷰포트를 밀지 않도록 */}
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="sticky top-0 z-20 flex h-12 items-center gap-2 border-b border-zinc-200 bg-zinc-50/85 px-3 backdrop-blur dark:border-zinc-800 dark:bg-black/80">
           <button
@@ -156,6 +174,7 @@ export function AppShell({ children }: AppShellProps) {
             RootMap
           </Link>
         </div>
+        {/* 각 페이지(`page.tsx`)가 여기로 렌더된다. */}
         <main className="flex min-h-0 flex-1 flex-col bg-zinc-50 dark:bg-black">
           {children}
         </main>

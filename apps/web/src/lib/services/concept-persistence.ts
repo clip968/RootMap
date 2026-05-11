@@ -13,6 +13,15 @@ import {
 } from "@/lib/repository/concept-repository";
 import { normalizeTitle } from "@/lib/concepts/normalize";
 
+/**
+ * Phase 2: LLM이 트리와 함께 내려준 `concept_candidate`를
+ * 글로벌 `concepts` 테이블의 행으로 "확정"하고, 학습 노드에 `concept_id`를 붙입니다.
+ *
+ * - `reuseConcepts === true`: 제목 정규화·유사도로 기존 행 재사용 시도, 아니면 새로 insert
+ * - `reuseConcepts === false`: 항상 새 Concept (중복 허용)
+ * - 트리 수준 `edges`와 노드 `prerequisites` 둘 다 Concept 간 prerequisite 간선으로 반영
+ */
+
 function logConceptPersistence(
   event: string,
   details: Record<string, unknown>,
@@ -23,6 +32,7 @@ function logConceptPersistence(
 function ensureConceptCandidate(
   node: LearningTreeResponse["nodes"][number],
 ): ConceptCandidate {
+  /** LLM이 후보를 안 주면 노드 제목/설명에서 최소 필드만 채움 */
   if (node.concept_candidate) {
     return {
       canonical_title: node.concept_candidate.canonical_title.trim() || node.title,
@@ -55,6 +65,7 @@ export function persistPhase2Concepts(
 ): void {
   const { treeId, tree, nodeKeyToDbId, reuseConcepts, requestId } = params;
   const startedAt = Date.now();
+  /** LLM 노드 id → 방금 확정한 concept UUID — edge 해석에 필요 */
   const nodeKeyToConceptId = new Map<string, string>();
 
   if (requestId) {
@@ -78,6 +89,7 @@ export function persistPhase2Concepts(
     let outcome: "reused" | "new" | "new_with_merge_candidate" = "new";
 
     if (!reuseConcepts) {
+      /** 강제 신규: slug 충돌 방지까지 포함해 insert */
       const slug = allocateUniqueSlug(cand.canonical_title, db);
       const row = insertConceptFromCandidate(db, cand, slug);
       conceptId = row.id;
@@ -88,6 +100,7 @@ export function persistPhase2Concepts(
         conceptId = res.concept.id;
         reused = true;
         outcome = "reused";
+        /** 재사용 시에도 이번 트리에서 쓴 별칭·표기는 aliases로 흡수 */
         const extraAliases = [
           ...cand.aliases,
           ...(normalizeTitle(cand.canonical_title) !==
@@ -103,6 +116,7 @@ export function persistPhase2Concepts(
         reused = false;
         if (res.kind === "ambiguous_similar") {
           outcome = "new_with_merge_candidate";
+          /** 관리자 병합 큐에 넣음 — 자동 병합은 하지 않음 */
           tryRecordMergeCandidate(
             db,
             row.id,
@@ -116,6 +130,7 @@ export function persistPhase2Concepts(
 
     nodeKeyToConceptId.set(n.id, conceptId);
 
+    /** `learning_nodes`에 Phase 2 외래키 + 이번 생성에서 재사용 여부 플래그 */
     db.update(learningNodes)
       .set({
         conceptId,
@@ -125,6 +140,7 @@ export function persistPhase2Concepts(
       .where(eq(learningNodes.id, dbNodeId))
       .run();
 
+    /** 이 트리 안에서 노드가 어떤 Concept 역할인지 join 테이블에 기록 — UNIQUE 충돌은 무시 */
     try {
       db.insert(learningTreeConcepts)
         .values({

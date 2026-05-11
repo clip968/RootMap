@@ -1,3 +1,10 @@
+/**
+ * 학습 트리 "생성 + 저장" 오케스트레이션 레이어.
+ *
+ * - 라우트(`api/trees/generate`)는 HTTP만 담당하고, 이 모듈이 비즈니스 단계를 묶습니다.
+ * - 단계: 주제 검증 → (선택) 기존 Concept 요약을 프롬프트에 넣기 → LLM 호출 → DB에 트리/노드/Concept 저장
+ *   → 같은 트리를 다시 읽어 API 스키마(`bundleToApiTreeResponse`)로 변환
+ */
 import { InvalidTopicError } from "@/lib/llm/errors";
 import { generateLearningTree } from "@/lib/llm/generate-tree";
 import { MAX_TOPIC_LENGTH } from "@/lib/constants/limits";
@@ -20,6 +27,7 @@ export class TreePersistError extends Error {
   }
 }
 
+/** `[tree-generate]` 로그에 붙는 stage — 라우트/LLM/퍼시스턴스와 구분 */
 function logGenerateService(
   event: string,
   details: Record<string, unknown>,
@@ -27,6 +35,7 @@ function logGenerateService(
   console.info("[tree-generate]", { stage: "service", event, ...details });
 }
 
+/** 라우트에서 넘어온 `topic`을 공통 규칙으로 정제·검증 — 실패 시 `InvalidTopicError` */
 export function validateTopicInput(topic: unknown): string {
   if (typeof topic !== "string") {
     throw new InvalidTopicError("주제는 문자열이어야 합니다.");
@@ -46,9 +55,16 @@ export function validateTopicInput(topic: unknown): string {
 export interface GenerateAndPersistOptions {
   /** 기본 true — 기존 Concept 재사용 */
   reuseConcepts?: boolean;
+  /** 있으면 각 단계마다 구조화 로그 출력 */
   requestId?: string;
 }
 
+/**
+ * LLM이 돌려준 트리 JSON을 검증한 뒤 DB에 넣고, 클라이언트용 페이로드로 바꿔 반환합니다.
+ *
+ * @param rawTopic - 라우트에서 온 그대로(문자열 아닐 수 있음) — 내부에서 검증
+ * @returns `bundleToApiTreeResponse` 결과 + `quality_warnings`(스키마는 아니지만 UX용 메시지)
+ */
 export async function generateAndPersistTree(
   rawTopic: unknown,
   options?: GenerateAndPersistOptions,
@@ -71,6 +87,7 @@ export async function generateAndPersistTree(
   }
 
   const db = getDb();
+  /** LLM 사용자 메시지에 붙일 "이미 저장된 개념 목록" 텍스트 — 재사용 끄면 비움 */
   let storeContext: string | undefined;
   if (reuseConcepts) {
     const conceptContextStartedAt = Date.now();
@@ -92,6 +109,7 @@ export async function generateAndPersistTree(
   }
 
   const llmStartedAt = Date.now();
+  /** `LearningTreeResponse` 형태의 노드/간선 + 품질 경고 문자열 */
   const { tree: llmTree, qualityWarnings } = await generateLearningTree(topic, {
     reuseConcepts,
     storeContext,
@@ -110,6 +128,7 @@ export async function generateAndPersistTree(
   let treeId: string;
   const persistStartedAt = Date.now();
   try {
+    /** 단일 트랜잭션: learning_trees + nodes + progress + Phase2 concepts/edges */
     treeId = createFullLearningTree(
       topic,
       llmTree.summary ?? null,
@@ -132,6 +151,7 @@ export async function generateAndPersistTree(
   }
 
   const loadStartedAt = Date.now();
+  /** 저장 직후 UI에 줄 필드를 한 번에 모은 번들(노드 행, 진행률, concept 사용 횟수 등) */
   const bundle = getLearningTree(treeId, DEFAULT_USER_ID);
   if (requestId) {
     logGenerateService("get_learning_tree_complete", {
