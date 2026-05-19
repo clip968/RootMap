@@ -10,7 +10,7 @@ npm install
 cp .env.example .env.local
 ```
 
-`.env.local`에 OpenRouter 키와 Supabase Postgres 연결 문자열을 설정합니다.
+`.env.local`에 OpenRouter 키, Supabase Postgres 연결 문자열, 문서 업로드용 Supabase Storage 설정을 지정합니다.
 
 ```bash
 OPENROUTER_API_KEY=sk-or-...
@@ -20,6 +20,11 @@ OPENROUTER_MODEL=google/gemini-2.5-flash
 LLM_SETTINGS_SECRET=change-this-long-random-secret
 # Supabase Dashboard > Connect > Connection Pooler의 URI를 사용하고 [YOUR-PASSWORD]를 실제 DB password로 바꿉니다.
 DATABASE_URL=postgresql://postgres.<project-ref>:<db-password>@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres
+# Supabase Storage signed upload URL 생성과 서버 측 문서 읽기에 사용합니다. service role key는 브라우저에 노출하지 않습니다.
+# SUPABASE_URL은 DATABASE_URL에서 project-ref를 추론할 수 없을 때만 명시합니다.
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+SUPABASE_DOCUMENT_BUCKET=rootmap-documents
 ```
 
 LLM provider는 기본적으로 위 `OPENROUTER_*` 환경 변수를 fallback으로 사용합니다.

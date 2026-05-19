@@ -44,6 +44,17 @@ interface DocumentUploadResponse {
   processing_status: DocumentProcessingStatus;
 }
 
+interface DocumentUploadUrlResponse {
+  bucket: string;
+  key: string;
+  signed_url: string;
+  filename: string;
+  original_filename: string;
+  file_type: string;
+  file_size_bytes: number;
+  content_type: string;
+}
+
 interface DocumentStatusResponse {
   document_id: string;
   title: string;
@@ -340,25 +351,59 @@ export function StartTopicForm() {
     setDocumentConcepts([]);
 
     try {
-      const form = new FormData();
-      form.set("file", documentFile);
-
-      const uploadRes = await fetch("/api/documents/upload", {
+      const uploadUrlRes = await fetch("/api/documents/upload-url", {
         method: "POST",
-        body: form,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: documentFile.name,
+          content_type: documentFile.type,
+          size: documentFile.size,
+        }),
       });
-      const uploadData = await uploadRes.json().catch(() => ({}));
-      if (!uploadRes.ok) {
+      const uploadUrlData = await uploadUrlRes.json().catch(() => ({}));
+      if (!uploadUrlRes.ok) {
         setDocumentError(
           apiErrorMessage(
-            uploadData,
-            "문서를 업로드하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+            uploadUrlData,
+            "문서 업로드 URL을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.",
           ),
         );
         return;
       }
 
-      const uploaded = uploadData as DocumentUploadResponse;
+      const uploadTicket = uploadUrlData as DocumentUploadUrlResponse;
+      const storageUploadRes = await fetch(uploadTicket.signed_url, {
+        method: "PUT",
+        headers: {
+          "Content-Type":
+            uploadTicket.content_type || "application/octet-stream",
+        },
+        body: documentFile,
+      });
+      if (!storageUploadRes.ok) {
+        setDocumentError(
+          "문서를 저장소에 업로드하지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
+        );
+        return;
+      }
+
+      const completeRes = await fetch("/api/documents/complete-upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(uploadTicket),
+      });
+      const completeData = await completeRes.json().catch(() => ({}));
+      if (!completeRes.ok) {
+        setDocumentError(
+          apiErrorMessage(
+            completeData,
+            "문서 업로드 기록을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+          ),
+        );
+        return;
+      }
+
+      const uploaded = completeData as DocumentUploadResponse;
       setDocumentUploading(false);
       setDocumentProcessing(true);
 

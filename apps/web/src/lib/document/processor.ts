@@ -41,6 +41,12 @@ import type {
   DocumentTreeStructureResponse,
   LearningTreeResponse,
 } from "@/types/learning";
+import {
+  downloadDocumentObject,
+  SUPABASE_DOCUMENT_STORAGE_PROVIDER,
+  type DocumentStorageRef,
+  type SupabaseDocumentStorageRef,
+} from "@/lib/storage/supabase-document-storage";
 
 // ──────────────────────────────────────────────
 // 오류 타입
@@ -73,6 +79,15 @@ const DOCUMENT_EVIDENCE_SNIPPET_MAX = 360;
 
 function storageAbsPath(key: string): string {
   return path.join(process.cwd(), "data", key);
+}
+
+async function readStoredDocumentFile(
+  storage: DocumentStorageRef,
+): Promise<Buffer> {
+  if (storage.provider === SUPABASE_DOCUMENT_STORAGE_PROVIDER) {
+    return downloadDocumentObject(storage as SupabaseDocumentStorageRef);
+  }
+  return fs.readFile(storageAbsPath(storage.key));
 }
 
 function nowIso(): string {
@@ -577,7 +592,7 @@ export async function processDocument(
     );
   }
 
-  const storage = doc.metadata?.storage as { key?: string } | undefined;
+  const storage = doc.metadata?.storage as DocumentStorageRef | undefined;
   const fileKey = storage?.key;
   if (!fileKey) {
     throw new DocumentProcessorError(
@@ -586,10 +601,9 @@ export async function processDocument(
     );
   }
 
-  const filePath = storageAbsPath(fileKey);
   let fileBuffer: Buffer;
   try {
-    fileBuffer = await fs.readFile(filePath);
+    fileBuffer = await readStoredDocumentFile(storage);
   } catch {
     throw new DocumentProcessorError(
       "FILE_NOT_FOUND",
