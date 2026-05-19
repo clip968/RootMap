@@ -23,3 +23,6 @@ create unique index if not exists "concept_communities_tree_name_uidx" on "conce
 create index if not exists "community_members_concept_id_idx" on "community_members" ("concept_id");
 create index if not exists "community_members_learning_node_id_idx" on "community_members" ("learning_node_id");
 create unique index if not exists "community_members_community_concept_uidx" on "community_members" ("community_id", "concept_id");
+
+alter table "concept_communities" enable row level security;
+alter table "community_members" enable row level security;
