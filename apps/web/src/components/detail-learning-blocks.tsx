@@ -25,8 +25,9 @@ export function DetailLearningBlocks({
   const whyItMatters = detail?.why_it_matters_for_document ?? detail?.why_it_matters ?? "";
   const misconception = detail?.common_misconceptions?.[0] ?? "";
   const example = detail?.example?.trim() ?? "";
+  const nodeRole = sectionLabel[node.type];
   const tableRows = [
-    { label: "핵심 역할", value: sectionLabel[node.type] },
+    { label: "핵심 역할", value: nodeRole },
     { label: "쉽게 말하면", value: detail?.easy_explanation || node.description },
     { label: "왜 중요한가", value: whyItMatters },
     { label: "예시", value: detail?.example },
@@ -47,18 +48,21 @@ export function DetailLearningBlocks({
           <h3>개념 스케치</h3>
           <div className="concept-sketch">
             <div className="sketch-node sketch-main">
-              <span>개념</span>
+              <span>입력/상황</span>
+              <strong>배우려는 문제</strong>
+              <em>{node.community ?? nodeRole}</em>
+            </div>
+            <div className="sketch-arrow" aria-hidden="true" />
+            <div className="sketch-node">
+              <span>핵심 개념</span>
               <strong>{node.title}</strong>
+              <em>{nodeRole}</em>
             </div>
             <div className="sketch-arrow" aria-hidden="true" />
             <div className="sketch-node">
-              <span>핵심 감각</span>
-              <strong>{explanation || "실제 상황에 적용해 보는 개념"}</strong>
-            </div>
-            <div className="sketch-arrow" aria-hidden="true" />
-            <div className="sketch-node">
-              <span>주의</span>
-              <strong>{misconception || "정의만 외우지 말고 쓰임까지 보기"}</strong>
+              <span>결과/주의</span>
+              <strong>{misconception ? "헷갈릴 지점 확인" : "쓰임까지 연결"}</strong>
+              <em>아래 예시와 표로 점검</em>
             </div>
           </div>
           {example || whyItMatters ? (

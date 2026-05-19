@@ -602,7 +602,7 @@ body {
   display: grid;
   align-content: start;
   gap: 6px;
-  min-height: 112px;
+  min-height: 104px;
   border: 1px solid #27272a;
   border-radius: 8px;
   padding: 12px;
@@ -627,6 +627,13 @@ body {
   line-height: 1.35;
   overflow-wrap: anywhere;
   word-break: keep-all;
+}
+
+.sketch-node em {
+  color: #a1a1aa;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.35;
 }
 
 .sketch-arrow {
