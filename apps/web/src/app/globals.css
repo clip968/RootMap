@@ -594,15 +594,15 @@ body {
 .concept-sketch {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr) 36px minmax(0, 1fr);
-  align-items: stretch;
+  align-items: start;
   gap: 10px;
 }
 
 .sketch-node {
   display: grid;
-  align-content: center;
+  align-content: start;
   gap: 6px;
-  min-height: 98px;
+  min-height: 112px;
   border: 1px solid #27272a;
   border-radius: 8px;
   padding: 12px;
@@ -625,6 +625,8 @@ body {
   color: #ffffff;
   font-size: 14px;
   line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
 }
 
 .sketch-arrow {

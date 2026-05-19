@@ -14,12 +14,6 @@ function firstSentence(text: string): string {
   return sentence || trimmed;
 }
 
-function shortText(text: string, maxLength: number): string {
-  const trimmed = text.trim();
-  if (trimmed.length <= maxLength) return trimmed;
-  return `${trimmed.slice(0, maxLength).trimEnd()}...`;
-}
-
 export function DetailLearningBlocks({
   node,
   detail,
@@ -59,12 +53,12 @@ export function DetailLearningBlocks({
             <div className="sketch-arrow" aria-hidden="true" />
             <div className="sketch-node">
               <span>핵심 감각</span>
-              <strong>{shortText(explanation || "실제 상황에 적용해 보는 개념", 48)}</strong>
+              <strong>{explanation || "실제 상황에 적용해 보는 개념"}</strong>
             </div>
             <div className="sketch-arrow" aria-hidden="true" />
             <div className="sketch-node">
               <span>주의</span>
-              <strong>{shortText(misconception || "정의만 외우지 말고 쓰임까지 보기", 44)}</strong>
+              <strong>{misconception || "정의만 외우지 말고 쓰임까지 보기"}</strong>
             </div>
           </div>
           {example || whyItMatters ? (
