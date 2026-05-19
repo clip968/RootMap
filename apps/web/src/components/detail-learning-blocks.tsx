@@ -1,17 +1,10 @@
 import type { ApiLearningNode, NodeType } from "@/types/learning";
 import type { ApiNodeDetailResponse } from "@/lib/services/node-detail";
 
-type DetailRelation = {
-  node: ApiLearningNode;
-  direction: "parent" | "child";
-};
-
 interface DetailLearningBlocksProps {
   node: ApiLearningNode;
   detail: ApiNodeDetailResponse | null;
-  relations: DetailRelation[];
   sectionLabel: Record<NodeType, string>;
-  onOpenNode: (nodeId: string) => void;
 }
 
 function firstSentence(text: string): string {
@@ -24,15 +17,20 @@ function firstSentence(text: string): string {
 export function DetailLearningBlocks({
   node,
   detail,
-  relations,
   sectionLabel,
-  onOpenNode,
 }: DetailLearningBlocksProps) {
   const explanation = firstSentence(
     detail?.easy_explanation || node.description || "",
   );
-  const parents = relations.filter((relation) => relation.direction === "parent");
-  const children = relations.filter((relation) => relation.direction === "child");
+  const whyItMatters = detail?.why_it_matters_for_document ?? detail?.why_it_matters ?? "";
+  const misconception = detail?.common_misconceptions?.[0] ?? "";
+  const tableRows = [
+    { label: "핵심 역할", value: sectionLabel[node.type] },
+    { label: "쉽게 말하면", value: detail?.easy_explanation || node.description },
+    { label: "왜 중요한가", value: whyItMatters },
+    { label: "예시", value: detail?.example },
+    { label: "주의점", value: misconception },
+  ].filter((row) => row.value?.trim());
 
   return (
     <div className="detail-learning-blocks">
@@ -43,80 +41,41 @@ export function DetailLearningBlocks({
         </section>
       ) : null}
 
-      <section className="detail-learning-card">
-        <h3>이 개념의 위치</h3>
-        <div className="concept-fact-grid">
-          <div>
-            <span>역할</span>
-            <strong>{sectionLabel[node.type]}</strong>
-          </div>
-          {node.community ? (
-            <div>
-              <span>묶음</span>
-              <strong>{node.community}</strong>
-            </div>
-          ) : null}
-          {node.depth != null ? (
-            <div>
-              <span>깊이</span>
-              <strong>Level {node.depth}</strong>
-            </div>
-          ) : null}
-          <div>
-            <span>연결</span>
-            <strong>{parents.length} 이전 · {children.length} 다음</strong>
-          </div>
-        </div>
-      </section>
-
-      {relations.length > 0 ? (
+      {explanation || detail?.example || misconception ? (
         <section className="detail-learning-card">
-          <h3>관계로 보기</h3>
-          <div className="detail-relation-flow">
-            <div className="relation-column">
-              <span>먼저 알 것</span>
-              {parents.length > 0 ? (
-                parents.slice(0, 3).map((relation) => (
-                  <button
-                    key={relation.node.id}
-                    type="button"
-                    onClick={() => onOpenNode(relation.node.id)}
-                  >
-                    {relation.node.title}
-                  </button>
-                ))
-              ) : (
-                <em>시작점</em>
-              )}
-            </div>
-            <div className="relation-current">
-              <span>현재</span>
+          <h3>개념 스케치</h3>
+          <div className="concept-sketch">
+            <div className="sketch-node sketch-main">
+              <span>개념</span>
               <strong>{node.title}</strong>
             </div>
-            <div className="relation-column">
-              <span>이어질 것</span>
-              {children.length > 0 ? (
-                children.slice(0, 3).map((relation) => (
-                  <button
-                    key={relation.node.id}
-                    type="button"
-                    onClick={() => onOpenNode(relation.node.id)}
-                  >
-                    {relation.node.title}
-                  </button>
-                ))
-              ) : (
-                <em>마무리</em>
-              )}
+            <div className="sketch-arrow" aria-hidden="true" />
+            <div className="sketch-node">
+              <span>작동 감각</span>
+              <p>{detail?.example || explanation || "이 개념이 실제로 쓰이는 상황을 떠올려 보세요."}</p>
+            </div>
+            <div className="sketch-arrow" aria-hidden="true" />
+            <div className="sketch-node">
+              <span>주의</span>
+              <p>{misconception || whyItMatters || "정의만 외우지 말고 언제 필요한지 같이 보세요."}</p>
             </div>
           </div>
         </section>
       ) : null}
 
-      {detail?.example ? (
-        <section className="detail-learning-card detail-example-card">
-          <h3>예시로 잡기</h3>
-          <p>{detail.example}</p>
+      {tableRows.length >= 2 ? (
+        <section className="detail-learning-card">
+          <h3>학습 정리표</h3>
+          <table className="detail-learning-table">
+            <tbody>
+              {tableRows.map((row) => (
+                <tr key={row.label}>
+                  <th>{row.label}</th>
+                  <td>{row.value}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </section>
       ) : null}
 

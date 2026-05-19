@@ -4,9 +4,9 @@ RootMap node detail pages should explain concepts with optional learning blocks,
 
 ## Scope
 - In:
-  - Add optional detail learning blocks for summary, concept position, relationship flow, examples, and misconception reminders.
+  - Add optional detail learning blocks for summary, concept sketch, learning table, and misconception reminders.
   - Allow multiple blocks to appear together when useful.
-  - Use existing `selectedNode`, `relations`, and `detail` data only.
+  - Use existing `selectedNode` and `detail` data only.
   - Keep the existing quiz/check section as-is without adding a new quiz-card interaction.
 - Out:
   - Do not change LLM prompts, detail response schema, persistence, API contracts, or generation retries.
@@ -16,7 +16,8 @@ RootMap node detail pages should explain concepts with optional learning blocks,
 ## Action items
 [x] Add a reusable detail learning blocks component under `apps/web/src/components/`.
 [x] Render blocks in the detail modal only after detail data is loaded.
-[x] Add CSS for relation flow, compact concept facts, example card, and misconception cards.
+[x] Add CSS for concept sketch, learning table, and misconception cards.
+[x] Remove the earlier concept-position and relationship-flow blocks from this pass.
 [x] Keep quiz-card work out of this pass.
 [x] Verify with `npm run lint`, `npm run build`, and `git diff --check`.
 

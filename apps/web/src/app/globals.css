@@ -591,97 +591,101 @@ body {
   line-height: 1.45;
 }
 
-.concept-fact-grid {
+.concept-sketch {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  grid-template-columns: minmax(0, 1fr) 26px minmax(0, 1.2fr) 26px minmax(0, 1.2fr);
+  align-items: stretch;
   gap: 8px;
 }
 
-.concept-fact-grid div {
+.sketch-node {
   display: grid;
-  gap: 4px;
+  align-content: start;
+  gap: 6px;
+  min-height: 112px;
   border: 1px solid #27272a;
   border-radius: 8px;
-  padding: 10px;
+  padding: 12px;
   background: #000000;
 }
 
-.concept-fact-grid span,
-.relation-column span,
-.relation-current span,
+.sketch-main {
+  border-color: #047857;
+  background: #022c22;
+}
+
+.sketch-node span,
 .misconception-card-list span {
   color: #34d399;
   font-size: 11px;
   font-weight: 900;
 }
 
-.concept-fact-grid strong {
+.sketch-node strong {
   color: #ffffff;
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.35;
 }
 
-.detail-relation-flow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 170px minmax(0, 1fr);
-  gap: 10px;
-  align-items: stretch;
-}
-
-.relation-column,
-.relation-current {
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  border: 1px solid #27272a;
-  border-radius: 8px;
-  padding: 10px;
-  background: #000000;
-}
-
-.relation-current {
-  place-items: center;
-  text-align: center;
-  border-color: #047857;
-  background: #022c22;
-}
-
-.relation-column button {
-  border: 1px solid #27272a;
-  border-radius: 8px;
-  padding: 8px;
-  color: #f4f4f5;
-  text-align: left;
-  background: #09090b;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.35;
-}
-
-.relation-column button:hover {
-  border-color: #047857;
-}
-
-.relation-column em {
-  color: #71717a;
-  font-size: 12px;
-  font-style: normal;
-}
-
-.relation-current strong {
-  color: #ffffff;
-  font-size: 14px;
-  line-height: 1.35;
-}
-
-.detail-example-card p {
+.sketch-node p {
   margin: 0;
+  color: #d4d4d8;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.sketch-arrow {
+  align-self: center;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(52, 211, 153, 0), #34d399);
+  position: relative;
+}
+
+.sketch-arrow::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-top: 2px solid #34d399;
+  border-right: 2px solid #34d399;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.detail-learning-table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
   border-radius: 8px;
-  padding: 12px;
-  color: #e4e4e7;
   background: #000000;
+}
+
+.detail-learning-table th,
+.detail-learning-table td {
+  border-bottom: 1px solid #27272a;
+  padding: 10px 12px;
+  vertical-align: top;
+  text-align: left;
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.55;
+}
+
+.detail-learning-table tr:last-child th,
+.detail-learning-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.detail-learning-table th {
+  width: 112px;
+  color: #34d399;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.detail-learning-table td {
+  color: #d4d4d8;
 }
 
 .misconception-card-list {
@@ -815,8 +819,22 @@ body {
     border-bottom: 1px solid #27272a;
   }
 
-  .detail-relation-flow {
+  .concept-sketch {
     grid-template-columns: 1fr;
+  }
+
+  .sketch-arrow {
+    width: 2px;
+    height: 18px;
+    justify-self: center;
+    background: linear-gradient(180deg, rgba(52, 211, 153, 0), #34d399);
+  }
+
+  .sketch-arrow::after {
+    right: 50%;
+    top: auto;
+    bottom: -1px;
+    transform: translateX(50%) rotate(135deg);
   }
 }
 

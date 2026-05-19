@@ -1228,9 +1228,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                         <DetailLearningBlocks
                           node={selectedNode}
                           detail={detail}
-                          relations={relations}
                           sectionLabel={SECTION_LABEL}
-                          onOpenNode={(nodeId) => void openNode(nodeId)}
                         />
 
                         {detail?.document_context ? (
