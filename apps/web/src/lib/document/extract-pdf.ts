@@ -47,11 +47,24 @@ function ensurePdfJsTextExtractionPolyfills(): void {
   }
 }
 
+async function loadPdfJs() {
+  // PDF.js on Node uses a fake worker. In Next/Vercel bundles, its default
+  // relative "./pdf.worker.mjs" import can point at a missing chunk, so provide
+  // the worker handler explicitly from the package path.
+  const worker = await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
+  const globalWithPdfJsWorker = globalThis as typeof globalThis & {
+    pdfjsWorker?: typeof worker;
+  };
+  globalWithPdfJsWorker.pdfjsWorker ??= worker;
+
+  // Dynamic import avoids static bundling issues in Next.js.
+  return await import("pdfjs-dist/legacy/build/pdf.mjs");
+}
+
 export async function extractPdfPages(buffer: Buffer): Promise<PdfPage[]> {
   ensurePdfJsTextExtractionPolyfills();
-  // Dynamic import avoids static bundling issues in Next.js
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pdfjs: any = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const pdfjs: any = await loadPdfJs();
   const data = new Uint8Array(buffer);
   const doc = await pdfjs.getDocument({ data }).promise;
   const pages: PdfPage[] = [];
