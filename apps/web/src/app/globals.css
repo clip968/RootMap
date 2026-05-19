@@ -593,16 +593,16 @@ body {
 
 .concept-sketch {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 26px minmax(0, 1.2fr) 26px minmax(0, 1.2fr);
+  grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr) 36px minmax(0, 1fr);
   align-items: stretch;
-  gap: 8px;
+  gap: 10px;
 }
 
 .sketch-node {
   display: grid;
-  align-content: start;
+  align-content: center;
   gap: 6px;
-  min-height: 112px;
+  min-height: 98px;
   border: 1px solid #27272a;
   border-radius: 8px;
   padding: 12px;
@@ -623,15 +623,8 @@ body {
 
 .sketch-node strong {
   color: #ffffff;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.35;
-}
-
-.sketch-node p {
-  margin: 0;
-  color: #d4d4d8;
-  font-size: 12px;
-  line-height: 1.55;
 }
 
 .sketch-arrow {
@@ -652,6 +645,34 @@ body {
   border-top: 2px solid #34d399;
   border-right: 2px solid #34d399;
   transform: translateY(-50%) rotate(45deg);
+}
+
+.sketch-note-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.sketch-note-grid div {
+  display: grid;
+  gap: 5px;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 12px;
+  background: #000000;
+}
+
+.sketch-note-grid span {
+  color: #34d399;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.sketch-note-grid p {
+  margin: 0;
+  color: #d4d4d8;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .detail-learning-table {

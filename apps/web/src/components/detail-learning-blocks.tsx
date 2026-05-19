@@ -14,6 +14,12 @@ function firstSentence(text: string): string {
   return sentence || trimmed;
 }
 
+function shortText(text: string, maxLength: number): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxLength) return trimmed;
+  return `${trimmed.slice(0, maxLength).trimEnd()}...`;
+}
+
 export function DetailLearningBlocks({
   node,
   detail,
@@ -24,6 +30,7 @@ export function DetailLearningBlocks({
   );
   const whyItMatters = detail?.why_it_matters_for_document ?? detail?.why_it_matters ?? "";
   const misconception = detail?.common_misconceptions?.[0] ?? "";
+  const example = detail?.example?.trim() ?? "";
   const tableRows = [
     { label: "핵심 역할", value: sectionLabel[node.type] },
     { label: "쉽게 말하면", value: detail?.easy_explanation || node.description },
@@ -51,15 +58,31 @@ export function DetailLearningBlocks({
             </div>
             <div className="sketch-arrow" aria-hidden="true" />
             <div className="sketch-node">
-              <span>작동 감각</span>
-              <p>{detail?.example || explanation || "이 개념이 실제로 쓰이는 상황을 떠올려 보세요."}</p>
+              <span>핵심 감각</span>
+              <strong>{shortText(explanation || "실제 상황에 적용해 보는 개념", 48)}</strong>
             </div>
             <div className="sketch-arrow" aria-hidden="true" />
             <div className="sketch-node">
               <span>주의</span>
-              <p>{misconception || whyItMatters || "정의만 외우지 말고 언제 필요한지 같이 보세요."}</p>
+              <strong>{shortText(misconception || "정의만 외우지 말고 쓰임까지 보기", 44)}</strong>
             </div>
           </div>
+          {example || whyItMatters ? (
+            <div className="sketch-note-grid">
+              {example ? (
+                <div>
+                  <span>예시</span>
+                  <p>{example}</p>
+                </div>
+              ) : null}
+              {whyItMatters ? (
+                <div>
+                  <span>왜 중요한가</span>
+                  <p>{whyItMatters}</p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </section>
       ) : null}
 
