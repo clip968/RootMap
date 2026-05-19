@@ -11,6 +11,7 @@ import type {
   DocumentConceptType,
   DocumentSourceType,
 } from "@/types/learning";
+import { GenerationLoadingPanel } from "@/components/generation-loading-panel";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -473,19 +474,12 @@ export function StartTopicForm() {
                   Ctrl+Enter (또는 ⌘+Enter)로 빠르게 생성할 수 있습니다.
                 </p>
                 {loading ? (
-                  <div className="mx-2 rounded-2xl border border-emerald-100 bg-emerald-50/80 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
-                    <p className="font-medium">
-                      생성 중 · {elapsedSeconds}초 경과
-                    </p>
-                    <p className="mt-1 text-xs">
-                      {generationStageMessage(elapsedSeconds)}
-                    </p>
-                    {reuseConcepts ? (
-                      <p className="mt-1 text-xs text-emerald-800/80 dark:text-emerald-200/80">
-                        저장된 Concept과 비교해 중복을 줄이는 중이라 조금 더 걸릴 수 있습니다.
-                      </p>
-                    ) : null}
-                  </div>
+                  <GenerationLoadingPanel
+                    title="생성 중"
+                    elapsedSeconds={elapsedSeconds}
+                    stageMessage={generationStageMessage(elapsedSeconds)}
+                    reuseConcepts={reuseConcepts}
+                  />
                 ) : null}
                 {error ? (
                   <p className="px-2 text-sm text-red-700 dark:text-red-400">

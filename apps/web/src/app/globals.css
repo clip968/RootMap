@@ -26,6 +26,222 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.generation-loading-panel {
+  margin: 0 8px;
+  overflow: hidden;
+  border: 1px solid rgba(4, 120, 87, 0.22);
+  border-radius: 16px;
+  padding: 12px;
+  background: linear-gradient(135deg, rgba(236, 253, 245, 0.96), rgba(255, 255, 255, 0.92));
+  color: #064e3b;
+}
+
+.generation-loading-panel.is-compact {
+  margin: 0;
+  border-color: rgba(4, 120, 87, 0.42);
+  border-radius: 8px;
+  background: rgba(6, 78, 59, 0.22);
+  color: #d1fae5;
+}
+
+.generation-loading-copy {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.generation-loading-title {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.generation-loading-stage {
+  margin-top: 3px;
+  font-size: 12px;
+  color: rgba(6, 78, 59, 0.82);
+}
+
+.generation-loading-panel.is-compact .generation-loading-stage {
+  color: rgba(209, 250, 229, 0.78);
+}
+
+.generation-loading-pulse {
+  margin-top: 3px;
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #047857;
+  box-shadow: 0 0 0 0 rgba(4, 120, 87, 0.45);
+  animation: generation-pulse 1.6s ease-out infinite;
+}
+
+.generation-map-preview {
+  position: relative;
+  height: 72px;
+  margin-top: 10px;
+  border-radius: 12px;
+  background:
+    linear-gradient(rgba(4, 120, 87, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(4, 120, 87, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+.generation-loading-panel.is-compact .generation-map-preview {
+  height: 58px;
+  background:
+    linear-gradient(rgba(16, 185, 129, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 185, 129, 0.1) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.preview-node {
+  position: absolute;
+  z-index: 1;
+  width: 13px;
+  height: 13px;
+  border: 2px solid #34d399;
+  border-radius: 999px;
+  background: #022c22;
+  box-shadow: 0 0 18px rgba(52, 211, 153, 0.28);
+  animation: preview-node-pop 2.8s ease-in-out infinite;
+}
+
+.preview-node.node-a {
+  left: 10%;
+  top: 42%;
+}
+
+.preview-node.node-b {
+  left: 30%;
+  top: 18%;
+  animation-delay: 0.22s;
+}
+
+.preview-node.node-c {
+  left: 50%;
+  top: 48%;
+  animation-delay: 0.44s;
+}
+
+.preview-node.node-d {
+  left: 70%;
+  top: 24%;
+  animation-delay: 0.66s;
+}
+
+.preview-node.node-e {
+  left: 86%;
+  top: 52%;
+  animation-delay: 0.88s;
+}
+
+.preview-line {
+  position: absolute;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(4, 120, 87, 0.78), transparent);
+  transform-origin: left center;
+  animation: preview-line-flow 2.8s ease-in-out infinite;
+}
+
+.preview-line.line-a {
+  left: 13%;
+  top: 48%;
+  width: 21%;
+  transform: rotate(-18deg);
+}
+
+.preview-line.line-b {
+  left: 33%;
+  top: 32%;
+  width: 22%;
+  transform: rotate(20deg);
+  animation-delay: 0.28s;
+}
+
+.preview-line.line-c {
+  left: 53%;
+  top: 48%;
+  width: 31%;
+  transform: rotate(-10deg);
+  animation-delay: 0.56s;
+}
+
+.generation-loading-hint,
+.generation-loading-subhint {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(6, 78, 59, 0.78);
+}
+
+.generation-loading-subhint {
+  margin-top: 3px;
+}
+
+.generation-loading-panel.is-compact .generation-loading-hint,
+.generation-loading-panel.is-compact .generation-loading-subhint {
+  color: rgba(209, 250, 229, 0.74);
+}
+
+@keyframes generation-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(4, 120, 87, 0.45);
+  }
+
+  70% {
+    box-shadow: 0 0 0 9px rgba(4, 120, 87, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(4, 120, 87, 0);
+  }
+}
+
+@keyframes preview-node-pop {
+  0%,
+  100% {
+    opacity: 0.58;
+    transform: scale(0.88);
+  }
+
+  38%,
+  70% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes preview-line-flow {
+  0%,
+  100% {
+    opacity: 0.16;
+    filter: saturate(0.7);
+  }
+
+  45%,
+  72% {
+    opacity: 0.82;
+    filter: saturate(1.2);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .generation-loading-panel {
+    border-color: rgba(4, 120, 87, 0.42);
+    background: rgba(6, 78, 59, 0.18);
+    color: #d1fae5;
+  }
+
+  .generation-loading-stage,
+  .generation-loading-hint,
+  .generation-loading-subhint {
+    color: rgba(209, 250, 229, 0.76);
+  }
+}
+
 .rootmap-flow-frame {
   flex: 1;
   min-height: 0;

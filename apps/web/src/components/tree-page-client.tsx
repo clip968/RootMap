@@ -10,6 +10,7 @@
  */
 
 import type { ApiTreeResponse } from "@/lib/tree/bundle-to-api";
+import { GenerationLoadingPanel } from "@/components/generation-loading-panel";
 import { buildDeepDiveGenerationTopic } from "@/lib/tree/deep-dive";
 import type { ApiNodeDetailResponse } from "@/lib/services/node-detail";
 import type {
@@ -931,15 +932,13 @@ export function TreePageClient({ treeId }: { treeId: string }) {
           </div>
 
           {regenLoading ? (
-            <div className="rounded-lg border border-emerald-900 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-100">
-              <p className="font-medium">재생성 중 · {regenElapsedSeconds}초 경과</p>
-              <p className="mt-1 text-xs">{generationStageMessage(regenElapsedSeconds)}</p>
-              {reuseConcepts ? (
-                <p className="mt-1 text-xs text-emerald-200/80">
-                  저장된 Concept과 비교해 중복을 줄이는 중이라 조금 더 걸릴 수 있습니다.
-                </p>
-              ) : null}
-            </div>
+            <GenerationLoadingPanel
+              title="재생성 중"
+              elapsedSeconds={regenElapsedSeconds}
+              stageMessage={generationStageMessage(regenElapsedSeconds)}
+              reuseConcepts={reuseConcepts}
+              compact
+            />
           ) : null}
           {regenError ? (
             <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
