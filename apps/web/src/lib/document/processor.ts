@@ -369,31 +369,32 @@ function formatMatchedConceptsForPrompt(rows: DocumentConceptRow[]): string {
   return lines.length > 0 ? lines.join("\n") : "";
 }
 
-export function resolveAndSaveDocumentConcepts(
+export async function resolveAndSaveDocumentConcepts(
   documentId: string,
   consolidatedConcepts: ConsolidatedConcept[],
-): DocumentConceptRow[] {
+): Promise<DocumentConceptRow[]> {
   const db = getDb();
-  const chunksById = new Map(getDocumentChunks(documentId).map((chunk) => [chunk.id, chunk]));
+  const chunksById = new Map((await getDocumentChunks(documentId)).map((chunk) => [chunk.id, chunk]));
 
-  const inputs: DocumentConceptInput[] = consolidatedConcepts.map((concept) => {
+  const inputs: DocumentConceptInput[] = [];
+  for (const concept of consolidatedConcepts) {
     const candidate = conceptCandidateFromDocumentConcept(concept);
-    const resolution = resolveConceptForReuse(db, candidate);
+    const resolution = await resolveConceptForReuse(db, candidate);
     let conceptId: string;
 
     if (resolution.kind === "reused") {
       conceptId = resolution.concept.id;
       // alias로 재사용된 경우 이후 검색도 쉬워지도록 문서 표기와 alias를 기존 Concept에 보강한다.
-      addAliasesIfNew(db, conceptId, uniqueNonEmpty([concept.canonical_title, ...concept.aliases]));
+      await addAliasesIfNew(db, conceptId, uniqueNonEmpty([concept.canonical_title, ...concept.aliases]));
     } else {
-      const created = insertConceptFromCandidate(
+      const created = await insertConceptFromCandidate(
         db,
         candidate,
-        allocateUniqueSlug(candidate.canonical_title, db),
+        await allocateUniqueSlug(candidate.canonical_title, db),
       );
       conceptId = created.id;
       if (resolution.kind === "ambiguous_similar") {
-        tryRecordMergeCandidate(
+        await tryRecordMergeCandidate(
           db,
           created.id,
           resolution.similar.id,
@@ -403,7 +404,7 @@ export function resolveAndSaveDocumentConcepts(
       }
     }
 
-    return {
+    inputs.push({
       conceptId,
       conceptTitle: concept.canonical_title,
       conceptType: concept.type,
@@ -411,10 +412,10 @@ export function resolveAndSaveDocumentConcepts(
       difficulty: clampDocumentScore(concept.difficulty),
       sourceType: concept.source_type,
       evidence: buildDocumentEvidence(documentId, concept, chunksById),
-    };
-  });
+    });
+  }
 
-  const saved = bulkInsertDocumentConcepts(documentId, inputs);
+  const saved = await bulkInsertDocumentConcepts(documentId, inputs);
   console.info("[document-processor]", {
     stage: "document_concepts_saved",
     documentId,
@@ -463,12 +464,12 @@ async function generateDocumentLearningTree(
 // 학습 트리 저장 (문서용)
 // ──────────────────────────────────────────────
 
-function persistDocumentTree(
+async function persistDocumentTree(
   llmTree: LearningTreeResponse,
   documentId: string,
   userId: string,
   documentConceptRows: DocumentConceptRow[],
-): string {
+): Promise<string> {
   const now = nowIso();
   const db = getDb();
   const conceptIdByTitle = new Map(
@@ -478,9 +479,9 @@ function persistDocumentTree(
     ]),
   );
 
-  return db.transaction((tx) => {
+  return db.transaction(async (tx) => {
     // 1. learning_trees 행 생성
-    const tr = tx
+    const tr = await tx
       .insert(learningTrees)
       .values({
         userId,
@@ -490,8 +491,7 @@ function persistDocumentTree(
         createdAt: now,
         updatedAt: now,
       })
-      .returning({ id: learningTrees.id })
-      .all();
+      .returning({ id: learningTrees.id });
     const treeId = tr[0]?.id;
     if (!treeId) throw new Error("learning_trees insert failed");
 
@@ -501,7 +501,7 @@ function persistDocumentTree(
       const matchedConceptId =
         conceptIdByTitle.get(n.title.trim().replace(/\s+/g, " ").toLowerCase()) ??
         null;
-      const nr = tx
+      const nr = await tx
         .insert(learningNodes)
         .values({
           treeId,
@@ -517,8 +517,7 @@ function persistDocumentTree(
           createdAt: now,
           updatedAt: now,
         })
-        .returning({ id: learningNodes.id })
-        .all();
+        .returning({ id: learningNodes.id });
       const nid = nr[0]?.id;
       if (!nid) throw new Error("learning_nodes insert failed");
       nodeIds.push(nid);
@@ -526,7 +525,7 @@ function persistDocumentTree(
 
     // 3. user_node_progress 생성 (기본 unknown)
     if (nodeIds.length > 0) {
-      tx.insert(userNodeProgress)
+      await tx.insert(userNodeProgress)
         .values(
           nodeIds.map((nodeId) => ({
             userId,
@@ -535,12 +534,11 @@ function persistDocumentTree(
             status: "unknown" as const,
             updatedAt: now,
           })),
-        )
-        .run();
+        );
     }
 
     // 4. document_learning_trees 연결
-    createDocumentLearningTreeLink(documentId, treeId);
+    await createDocumentLearningTreeLink(documentId, treeId);
 
     return treeId;
   });
@@ -558,7 +556,7 @@ export async function processDocument(
   documentId: string,
   userId: string,
 ): Promise<ProcessDocumentResult> {
-  const doc = getDocumentForUser(documentId, userId);
+  const doc = await getDocumentForUser(documentId, userId);
   if (!doc) {
     throw new DocumentProcessorError("NOT_FOUND", "문서를 찾을 수 없습니다.");
   }
@@ -620,7 +618,7 @@ export async function processDocument(
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "알 수 없는 오류";
-      updateDocumentStatus(documentId, "failed", `텍스트 추출 실패: ${message}`);
+      await updateDocumentStatus(documentId, "failed", `텍스트 추출 실패: ${message}`);
       throw new DocumentProcessorError(
         "TEXT_EXTRACTION_FAILED",
         "이 PDF에서는 텍스트를 추출할 수 없습니다. 텍스트가 포함된 PDF, TXT, MD 파일을 업로드해 주세요.",
@@ -630,7 +628,7 @@ export async function processDocument(
     // 추출된 텍스트 최소 길이 검증
     const totalText = pages.map((p) => p.text).join("\n\n");
     if (totalText.length < MIN_EXTRACTED_TEXT_LENGTH) {
-      updateDocumentStatus(documentId, "failed", "추출된 텍스트가 너무 적습니다. 스캔본 PDF일 수 있습니다.");
+      await updateDocumentStatus(documentId, "failed", "추출된 텍스트가 너무 적습니다. 스캔본 PDF일 수 있습니다.");
       throw new DocumentProcessorError(
         "TEXT_EXTRACTION_FAILED",
         "이 PDF에서는 텍스트를 추출할 수 없습니다. 텍스트가 포함된 PDF, TXT, MD 파일을 업로드해 주세요.",
@@ -639,7 +637,7 @@ export async function processDocument(
 
     // 페이지 수 제한
     if (pages.length > MAX_PAGES) {
-      updateDocumentStatus(documentId, "failed", `페이지 수 초과: ${pages.length} > ${MAX_PAGES}`);
+      await updateDocumentStatus(documentId, "failed", `페이지 수 초과: ${pages.length} > ${MAX_PAGES}`);
       throw new DocumentProcessorError(
         "DOCUMENT_TOO_LONG",
         "문서가 너무 깁니다. Phase 3에서는 최대 80페이지 또는 120,000자까지 지원합니다. 중요한 챕터나 섹션만 분리해서 업로드해 주세요.",
@@ -649,7 +647,7 @@ export async function processDocument(
     // 텍스트 길이 제한
     const totalTextLen = pages.map((p) => p.text).join("\n\n");
     if (totalTextLen.length > MAX_TEXT_LENGTH) {
-      updateDocumentStatus(documentId, "failed", `텍스트 길이 초과: ${totalTextLen.length} > ${MAX_TEXT_LENGTH}`);
+      await updateDocumentStatus(documentId, "failed", `텍스트 길이 초과: ${totalTextLen.length} > ${MAX_TEXT_LENGTH}`);
       throw new DocumentProcessorError(
         "DOCUMENT_TOO_LONG",
         "문서가 너무 깁니다. Phase 3에서는 최대 80페이지 또는 120,000자까지 지원합니다. 중요한 챕터나 섹션만 분리해서 업로드해 주세요.",
@@ -658,11 +656,11 @@ export async function processDocument(
 
     // 페이지 저장
     const pageInputs = pages.map((p) => ({ pageNumber: p.pageNumber, text: p.text }));
-    bulkInsertDocumentPages(documentId, pageInputs);
+    await bulkInsertDocumentPages(documentId, pageInputs);
 
     // 문서 메타데이터 갱신
-    updateDocumentExtractedInfo(documentId, pages.length, totalTextLen.length);
-    updateDocumentStatus(documentId, "text_extracted");
+    await updateDocumentExtractedInfo(documentId, pages.length, totalTextLen.length);
+    await updateDocumentStatus(documentId, "text_extracted");
   }
 
   // ══════════════════════════════════════════
@@ -689,7 +687,7 @@ export async function processDocument(
     }
 
     if (chunks.length > 0) {
-      bulkInsertDocumentChunks(
+      await bulkInsertDocumentChunks(
         documentId,
         chunks.map((c) => ({
           chunkIndex: c.chunkIndex,
@@ -703,7 +701,7 @@ export async function processDocument(
       );
     }
 
-    updateDocumentStatus(documentId, "chunked");
+    await updateDocumentStatus(documentId, "chunked");
   }
 
   // ══════════════════════════════════════════
@@ -714,9 +712,9 @@ export async function processDocument(
     // 그래도 청크 데이터가 확실히 있는지 확인
   }
 
-  const chunks = getDocumentChunks(documentId);
+  const chunks = await getDocumentChunks(documentId);
   if (chunks.length === 0) {
-    updateDocumentStatus(documentId, "failed", "청크 데이터가 없습니다.");
+    await updateDocumentStatus(documentId, "failed", "청크 데이터가 없습니다.");
     throw new DocumentProcessorError(
       "CHUNKING_FAILED",
       "문서를 청크로 분할하는 데 실패했습니다.",
@@ -738,7 +736,7 @@ export async function processDocument(
     allCandidatesJson = await extractConceptsFromChunks(documentId, documentTitle, chunks);
   } catch (err) {
     const msg = err instanceof DocumentProcessorError ? err.message : "청크 개념 추출 중 오류가 발생했습니다.";
-    updateDocumentStatus(documentId, "failed", msg);
+    await updateDocumentStatus(documentId, "failed", msg);
     throw new DocumentProcessorError("CONCEPT_EXTRACTION_FAILED", msg);
   }
 
@@ -749,22 +747,22 @@ export async function processDocument(
     consolidated = await consolidateConcepts(documentId, documentTitle, allCandidatesJson);
   } catch (err) {
     if (err instanceof DocumentProcessorError) {
-      updateDocumentStatus(documentId, "failed", err.message);
+      await updateDocumentStatus(documentId, "failed", err.message);
       throw err;
     }
     const msg = err instanceof LlmExhaustedRetriesError
       ? "개념 통합 중 오류가 발생했습니다."
       : "개념 통합 중 오류가 발생했습니다.";
-    updateDocumentStatus(documentId, "failed", msg);
+    await updateDocumentStatus(documentId, "failed", msg);
     throw new DocumentProcessorError("CONSOLIDATION_FAILED", msg);
   }
 
-  updateDocumentStatus(documentId, "concepts_extracted");
+  await updateDocumentStatus(documentId, "concepts_extracted");
 
   // ══════════════════════════════════════════
   // Step 6: document_concepts 저장
   // ══════════════════════════════════════════
-  const documentConceptRows = resolveAndSaveDocumentConcepts(documentId, consolidated.consolidatedConcepts);
+  const documentConceptRows = await resolveAndSaveDocumentConcepts(documentId, consolidated.consolidatedConcepts);
 
   // ══════════════════════════════════════════
   // Step 7: 문서 기반 학습 트리 생성 via LLM
@@ -782,7 +780,7 @@ export async function processDocument(
     const msg = err instanceof LlmExhaustedRetriesError
       ? "학습 트리 생성 중 오류가 발생했습니다."
       : "학습 트리 생성 중 오류가 발생했습니다.";
-    updateDocumentStatus(documentId, "failed", msg);
+    await updateDocumentStatus(documentId, "failed", msg);
     throw new DocumentProcessorError("TREE_GENERATION_FAILED", msg);
   }
 
@@ -791,17 +789,17 @@ export async function processDocument(
   // ══════════════════════════════════════════
   let treeId: string;
   try {
-    treeId = persistDocumentTree(docTree, documentId, userId, documentConceptRows);
+    treeId = await persistDocumentTree(docTree, documentId, userId, documentConceptRows);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "학습 트리 저장 중 오류가 발생했습니다.";
-    updateDocumentStatus(documentId, "failed", `트리 저장 실패: ${msg}`);
+    await updateDocumentStatus(documentId, "failed", `트리 저장 실패: ${msg}`);
     throw new DocumentProcessorError("TREE_PERSIST_FAILED", "학습 트리를 저장하지 못했습니다.");
   }
 
   // ══════════════════════════════════════════
   // Step 9: 상태 → tree_generated
   // ══════════════════════════════════════════
-  updateDocumentStatus(documentId, "tree_generated");
+  await updateDocumentStatus(documentId, "tree_generated");
 
   console.info("[document-processor]", {
     stage: "pipeline_complete",

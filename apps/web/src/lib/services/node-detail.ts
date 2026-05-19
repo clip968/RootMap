@@ -73,10 +73,10 @@ export interface ApiNodeDetailResponse {
   }>;
 }
 
-function buildPanelGraph(
+async function buildPanelGraph(
   conceptId: string,
   treeId: string,
-): {
+): Promise<{
   prerequisite_concepts: Array<{ id: string; title: string }>;
   related_concepts: Array<{ id: string; title: string }>;
   used_in_other_trees: Array<{
@@ -84,9 +84,9 @@ function buildPanelGraph(
     topic: string;
     role_in_tree: string;
   }>;
-} {
+}> {
   const db = getDb();
-  const edges = listEdgesForConcept(db, conceptId);
+  const edges = await listEdgesForConcept(db, conceptId);
   const prereq: Array<{ id: string; title: string }> = [];
   const related: Array<{ id: string; title: string }> = [];
   const seenP = new Set<string>();
@@ -94,13 +94,13 @@ function buildPanelGraph(
   for (const e of edges) {
     if (e.relationType === "prerequisite") {
       if (e.toConceptId === conceptId) {
-        const o = getConceptById(db, e.fromConceptId);
+        const o = await getConceptById(db, e.fromConceptId);
         if (o && !seenP.has(o.id)) {
           seenP.add(o.id);
           prereq.push({ id: o.id, title: o.title });
         }
       } else if (e.fromConceptId === conceptId) {
-        const o = getConceptById(db, e.toConceptId);
+        const o = await getConceptById(db, e.toConceptId);
         if (o && !seenR.has(o.id)) {
           seenR.add(o.id);
           related.push({ id: o.id, title: o.title });
@@ -109,14 +109,14 @@ function buildPanelGraph(
     } else {
       const oid =
         e.fromConceptId === conceptId ? e.toConceptId : e.fromConceptId;
-      const o = getConceptById(db, oid);
+      const o = await getConceptById(db, oid);
       if (o && !seenR.has(o.id)) {
         seenR.add(o.id);
         related.push({ id: o.id, title: o.title });
       }
     }
   }
-  const used = listTreesUsingConcept(db, conceptId)
+  const used = (await listTreesUsingConcept(db, conceptId))
     .filter((t) => t.treeId !== treeId)
     .map((t) => ({
       tree_id: t.treeId,
@@ -246,15 +246,15 @@ function responseFromStoredConcept(
   };
 }
 
-function responseFromStoredConceptFallback(
+async function responseFromStoredConceptFallback(
   dbId: string,
   nodeKey: string,
   nodeRow: LearningNodeRow,
   bundle: LearningTreeBundle,
   treeId: string,
-): ApiNodeDetailResponse | null {
+): Promise<ApiNodeDetailResponse | null> {
   if (!nodeRow.conceptId) return null;
-  const c = getConceptById(getDb(), nodeRow.conceptId);
+  const c = await getConceptById(getDb(), nodeRow.conceptId);
   if (!c || !(c.explanation?.trim() || c.shortDescription?.trim())) return null;
   return responseFromStoredConcept(
     dbId,
@@ -280,7 +280,7 @@ export async function getOrCreateNodeDetail(params: {
     throw new Error("NODE_NOT_IN_TREE");
   }
 
-  const documentTreeContext = getDocumentTreeContextForUser(
+  const documentTreeContext = await getDocumentTreeContextForUser(
     treeId,
     DEFAULT_USER_ID,
   );
@@ -290,7 +290,7 @@ export async function getOrCreateNodeDetail(params: {
     nodeRow.conceptId,
   );
 
-  const extrasBase = (): Partial<ApiNodeDetailResponse> => {
+  const extrasBase = async (): Promise<Partial<ApiNodeDetailResponse>> => {
     const conceptId = nodeRow.conceptId ?? documentNodeContext?.concept_id ?? null;
     const documentExtras: Partial<ApiNodeDetailResponse> =
       documentNodeContext ?
@@ -303,7 +303,7 @@ export async function getOrCreateNodeDetail(params: {
         }
       : {};
     if (!conceptId) return { concept_id: null, ...documentExtras };
-    const graph = buildPanelGraph(conceptId, treeId);
+    const graph = await buildPanelGraph(conceptId, treeId);
     return {
       concept_id: conceptId,
       topic_context_line:
@@ -322,7 +322,7 @@ export async function getOrCreateNodeDetail(params: {
       nodeRow.nodeKey,
       nodeRow.detailJson,
       [],
-      extrasBase(),
+      await extrasBase(),
     );
   }
 
@@ -351,18 +351,18 @@ export async function getOrCreateNodeDetail(params: {
         check_questions: detail.check_questions,
         next_nodes: detail.next_nodes,
       };
-      const saved = saveNodeDetail(nodeId, genericDetail);
+      const saved = await saveNodeDetail(nodeId, genericDetail);
       if (!saved) {
         throw new Error("DETAIL_SAVE_FAILED");
       }
       return toApiBody(nodeId, nodeRow.nodeKey, genericDetail, qualityWarnings, {
-        ...extrasBase(),
+        ...(await extrasBase()),
         from_concept_store: false,
         why_it_matters_for_document: detail.why_it_matters_for_document,
         document_context_summary: detail.document_context_summary,
       });
     } catch (err) {
-      const fallback = responseFromStoredConceptFallback(
+      const fallback = await responseFromStoredConceptFallback(
         nodeId,
         nodeRow.nodeKey,
         nodeRow,
@@ -392,17 +392,17 @@ export async function getOrCreateNodeDetail(params: {
     const generateGenericNodeDetail =
       params.generateGenericNodeDetail ?? generateNodeDetail;
     const { detail, qualityWarnings } = await generateGenericNodeDetail(llmInput);
-    const saved = saveNodeDetail(nodeId, detail);
+    const saved = await saveNodeDetail(nodeId, detail);
     if (!saved) {
       throw new Error("DETAIL_SAVE_FAILED");
     }
 
     return toApiBody(nodeId, nodeRow.nodeKey, detail, qualityWarnings, {
-      ...extrasBase(),
+      ...(await extrasBase()),
       from_concept_store: false,
     });
   } catch (err) {
-    const fallback = responseFromStoredConceptFallback(
+    const fallback = await responseFromStoredConceptFallback(
       nodeId,
       nodeRow.nodeKey,
       nodeRow,
@@ -418,7 +418,7 @@ export async function getOrCreateNodeDetailForRequest(
   treeId: string,
   nodeId: string,
 ): Promise<ApiNodeDetailResponse> {
-  const bundle = getLearningTree(treeId, DEFAULT_USER_ID);
+  const bundle = await getLearningTree(treeId, DEFAULT_USER_ID);
   if (!bundle) {
     throw new Error("NOT_FOUND");
   }

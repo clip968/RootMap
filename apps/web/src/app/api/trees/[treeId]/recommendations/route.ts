@@ -18,7 +18,7 @@ type Ctx = { params: Promise<{ treeId: string }> };
 
 export async function GET(_req: Request, ctx: Ctx) {
   const { treeId } = await ctx.params;
-  const bundle = getLearningTree(treeId, DEFAULT_USER_ID);
+  const bundle = await getLearningTree(treeId, DEFAULT_USER_ID);
   if (!bundle) {
     return jsonError(
       "NOT_FOUND",
@@ -27,7 +27,7 @@ export async function GET(_req: Request, ctx: Ctx) {
     );
   }
 
-  const documentContext = getDocumentTreeContextForUser(treeId, DEFAULT_USER_ID);
+  const documentContext = await getDocumentTreeContextForUser(treeId, DEFAULT_USER_ID);
   const recommendedOrderIndex = new Map(
     bundle.tree.treeJson.recommended_order.map((nodeKey, index) => [
       nodeKey,
@@ -74,7 +74,7 @@ export async function GET(_req: Request, ctx: Ctx) {
         .filter((n) => n.conceptId != null)
         .map((n) => [n.id, n.conceptId!]),
     ),
-    conceptProgress: getConceptProgressMapForUser(DEFAULT_USER_ID),
+    conceptProgress: await getConceptProgressMapForUser(DEFAULT_USER_ID),
   });
   return NextResponse.json({ recommended_nodes });
 }

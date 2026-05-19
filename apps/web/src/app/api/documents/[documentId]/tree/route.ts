@@ -14,7 +14,7 @@ type Ctx = { params: Promise<{ documentId: string }> };
 
 export async function GET(_req: Request, ctx: Ctx) {
   const { documentId } = await ctx.params;
-  const document = getDocumentForUser(documentId, DEFAULT_USER_ID);
+  const document = await getDocumentForUser(documentId, DEFAULT_USER_ID);
   if (!document) {
     return jsonError("NOT_FOUND", "문서를 찾을 수 없습니다.", 404);
   }
@@ -26,12 +26,12 @@ export async function GET(_req: Request, ctx: Ctx) {
     );
   }
 
-  const bundle = getDocumentLearningTreeForUser(documentId, DEFAULT_USER_ID);
+  const bundle = await getDocumentLearningTreeForUser(documentId, DEFAULT_USER_ID);
   if (!bundle) {
     return jsonError("NOT_FOUND", "문서 기반 학습 트리를 찾을 수 없습니다.", 404);
   }
 
-  const documentContext = getDocumentTreeContextForUser(
+  const documentContext = await getDocumentTreeContextForUser(
     bundle.tree.id,
     DEFAULT_USER_ID,
   );

@@ -21,13 +21,13 @@ type Ctx = { params: Promise<{ treeId: string; nodeId: string }> };
 export async function POST(_req: Request, ctx: Ctx) {
   const { treeId, nodeId } = await ctx.params;
 
-  const bundle = getLearningTree(treeId, DEFAULT_USER_ID);
+  const bundle = await getLearningTree(treeId, DEFAULT_USER_ID);
   if (!bundle) {
     return jsonError("NOT_FOUND", "트리를 찾을 수 없습니다.", 404);
   }
 
   // 문서 기반 트리인지 확인 (documentLearningTrees 링크 존재 여부)
-  const documentContext = getDocumentTreeContextForUser(treeId, DEFAULT_USER_ID);
+  const documentContext = await getDocumentTreeContextForUser(treeId, DEFAULT_USER_ID);
   if (!documentContext) {
     return jsonError(
       "INVALID_OPERATION",

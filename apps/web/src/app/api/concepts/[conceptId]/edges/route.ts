@@ -28,21 +28,21 @@ type Ctx = { params: Promise<{ conceptId: string }> };
 export async function GET(_req: Request, ctx: Ctx) {
   const { conceptId } = await ctx.params;
   const db = getDb();
-  const c = getConceptById(db, conceptId);
+  const c = await getConceptById(db, conceptId);
   if (!c) {
     return jsonError("NOT_FOUND", "개념을 찾을 수 없습니다.", 404);
   }
-  const edges = listEdgesForConcept(db, conceptId);
-  const out = edges.map((e) => ({
-    relation_type: e.relationType,
-    direction: e.fromConceptId === conceptId ? "outgoing" : "incoming",
-    target_concept_id:
-      e.fromConceptId === conceptId ? e.toConceptId : e.fromConceptId,
-    target_title: (() => {
-      const tid = e.fromConceptId === conceptId ? e.toConceptId : e.fromConceptId;
-      return getConceptById(db, tid)?.title ?? "";
-    })(),
-    reason: e.reason,
+  const edges = await listEdgesForConcept(db, conceptId);
+  const out = await Promise.all(edges.map(async (e) => {
+    const targetId = e.fromConceptId === conceptId ? e.toConceptId : e.fromConceptId;
+    const target = await getConceptById(db, targetId);
+    return {
+      relation_type: e.relationType,
+      direction: e.fromConceptId === conceptId ? "outgoing" : "incoming",
+      target_concept_id: targetId,
+      target_title: target?.title ?? "",
+      reason: e.reason,
+    };
   }));
   return NextResponse.json({ concept_id: conceptId, title: c.title, edges: out });
 }
@@ -64,19 +64,19 @@ export async function POST(req: Request, ctx: Ctx) {
     return jsonError("INVALID_REQUEST", "간선 본문이 올바르지 않습니다.", 400);
   }
   const db = getDb();
-  const fromC = getConceptById(db, conceptId);
-  const toC = getConceptById(db, parsed.data.to_concept_id);
+  const fromC = await getConceptById(db, conceptId);
+  const toC = await getConceptById(db, parsed.data.to_concept_id);
   if (!fromC || !toC) {
     return jsonError("NOT_FOUND", "개념을 찾을 수 없습니다.", 404);
   }
-  upsertConceptEdge(
+  await upsertConceptEdge(
     db,
     conceptId,
     parsed.data.to_concept_id,
     parsed.data.relation_type,
     parsed.data.reason,
   );
-  const edges = listEdgesForConcept(db, conceptId);
+  const edges = await listEdgesForConcept(db, conceptId);
   const last = edges.find(
     (e) =>
       e.fromConceptId === conceptId &&

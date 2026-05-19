@@ -1,7 +1,5 @@
-import fs from "node:fs";
-import path from "node:path";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import * as schema from "./schema";
 
 export type RootMapDb = ReturnType<typeof drizzle<typeof schema>>;
@@ -14,38 +12,39 @@ export type RootMapTx = Parameters<
 export type RootMapDbClient = RootMapDb | RootMapTx;
 
 const globalForDb = globalThis as unknown as {
-  rootmapSqlite?: Database.Database;
+  rootmapPostgres?: postgres.Sql;
   rootmapDb?: RootMapDb;
 };
 
-function resolveSqliteFilePath(): string {
-  const url = process.env.DATABASE_URL ?? "file:./data/rootmap.db";
-  if (!url.startsWith("file:")) {
-    throw new Error("DATABASE_URL는 SQLite용 file: URL이어야 합니다.");
+function resolvePostgresConnectionString(): string {
+  const url = process.env.DATABASE_URL?.trim();
+  if (!url) {
+    throw new Error("DATABASE_URL에 Supabase Postgres 연결 문자열이 필요합니다.");
   }
-  const raw = url.slice("file:".length);
-  return path.isAbsolute(raw)
-    ? raw
-    : path.join(/* turbopackIgnore: true */ process.cwd(), raw);
+  if (url.startsWith("file:")) {
+    throw new Error("DATABASE_URL는 더 이상 SQLite file: URL을 사용할 수 없습니다. Supabase Postgres URL을 설정하세요.");
+  }
+  return url;
 }
 
 export function getDb(): RootMapDb {
   if (!globalForDb.rootmapDb) {
-    const dbPath = resolveSqliteFilePath();
-    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-    const sqlite = new Database(dbPath);
-    sqlite.pragma("foreign_keys = ON");
-    globalForDb.rootmapSqlite = sqlite;
-    globalForDb.rootmapDb = drizzle(sqlite, { schema });
+    const client = postgres(resolvePostgresConnectionString(), {
+      max: 5,
+      // Supabase Shared Pooler의 transaction 모드에서는 prepared statement를 끈 연결이 안전합니다.
+      prepare: false,
+    });
+    globalForDb.rootmapPostgres = client;
+    globalForDb.rootmapDb = drizzle(client, { schema });
   }
   return globalForDb.rootmapDb;
 }
 
-/** 테스트·스모크 스크립트에서 DB 파일을 바꾸기 전에 연결을 닫는다. */
-export function resetDbSingleton(): void {
-  if (globalForDb.rootmapSqlite) {
-    globalForDb.rootmapSqlite.close();
-    globalForDb.rootmapSqlite = undefined;
+/** 테스트·스모크 스크립트에서 DATABASE_URL을 바꾸기 전에 Postgres 연결을 닫는다. */
+export async function resetDbSingleton(): Promise<void> {
+  if (globalForDb.rootmapPostgres) {
+    await globalForDb.rootmapPostgres.end({ timeout: 0 });
+    globalForDb.rootmapPostgres = undefined;
     globalForDb.rootmapDb = undefined;
   }
 }

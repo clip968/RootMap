@@ -10,7 +10,7 @@ npm install
 cp .env.example .env.local
 ```
 
-`.env.local`에 OpenRouter 키를 설정합니다.
+`.env.local`에 OpenRouter 키와 Supabase Postgres 연결 문자열을 설정합니다.
 
 ```bash
 OPENROUTER_API_KEY=sk-or-...
@@ -18,13 +18,14 @@ OPENROUTER_API_KEY=sk-or-...
 OPENROUTER_MODEL=google/gemini-2.5-flash
 # 설정 화면에서 저장하는 provider API key를 암호화하는 서버 전용 secret
 LLM_SETTINGS_SECRET=change-this-long-random-secret
-DATABASE_URL=file:./data/rootmap.db
+# Supabase Dashboard > Connect > Connection Pooler의 URI를 사용하고 [YOUR-PASSWORD]를 실제 DB password로 바꿉니다.
+DATABASE_URL=postgresql://postgres.<project-ref>:<db-password>@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres
 ```
 
 LLM provider는 기본적으로 위 `OPENROUTER_*` 환경 변수를 fallback으로 사용합니다.
 앱 실행 후 `/settings/llm-provider`에서 OpenRouter, CrofAI, OpenAI-compatible `Base URL`/`API Key`/`Model`/`JSON mode`를 저장하면 DB 설정이 fallback보다 우선됩니다.
 
-DB 테이블을 준비하고 개발 서버를 실행합니다.
+DB 테이블을 준비하고 개발 서버를 실행합니다. 마이그레이션 SQL은 `drizzle/`에 있습니다.
 
 ```bash
 npm run db:push
@@ -54,7 +55,7 @@ cd apps/web
 npm run check
 ```
 
-`check`는 lint, DB smoke, LLM 파싱 smoke, LLM provider 설정 smoke, Phase 1 MVP fixture smoke, Phase 2 Concept Store fixture smoke, production build/type check를 순서대로 실행합니다.
+`check`는 lint와 production build/type check를 순서대로 실행합니다. Supabase 실제 DB 검증은 `DATABASE_URL`을 Supabase Postgres URL로 설정한 뒤 API 라우트 또는 Drizzle 쿼리로 수행합니다.
 
 ## Phase 2 관리자/개발자 화면
 

@@ -91,7 +91,7 @@ export async function generateAndPersistTree(
   let storeContext: string | undefined;
   if (reuseConcepts) {
     const conceptContextStartedAt = Date.now();
-    const conceptRows = searchConceptsForPromptContext(db, topic, 24);
+    const conceptRows = await searchConceptsForPromptContext(db, topic, 24);
     storeContext = formatConceptsForPrompt(conceptRows);
     if (requestId) {
       logGenerateService("concept_context_ready", {
@@ -129,7 +129,7 @@ export async function generateAndPersistTree(
   const persistStartedAt = Date.now();
   try {
     /** 단일 트랜잭션: learning_trees + nodes + progress + Phase2 concepts/edges */
-    treeId = createFullLearningTree(
+    treeId = await createFullLearningTree(
       topic,
       llmTree.summary ?? null,
       llmTree,
@@ -152,7 +152,7 @@ export async function generateAndPersistTree(
 
   const loadStartedAt = Date.now();
   /** 저장 직후 UI에 줄 필드를 한 번에 모은 번들(노드 행, 진행률, concept 사용 횟수 등) */
-  const bundle = getLearningTree(treeId, DEFAULT_USER_ID);
+  const bundle = await getLearningTree(treeId, DEFAULT_USER_ID);
   if (requestId) {
     logGenerateService("get_learning_tree_complete", {
       requestId,

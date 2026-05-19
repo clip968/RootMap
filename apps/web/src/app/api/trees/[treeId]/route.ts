@@ -11,7 +11,7 @@ type Ctx = { params: Promise<{ treeId: string }> };
 
 export async function GET(_req: Request, ctx: Ctx) {
   const { treeId } = await ctx.params;
-  const bundle = getLearningTree(treeId, DEFAULT_USER_ID);
+  const bundle = await getLearningTree(treeId, DEFAULT_USER_ID);
   if (!bundle) {
     return jsonError(
       "NOT_FOUND",
@@ -19,6 +19,6 @@ export async function GET(_req: Request, ctx: Ctx) {
       404,
     );
   }
-  const documentContext = getDocumentTreeContextForUser(treeId, DEFAULT_USER_ID);
+  const documentContext = await getDocumentTreeContextForUser(treeId, DEFAULT_USER_ID);
   return NextResponse.json(bundleToApiTreeResponse(bundle, { documentContext }));
 }

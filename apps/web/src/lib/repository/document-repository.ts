@@ -131,10 +131,10 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-export function createDocument(input: CreateDocumentInput): string {
+export async function createDocument(input: CreateDocumentInput): Promise<string> {
   const db = getDb();
   const ts = nowIso();
-  const rows = db
+  const rows = await db
     .insert(documents)
     .values({
       userId: input.userId,
@@ -150,33 +150,31 @@ export function createDocument(input: CreateDocumentInput): string {
       createdAt: ts,
       updatedAt: ts,
     })
-    .returning({ id: documents.id })
-    .all();
+    .returning({ id: documents.id });
   const row = rows[0];
   if (!row) throw new Error("documents insert failed");
   return row.id;
 }
 
-export function getDocumentForUser(
+export async function getDocumentForUser(
   documentId: string,
   userId: string,
-): DocumentRow | null {
+): Promise<DocumentRow | null> {
   const db = getDb();
-  const rows = db
+  const rows = await db
     .select()
     .from(documents)
-    .where(and(eq(documents.id, documentId), eq(documents.userId, userId)))
-    .all();
+    .where(and(eq(documents.id, documentId), eq(documents.userId, userId)));
   return rows[0] ?? null;
 }
 
-export function updateDocumentStatus(
+export async function updateDocumentStatus(
   documentId: string,
   processingStatus: DocumentProcessingStatus,
   processingError?: string | null,
-): boolean {
+): Promise<boolean> {
   const db = getDb();
-  const result = db
+  const rows = await db
     .update(documents)
     .set({
       processingStatus,
@@ -184,17 +182,17 @@ export function updateDocumentStatus(
       updatedAt: nowIso(),
     })
     .where(eq(documents.id, documentId))
-    .run();
-  return result.changes > 0;
+    .returning({ id: documents.id });
+  return rows.length > 0;
 }
 
-export function updateDocumentExtractedInfo(
+export async function updateDocumentExtractedInfo(
   documentId: string,
   pageCount: number,
   extractedTextLength: number,
-): boolean {
+): Promise<boolean> {
   const db = getDb();
-  const result = db
+  const rows = await db
     .update(documents)
     .set({
       pageCount,
@@ -202,28 +200,27 @@ export function updateDocumentExtractedInfo(
       updatedAt: nowIso(),
     })
     .where(eq(documents.id, documentId))
-    .run();
-  return result.changes > 0;
+    .returning({ id: documents.id });
+  return rows.length > 0;
 }
 
-export function getDocumentById(documentId: string): DocumentRow | null {
+export async function getDocumentById(documentId: string): Promise<DocumentRow | null> {
   const db = getDb();
-  const rows = db
+  const rows = await db
     .select()
     .from(documents)
-    .where(eq(documents.id, documentId))
-    .all();
+    .where(eq(documents.id, documentId));
   return rows[0] ?? null;
 }
 
-export function bulkInsertDocumentPages(
+export async function bulkInsertDocumentPages(
   documentId: string,
   pages: DocumentPageInput[],
-): DocumentPageRow[] {
+): Promise<DocumentPageRow[]> {
   if (pages.length === 0) return [];
   const db = getDb();
   const ts = nowIso();
-  return db
+  return await db
     .insert(documentPages)
     .values(
       pages.map((page) => ({
@@ -237,18 +234,17 @@ export function bulkInsertDocumentPages(
       target: [documentPages.documentId, documentPages.pageNumber],
       set: { text: sql`excluded.text` },
     })
-    .returning()
-    .all();
+    .returning();
 }
 
-export function bulkInsertDocumentChunks(
+export async function bulkInsertDocumentChunks(
   documentId: string,
   chunks: DocumentChunkInput[],
-): DocumentChunkRow[] {
+): Promise<DocumentChunkRow[]> {
   if (chunks.length === 0) return [];
   const db = getDb();
   const ts = nowIso();
-  return db
+  return await db
     .insert(documentChunks)
     .values(
       chunks.map((chunk) => ({
@@ -274,18 +270,17 @@ export function bulkInsertDocumentChunks(
         metadata: sql`excluded.metadata`,
       },
     })
-    .returning()
-    .all();
+    .returning();
 }
 
-export function bulkInsertDocumentConcepts(
+export async function bulkInsertDocumentConcepts(
   documentId: string,
   conceptsInput: DocumentConceptInput[],
-): DocumentConceptRow[] {
+): Promise<DocumentConceptRow[]> {
   if (conceptsInput.length === 0) return [];
   const db = getDb();
   const ts = nowIso();
-  return db
+  return await db
     .insert(documentConcepts)
     .values(
       conceptsInput.map((concept) => ({
@@ -316,31 +311,29 @@ export function bulkInsertDocumentConcepts(
         updatedAt: ts,
       },
     })
-    .returning()
-    .all();
+    .returning();
 }
 
 /**
  * 문서의 모든 청크를 chunkIndex 순서로 조회한다.
  */
-export function getDocumentChunks(
+export async function getDocumentChunks(
   documentId: string,
-): DocumentChunkRow[] {
+): Promise<DocumentChunkRow[]> {
   const db = getDb();
-  return db
+  return await db
     .select()
     .from(documentChunks)
     .where(eq(documentChunks.documentId, documentId))
-    .orderBy(documentChunks.chunkIndex)
-    .all();
+    .orderBy(documentChunks.chunkIndex);
 }
 
-export function createDocumentLearningTreeLink(
+export async function createDocumentLearningTreeLink(
   documentId: string,
   treeId: string,
-): string {
+): Promise<string> {
   const db = getDb();
-  const rows = db
+  const rows = await db
     .insert(documentLearningTrees)
     .values({
       documentId,
@@ -348,12 +341,11 @@ export function createDocumentLearningTreeLink(
       createdAt: nowIso(),
     })
     .onConflictDoNothing()
-    .returning({ id: documentLearningTrees.id })
-    .all();
+    .returning({ id: documentLearningTrees.id });
   const inserted = rows[0];
   if (inserted) return inserted.id;
 
-  const existing = db
+  const existing = (await db
     .select({ id: documentLearningTrees.id })
     .from(documentLearningTrees)
     .where(
@@ -361,8 +353,7 @@ export function createDocumentLearningTreeLink(
         eq(documentLearningTrees.documentId, documentId),
         eq(documentLearningTrees.treeId, treeId),
       ),
-    )
-    .all()[0];
+    ))[0];
   if (!existing) throw new Error("document_learning_trees insert failed");
   return existing.id;
 }
@@ -412,12 +403,12 @@ function toDocumentTreeNodeContext(
  * 트리 id가 문서 기반 트리인지 확인하고, 맞다면 노드 UI에 붙일 문서 출처 맵을 만든다.
  * 노드에 concept_id가 없는 과거 데이터도 제목으로 fallback 매칭할 수 있게 두 맵을 함께 둔다.
  */
-export function getDocumentTreeContextForUser(
+export async function getDocumentTreeContextForUser(
   treeId: string,
   userId: string,
-): DocumentTreeContext | null {
+): Promise<DocumentTreeContext | null> {
   const db = getDb();
-  const document = db
+  const document = (await db
     .select({
       id: documents.id,
       userId: documents.userId,
@@ -441,15 +432,13 @@ export function getDocumentTreeContextForUser(
         eq(documents.userId, userId),
       ),
     )
-    .orderBy(desc(documentLearningTrees.createdAt))
-    .all()[0];
+    .orderBy(desc(documentLearningTrees.createdAt)))[0];
   if (!document) return null;
 
-  const conceptRows = db
+  const conceptRows = await db
     .select()
     .from(documentConcepts)
-    .where(eq(documentConcepts.documentId, document.id))
-    .all();
+    .where(eq(documentConcepts.documentId, document.id));
 
   const byConceptId = new Map<string, DocumentTreeNodeContext>();
   const byTitle = new Map<string, DocumentTreeNodeContext>();
@@ -484,19 +473,18 @@ export function findDocumentContextForNode(
  * 문서 분석 결과 화면의 개념 목록용 DTO를 만든다.
  * 먼저 document ownership을 확인하므로 다른 사용자의 document_id는 빈 목록처럼 처리된다.
  */
-export function listDocumentConceptsForUser(
+export async function listDocumentConceptsForUser(
   documentId: string,
   userId: string,
-): DocumentConceptSummary[] {
-  const document = getDocumentForUser(documentId, userId);
+): Promise<DocumentConceptSummary[]> {
+  const document = await getDocumentForUser(documentId, userId);
   if (!document) return [];
 
   const db = getDb();
-  const rows = db
+  const rows = await db
     .select()
     .from(documentConcepts)
-    .where(eq(documentConcepts.documentId, documentId))
-    .all();
+    .where(eq(documentConcepts.documentId, documentId));
 
   return rows
     .map((row) => ({
@@ -529,20 +517,19 @@ export function listDocumentConceptsForUser(
  * document_learning_trees에 연결된 최신 트리를 사용자 소유권까지 확인해 반환한다.
  * 문서 소유권과 tree.user_id를 모두 확인해 임의 tree_id 우회 조회를 막는다.
  */
-export function getDocumentLearningTreeForUser(
+export async function getDocumentLearningTreeForUser(
   documentId: string,
   userId: string,
-): LearningTreeBundle | null {
-  const document = getDocumentForUser(documentId, userId);
+): Promise<LearningTreeBundle | null> {
+  const document = await getDocumentForUser(documentId, userId);
   if (!document) return null;
 
   const db = getDb();
-  const link = db
+  const link = (await db
     .select({ treeId: documentLearningTrees.treeId })
     .from(documentLearningTrees)
     .where(eq(documentLearningTrees.documentId, documentId))
-    .orderBy(desc(documentLearningTrees.createdAt))
-    .all()[0];
+    .orderBy(desc(documentLearningTrees.createdAt)))[0];
   if (!link) return null;
 
   return getLearningTree(link.treeId, userId);
@@ -552,21 +539,20 @@ export function getDocumentLearningTreeForUser(
  * Phase 3 Task 11: 특정 문서의 청크 텍스트를 반환한다.
  * 노드 상세 지연 생성 시 LLM 컨텍스트로 사용된다.
  */
-export function getChunkTextsForConcept(
+export async function getChunkTextsForConcept(
   documentId: string,
   _conceptTitle: string,
   limit = 3,
-): Array<{ chunk_id: string; content: string }> {
+): Promise<Array<{ chunk_id: string; content: string }>> {
   const db = getDb();
-  const rows = db
+  const rows = await db
     .select({
       chunkId: documentChunks.id,
       content: documentChunks.text,
     })
     .from(documentChunks)
     .where(eq(documentChunks.documentId, documentId))
-    .limit(limit)
-    .all();
+    .limit(limit);
 
   return rows.map((r) => ({ chunk_id: r.chunkId, content: r.content }));
 }
@@ -574,12 +560,12 @@ export function getChunkTextsForConcept(
 /**
  * evidence 조회는 document_concepts.id에서 시작하지만, 반드시 연결된 document의 user_id를 함께 확인한다.
  */
-export function getDocumentConceptEvidenceForUser(
+export async function getDocumentConceptEvidenceForUser(
   documentConceptId: string,
   userId: string,
-): DocumentConceptEvidenceResponse | null {
+): Promise<DocumentConceptEvidenceResponse | null> {
   const db = getDb();
-  const row = db
+  const row = (await db
     .select({
       id: documentConcepts.id,
       conceptTitle: documentConcepts.conceptTitle,
@@ -592,8 +578,7 @@ export function getDocumentConceptEvidenceForUser(
         eq(documentConcepts.id, documentConceptId),
         eq(documents.userId, userId),
       ),
-    )
-    .all()[0];
+    ))[0];
   if (!row) return null;
 
   const evidence = Array.isArray(row.evidence) ? row.evidence : [];

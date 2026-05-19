@@ -9,7 +9,7 @@ type Ctx = { params: Promise<{ documentConceptId: string }> };
 
 export async function GET(_req: Request, ctx: Ctx) {
   const { documentConceptId } = await ctx.params;
-  const evidence = getDocumentConceptEvidenceForUser(
+  const evidence = await getDocumentConceptEvidenceForUser(
     documentConceptId,
     DEFAULT_USER_ID,
   );

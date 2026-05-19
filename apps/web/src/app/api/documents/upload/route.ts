@@ -144,7 +144,7 @@ export async function POST(req: Request) {
 
   let documentId: string;
   try {
-    documentId = createDocument({
+    documentId = await createDocument({
       userId: DEFAULT_USER_ID,
       title: path.basename(originalFilename, path.extname(originalFilename)),
       originalFilename,

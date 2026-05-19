@@ -49,7 +49,7 @@ export async function createChatCompletion(
 }> {
   let config: ResolvedLlmProviderConfig;
   try {
-    config = options.providerConfig ?? resolveLlmProviderConfig();
+    config = options.providerConfig ?? (await resolveLlmProviderConfig());
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "LLM provider 설정을 확인해 주세요.";

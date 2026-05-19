@@ -59,18 +59,27 @@ export default async function AdminConceptsPage({ searchParams }: PageProps) {
   const mergeStatus = firstParam(params.merge_status).trim() || "pending";
 
   const db = getDb();
-  const domains = listConceptDomains(db);
-  const concepts = listConcepts(db, {
+  const domains = await listConceptDomains(db);
+  const concepts = await listConcepts(db, {
     search: q || undefined,
     domain: domain || undefined,
     limit: 80,
   });
   const selected = selectedConceptId
-    ? getConceptById(db, selectedConceptId)
+    ? await getConceptById(db, selectedConceptId)
     : (concepts[0] ?? null);
-  const selectedEdges = selected ? listEdgesForConcept(db, selected.id) : [];
-  const selectedTrees = selected ? listTreesUsingConcept(db, selected.id) : [];
-  const mergeCandidates = listConceptMergeCandidates(db, {
+  const selectedEdges = selected ? await listEdgesForConcept(db, selected.id) : [];
+  const selectedEdgeItems = await Promise.all(selectedEdges.map(async (edge) => {
+    const outgoing = selected ? edge.fromConceptId === selected.id : false;
+    const otherId = outgoing ? edge.toConceptId : edge.fromConceptId;
+    return {
+      edge,
+      outgoing,
+      otherTitle: (await getConceptById(db, otherId))?.title ?? otherId,
+    };
+  }));
+  const selectedTrees = selected ? await listTreesUsingConcept(db, selected.id) : [];
+  const mergeCandidates = await listConceptMergeCandidates(db, {
     status: mergeStatus === "all" ? undefined : mergeStatus,
     limit: 80,
   });
@@ -209,10 +218,7 @@ export default async function AdminConceptsPage({ searchParams }: PageProps) {
                   <div>
                     <p className="font-medium">연결 Edge</p>
                     <ul className="mt-2 space-y-2">
-                      {selectedEdges.map((e) => {
-                        const outgoing = e.fromConceptId === selected.id;
-                        const otherId = outgoing ? e.toConceptId : e.fromConceptId;
-                        const other = getConceptById(db, otherId);
+                      {selectedEdgeItems.map(({ edge: e, outgoing, otherTitle }) => {
                         return (
                           <li key={e.id} className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
                             <div className="flex flex-wrap items-center gap-2">
@@ -221,7 +227,7 @@ export default async function AdminConceptsPage({ searchParams }: PageProps) {
                               </span>
                               <span className="font-medium">{e.relationType}</span>
                               <span className="text-zinc-500">→</span>
-                              <span>{other?.title ?? otherId}</span>
+                              <span>{otherTitle}</span>
                             </div>
                             {e.reason ? <p className="mt-1 text-xs text-zinc-500">{e.reason}</p> : null}
                           </li>

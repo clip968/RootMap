@@ -53,7 +53,7 @@ function ensureConceptCandidate(
   };
 }
 
-export function persistPhase2Concepts(
+export async function persistPhase2Concepts(
   db: RootMapDbClient,
   params: {
     treeId: string;
@@ -62,7 +62,7 @@ export function persistPhase2Concepts(
     reuseConcepts: boolean;
     requestId?: string;
   },
-): void {
+): Promise<void> {
   const { treeId, tree, nodeKeyToDbId, reuseConcepts, requestId } = params;
   const startedAt = Date.now();
   /** LLM 노드 id → 방금 확정한 concept UUID — edge 해석에 필요 */
@@ -90,12 +90,12 @@ export function persistPhase2Concepts(
 
     if (!reuseConcepts) {
       /** 강제 신규: slug 충돌 방지까지 포함해 insert */
-      const slug = allocateUniqueSlug(cand.canonical_title, db);
-      const row = insertConceptFromCandidate(db, cand, slug);
+      const slug = await allocateUniqueSlug(cand.canonical_title, db);
+      const row = await insertConceptFromCandidate(db, cand, slug);
       conceptId = row.id;
       reused = false;
     } else {
-      const res = resolveConceptForReuse(db, cand);
+      const res = await resolveConceptForReuse(db, cand);
       if (res.kind === "reused") {
         conceptId = res.concept.id;
         reused = true;
@@ -108,16 +108,16 @@ export function persistPhase2Concepts(
             ? [cand.canonical_title]
             : []),
         ];
-        addAliasesIfNew(db, conceptId, extraAliases);
+        await addAliasesIfNew(db, conceptId, extraAliases);
       } else {
-        const slug = allocateUniqueSlug(cand.canonical_title, db);
-        const row = insertConceptFromCandidate(db, cand, slug);
+        const slug = await allocateUniqueSlug(cand.canonical_title, db);
+        const row = await insertConceptFromCandidate(db, cand, slug);
         conceptId = row.id;
         reused = false;
         if (res.kind === "ambiguous_similar") {
           outcome = "new_with_merge_candidate";
           /** 관리자 병합 큐에 넣음 — 자동 병합은 하지 않음 */
-          tryRecordMergeCandidate(
+          await tryRecordMergeCandidate(
             db,
             row.id,
             res.similar.id,
@@ -131,29 +131,24 @@ export function persistPhase2Concepts(
     nodeKeyToConceptId.set(n.id, conceptId);
 
     /** `learning_nodes`에 Phase 2 외래키 + 이번 생성에서 재사용 여부 플래그 */
-    db.update(learningNodes)
+    await db.update(learningNodes)
       .set({
         conceptId,
         isReusedConcept: reused,
         updatedAt: new Date().toISOString(),
       })
-      .where(eq(learningNodes.id, dbNodeId))
-      .run();
+      .where(eq(learningNodes.id, dbNodeId));
 
     /** 이 트리 안에서 노드가 어떤 Concept 역할인지 join 테이블에 기록 — UNIQUE 충돌은 무시 */
-    try {
-      db.insert(learningTreeConcepts)
-        .values({
-          treeId,
-          learningNodeId: dbNodeId,
-          conceptId,
-          roleInTree: n.type,
-          createdAt: new Date().toISOString(),
-        })
-        .run();
-    } catch {
-      /* UNIQUE 등 */
-    }
+    await db.insert(learningTreeConcepts)
+      .values({
+        treeId,
+        learningNodeId: dbNodeId,
+        conceptId,
+        roleInTree: n.type,
+        createdAt: new Date().toISOString(),
+      })
+      .onConflictDoNothing();
 
     if (requestId) {
       logConceptPersistence("node_resolved", {
@@ -174,7 +169,7 @@ export function persistPhase2Concepts(
     const toC = nodeKeyToConceptId.get(e.to);
     if (!fromC || !toC) continue;
     /** 명세: prerequisite면 from이 선수, to가 이후 */
-    upsertConceptEdge(db, fromC, toC, e.relation_type, e.reason ?? null);
+    await upsertConceptEdge(db, fromC, toC, e.relation_type, e.reason ?? null);
   }
 
   let prerequisiteEdgeCount = 0;
@@ -185,7 +180,7 @@ export function persistPhase2Concepts(
     for (const preKey of n.prerequisites) {
       const fromC = nodeKeyToConceptId.get(preKey);
       if (fromC) {
-        upsertConceptEdge(db, fromC, toC, "prerequisite", "learning tree structure");
+        await upsertConceptEdge(db, fromC, toC, "prerequisite", "learning tree structure");
         prerequisiteEdgeCount += 1;
       }
     }

@@ -33,11 +33,11 @@ async function readOptionalBody(req: Request): Promise<Record<string, unknown>> 
   }
 }
 
-function configFromBody(body: Record<string, unknown>): ResolvedLlmProviderConfig | null {
+async function configFromBody(body: Record<string, unknown>): Promise<ResolvedLlmProviderConfig | null> {
   const providerType = normalizeProviderType(body.providerType);
   if (!providerType) return null;
 
-  const existing = getActiveLlmProviderSetting();
+  const existing = await getActiveLlmProviderSetting();
   const apiKey =
     typeof body.apiKey === "string" && body.apiKey.trim() ?
       body.apiKey.trim()
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
   let config: ResolvedLlmProviderConfig;
   try {
     const body = await readOptionalBody(req);
-    config = configFromBody(body) ?? resolveLlmProviderConfig();
+    config = (await configFromBody(body)) ?? (await resolveLlmProviderConfig());
   } catch (err) {
     return jsonError(
       "INVALID_REQUEST",

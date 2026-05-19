@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   );
 
   const db = getDb();
-  const rows = listConcepts(db, { search: q, domain, limit });
+  const rows = await listConcepts(db, { search: q, domain, limit });
   return NextResponse.json({
     concepts: rows.map((r) => ({
       id: r.id,

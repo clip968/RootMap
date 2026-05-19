@@ -107,12 +107,12 @@ function mapNodeRow(row: typeof learningNodes.$inferSelect): LearningNodeRow {
   };
 }
 
-export function getConceptTreeUsageCounts(
+export async function getConceptTreeUsageCounts(
   conceptIds: string[],
-): Map<string, number> {
+): Promise<Map<string, number>> {
   if (conceptIds.length === 0) return new Map();
   const db = getDb();
-  const rows = db
+  const rows = await db
     .select({
       cid: learningTreeConcepts.conceptId,
       n: sql<number>`count(distinct ${learningTreeConcepts.treeId})`.mapWith(
@@ -121,17 +121,16 @@ export function getConceptTreeUsageCounts(
     })
     .from(learningTreeConcepts)
     .where(inArray(learningTreeConcepts.conceptId, conceptIds))
-    .groupBy(learningTreeConcepts.conceptId)
-    .all();
+    .groupBy(learningTreeConcepts.conceptId);
   return new Map(rows.map((r) => [r.cid, r.n]));
 }
 
-export function listLearningTreeHistory(
+export async function listLearningTreeHistory(
   userId: string = DEFAULT_USER_ID,
   limit: number = 50,
-): LearningTreeHistoryRow[] {
+): Promise<LearningTreeHistoryRow[]> {
   const db = getDb();
-  const rows = db
+  const rows = await db
     .select({
       id: learningTrees.id,
       topic: learningTrees.topic,
@@ -145,8 +144,7 @@ export function listLearningTreeHistory(
     .where(eq(learningTrees.userId, userId))
     .groupBy(learningTrees.id)
     .orderBy(desc(learningTrees.updatedAt), desc(learningTrees.createdAt))
-    .limit(limit)
-    .all();
+    .limit(limit);
 
   return rows.map((row) => ({
     id: row.id,
@@ -158,15 +156,15 @@ export function listLearningTreeHistory(
   }));
 }
 
-export function createLearningTree(
+export async function createLearningTree(
   topic: string,
   summary: string | null,
   treeJson: LearningTreeResponse,
   userId: string = DEFAULT_USER_ID,
-): string {
+): Promise<string> {
   const db = getDb();
   const now = new Date().toISOString();
-  const rows = db
+  const rows = await db
     .insert(learningTrees)
     .values({
       userId,
@@ -176,8 +174,7 @@ export function createLearningTree(
       createdAt: now,
       updatedAt: now,
     })
-    .returning({ id: learningTrees.id })
-    .all();
+    .returning({ id: learningTrees.id });
   const row = rows[0];
   if (!row) {
     throw new Error("learning_trees insert failed");
@@ -208,22 +205,22 @@ function logLearningPersistence(
  *
  * @returns 새 트리의 UUID
  */
-export function createFullLearningTree(
+export async function createFullLearningTree(
   topic: string,
   summary: string | null,
   treeJson: LearningTreeResponse,
   userId: string = DEFAULT_USER_ID,
   options?: FullTreeOptions,
-): string {
+): Promise<string> {
   const db = getDb();
   const now = new Date().toISOString();
   const reuseConcepts = options?.reuseConcepts ?? true;
   const requestId = options?.requestId;
   const transactionStartedAt = Date.now();
-  return db.transaction((tx) => {
+  return db.transaction(async (tx) => {
     /** (1) 트리 메타 + JSON 스냅샷 */
     const treeInsertStartedAt = Date.now();
-    const tr = tx
+    const tr = await tx
       .insert(learningTrees)
       .values({
         userId,
@@ -233,8 +230,7 @@ export function createFullLearningTree(
         createdAt: now,
         updatedAt: now,
       })
-      .returning({ id: learningTrees.id })
-      .all();
+      .returning({ id: learningTrees.id });
     const treeId = tr[0]?.id;
     if (!treeId) throw new Error("learning_trees insert failed");
     if (requestId) {
@@ -250,7 +246,7 @@ export function createFullLearningTree(
     const nodeKeyToDbId = new Map<string, string>();
     const nodeIds: string[] = [];
     for (const n of treeJson.nodes) {
-      const nr = tx
+      const nr = await tx
         .insert(learningNodes)
         .values({
           treeId,
@@ -264,8 +260,7 @@ export function createFullLearningTree(
           createdAt: now,
           updatedAt: now,
         })
-        .returning({ id: learningNodes.id })
-        .all();
+        .returning({ id: learningNodes.id });
       const nid = nr[0]?.id;
       if (!nid) throw new Error("learning_nodes insert failed");
       nodeKeyToDbId.set(n.id, nid);
@@ -282,7 +277,7 @@ export function createFullLearningTree(
     const progressInsertStartedAt = Date.now();
     if (nodeIds.length > 0) {
       /** 트리를 처음 본 사용자의 각 노드 이해 상태 — 기본 unknown */
-      tx.insert(userNodeProgress)
+      await tx.insert(userNodeProgress)
         .values(
           nodeIds.map((nodeId) => ({
             userId,
@@ -291,8 +286,7 @@ export function createFullLearningTree(
             status: "unknown" as const,
             updatedAt: now,
           })),
-        )
-        .run();
+        );
     }
     if (requestId) {
       logLearningPersistence("progress_insert_complete", {
@@ -306,7 +300,7 @@ export function createFullLearningTree(
     /**
      * 같은 트랜잭션 `tx`를 넘겨야 트리/노드와 Concept 데이터가 함께 커밋/롤백됨
      */
-    persistPhase2Concepts(tx, {
+    await persistPhase2Concepts(tx, {
       treeId,
       tree: treeJson,
       nodeKeyToDbId,
@@ -332,16 +326,16 @@ export function createFullLearningTree(
   });
 }
 
-export function createLearningNodes(
+export async function createLearningNodes(
   treeId: string,
   nodes: LearningTreeNode[],
-): Array<{ id: string; nodeKey: string }> {
+): Promise<Array<{ id: string; nodeKey: string }>> {
   const db = getDb();
   const now = new Date().toISOString();
-  return db.transaction((tx) => {
+  return db.transaction(async (tx) => {
     const out: Array<{ id: string; nodeKey: string }> = [];
     for (const n of nodes) {
-      const rows = tx
+      const rows = await tx
         .insert(learningNodes)
         .values({
           treeId,
@@ -358,8 +352,7 @@ export function createLearningNodes(
         .returning({
           id: learningNodes.id,
           nodeKey: learningNodes.nodeKey,
-        })
-        .all();
+        });
       const row = rows[0];
       if (!row) {
         throw new Error("learning_nodes insert failed");
@@ -370,15 +363,15 @@ export function createLearningNodes(
   });
 }
 
-export function initializeNodeProgress(
+export async function initializeNodeProgress(
   userId: string,
   treeId: string,
   nodeIds: string[],
-): void {
+): Promise<void> {
   if (nodeIds.length === 0) return;
   const db = getDb();
   const now = new Date().toISOString();
-  db.insert(userNodeProgress)
+  await db.insert(userNodeProgress)
     .values(
       nodeIds.map((nodeId) => ({
         userId,
@@ -387,36 +380,33 @@ export function initializeNodeProgress(
         status: "unknown" as const,
         updatedAt: now,
       })),
-    )
-    .run();
+    );
 }
 
 /**
  * 단일 트리 id로 화면/API에 필요한 데이터를 모읍니다.
  * 존재하지 않거나 다른 사용자 소유면 `null`.
  */
-export function getLearningTree(
+export async function getLearningTree(
   treeId: string,
   userId: string = DEFAULT_USER_ID,
-): LearningTreeBundle | null {
+): Promise<LearningTreeBundle | null> {
   const db = getDb();
-  const treeRows = db
+  const treeRows = await db
     .select()
     .from(learningTrees)
     .where(
       and(eq(learningTrees.id, treeId), eq(learningTrees.userId, userId)),
-    )
-    .all();
+    );
   const treeRow = treeRows[0];
   if (!treeRow) return null;
 
-  const nodeRows = db
+  const nodeRows = await db
     .select()
     .from(learningNodes)
-    .where(eq(learningNodes.treeId, treeId))
-    .all();
+    .where(eq(learningNodes.treeId, treeId));
 
-  const progress = getProgressByTree(userId, treeId);
+  const progress = await getProgressByTree(userId, treeId);
   const mapped = nodeRows.map(mapNodeRow);
   const cids = mapped
     .map((n) => n.conceptId)
@@ -426,17 +416,16 @@ export function getLearningTree(
     tree: mapTreeRow(treeRow),
     nodes: mapped,
     progress,
-    conceptTreeCounts: getConceptTreeUsageCounts(cids),
+    conceptTreeCounts: await getConceptTreeUsageCounts(cids),
   };
 }
 
-export function getNodeById(nodeId: string): LearningNodeRow | null {
+export async function getNodeById(nodeId: string): Promise<LearningNodeRow | null> {
   const db = getDb();
-  const rows = db
+  const rows = await db
     .select()
     .from(learningNodes)
-    .where(eq(learningNodes.id, nodeId))
-    .all();
+    .where(eq(learningNodes.id, nodeId));
   const row = rows[0];
   if (!row) return null;
   return mapNodeRow(row);
@@ -447,16 +436,16 @@ export function getNodeById(nodeId: string): LearningNodeRow | null {
  * 점진적 트리 생성에서 사용자가 노드를 클릭하면 지연 생성된
  * 상세 정보를 저장한다.
  */
-export function updateNodeDetail(
+export async function updateNodeDetail(
   treeId: string,
   nodeId: string,
   detail: {
     description: string;
     difficulty: number;
   },
-): void {
+): Promise<void> {
   const db = getDb();
-  db.update(learningNodes)
+  await db.update(learningNodes)
     .set({
       description: detail.description,
       difficulty: detail.difficulty,
@@ -467,33 +456,31 @@ export function updateNodeDetail(
         eq(learningNodes.treeId, treeId),
         eq(learningNodes.id, nodeId),
       ),
-    )
-    .run();
+    );
 }
 
-export function saveNodeDetail(
+export async function saveNodeDetail(
   nodeId: string,
   detailJson: NodeDetailResponse,
-): boolean {
+): Promise<boolean> {
   const db = getDb();
   const now = new Date().toISOString();
-  const result = db
+  const updated = await db
     .update(learningNodes)
     .set({ detailJson, updatedAt: now })
     .where(eq(learningNodes.id, nodeId))
-    .run();
-  if (result.changes === 0) return false;
+    .returning({ id: learningNodes.id });
+  if (updated.length === 0) return false;
 
-  const nodeRow = db
+  const nodeRow = (await db
     .select({ conceptId: learningNodes.conceptId })
     .from(learningNodes)
-    .where(eq(learningNodes.id, nodeId))
-    .all()[0];
+    .where(eq(learningNodes.id, nodeId)))[0];
   const cid = nodeRow?.conceptId;
   if (cid && detailJson.easy_explanation?.trim()) {
-    const concept = getConceptById(db, cid);
+    const concept = await getConceptById(db, cid);
     if (concept && !concept.explanation?.trim()) {
-      updateConceptPatch(db, cid, {
+      await updateConceptPatch(db, cid, {
         explanation: detailJson.easy_explanation.trim(),
       });
     }
@@ -501,14 +488,14 @@ export function saveNodeDetail(
   return true;
 }
 
-export function updateNodeProgress(
+export async function updateNodeProgress(
   userId: string,
   nodeId: string,
   status: ProgressStatus,
-): boolean {
+): Promise<boolean> {
   const db = getDb();
   const now = new Date().toISOString();
-  const result = db
+  const rows = await db
     .update(userNodeProgress)
     .set({ status, updatedAt: now })
     .where(
@@ -517,18 +504,18 @@ export function updateNodeProgress(
         eq(userNodeProgress.nodeId, nodeId),
       ),
     )
-    .run();
-  return result.changes > 0;
+    .returning({ id: userNodeProgress.id });
+  return rows.length > 0;
 }
 
-export function upsertUserConceptProgress(
+export async function upsertUserConceptProgress(
   userId: string,
   conceptId: string,
   status: ProgressStatus,
-): void {
+): Promise<void> {
   const db = getDb();
   const now = new Date().toISOString();
-  db.insert(userConceptProgress)
+  await db.insert(userConceptProgress)
     .values({
       userId,
       conceptId,
@@ -538,32 +525,30 @@ export function upsertUserConceptProgress(
     .onConflictDoUpdate({
       target: [userConceptProgress.userId, userConceptProgress.conceptId],
       set: { status, updatedAt: now },
-    })
-    .run();
+    });
 }
 
-export function getConceptProgressMapForUser(
+export async function getConceptProgressMapForUser(
   userId: string,
-): Map<string, ProgressStatus> {
+): Promise<Map<string, ProgressStatus>> {
   const db = getDb();
-  const rows = db
+  const rows = await db
     .select()
     .from(userConceptProgress)
-    .where(eq(userConceptProgress.userId, userId))
-    .all();
+    .where(eq(userConceptProgress.userId, userId));
   return new Map(rows.map((r) => [r.conceptId, r.status as ProgressStatus]));
 }
 
 /** 진행 행이 없으면 INSERT, 있으면 UPDATE (PATCH API용) */
-export function upsertNodeProgress(
+export async function upsertNodeProgress(
   userId: string,
   treeId: string,
   nodeId: string,
   status: ProgressStatus,
-): void {
+): Promise<void> {
   const db = getDb();
   const now = new Date().toISOString();
-  db.insert(userNodeProgress)
+  await db.insert(userNodeProgress)
     .values({
       userId,
       treeId,
@@ -574,16 +559,15 @@ export function upsertNodeProgress(
     .onConflictDoUpdate({
       target: [userNodeProgress.userId, userNodeProgress.nodeId],
       set: { status, updatedAt: now, treeId },
-    })
-    .run();
+    });
 }
 
-export function getProgressByTree(
+export async function getProgressByTree(
   userId: string,
   treeId: string,
-): ApiProgressEntry[] {
+): Promise<ApiProgressEntry[]> {
   const db = getDb();
-  const rows = db
+  const rows = await db
     .select({
       node_id: userNodeProgress.nodeId,
       status: userNodeProgress.status,
@@ -594,8 +578,7 @@ export function getProgressByTree(
         eq(userNodeProgress.userId, userId),
         eq(userNodeProgress.treeId, treeId),
       ),
-    )
-    .all();
+    );
   return rows.map((r) => ({
     node_id: r.node_id,
     status: r.status as ProgressStatus,

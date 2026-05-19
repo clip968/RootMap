@@ -148,13 +148,13 @@ export function getEnvLlmProviderStatus(): LlmProviderStatus {
   };
 }
 
-export function getLlmProviderStatus(): LlmProviderStatus {
-  const row = getActiveLlmProviderSetting();
+export async function getLlmProviderStatus(): Promise<LlmProviderStatus> {
+  const row = await getActiveLlmProviderSetting();
   return row ? statusFromRow(row) : getEnvLlmProviderStatus();
 }
 
-export function resolveLlmProviderConfig(): ResolvedLlmProviderConfig {
-  const row = getActiveLlmProviderSetting();
+export async function resolveLlmProviderConfig(): Promise<ResolvedLlmProviderConfig> {
+  const row = await getActiveLlmProviderSetting();
   if (row) {
     return {
       source: "database",
@@ -197,4 +197,3 @@ export function buildLlmProviderHeaders(
   }
   return headers;
 }
-

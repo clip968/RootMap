@@ -13,11 +13,11 @@ type Ctx = { params: Promise<{ conceptId: string }> };
 export async function GET(_req: Request, ctx: Ctx) {
   const { conceptId } = await ctx.params;
   const db = getDb();
-  const c = getConceptById(db, conceptId);
+  const c = await getConceptById(db, conceptId);
   if (!c) {
     return jsonError("NOT_FOUND", "개념을 찾을 수 없습니다.", 404);
   }
-  const trees = listTreesUsingConcept(db, conceptId).map((t) => ({
+  const trees = (await listTreesUsingConcept(db, conceptId)).map((t) => ({
     tree_id: t.treeId,
     topic: t.topic,
     role_in_tree: t.roleInTree,

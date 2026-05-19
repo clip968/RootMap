@@ -1,14 +1,16 @@
 import {
+  boolean,
   index,
   integer,
+  jsonb,
+  pgTable,
   real,
-  sqliteTable,
   text,
   uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+} from "drizzle-orm/pg-core";
 import type { LearningTreeResponse, NodeDetailResponse } from "@/types/learning";
 
-export const learningTrees = sqliteTable("learning_trees", {
+export const learningTrees = pgTable("learning_trees", {
   id: text("id")
     .primaryKey()
     .notNull()
@@ -16,7 +18,7 @@ export const learningTrees = sqliteTable("learning_trees", {
   userId: text("user_id").notNull(),
   topic: text("topic").notNull(),
   summary: text("summary"),
-  treeJson: text("tree_json", { mode: "json" })
+  treeJson: jsonb("tree_json")
     .notNull()
     .$type<LearningTreeResponse>(),
   createdAt: text("created_at")
@@ -28,7 +30,7 @@ export const learningTrees = sqliteTable("learning_trees", {
 });
 
 /** Phase 3 LLM provider 설정: API key 원문은 저장하지 않고 AES-GCM 결과만 보관한다. */
-export const llmProviderSettings = sqliteTable(
+export const llmProviderSettings = pgTable(
   "llm_provider_settings",
   {
     id: text("id")
@@ -44,7 +46,7 @@ export const llmProviderSettings = sqliteTable(
     apiKeyIv: text("api_key_iv").notNull(),
     apiKeyTag: text("api_key_tag").notNull(),
     apiKeyHint: text("api_key_hint").notNull(),
-    isActive: integer("is_active", { mode: "boolean" })
+    isActive: boolean("is_active")
       .notNull()
       .default(true),
     createdAt: text("created_at")
@@ -61,7 +63,7 @@ export const llmProviderSettings = sqliteTable(
 );
 
 /** Phase 2 Concept Node Store */
-export const concepts = sqliteTable(
+export const concepts = pgTable(
   "concepts",
   {
     id: text("id")
@@ -71,7 +73,7 @@ export const concepts = sqliteTable(
     slug: text("slug").notNull().unique(),
     title: text("title").notNull(),
     normalizedTitle: text("normalized_title").notNull(),
-    aliases: text("aliases", { mode: "json" })
+    aliases: jsonb("aliases")
       .notNull()
       .$type<string[]>()
       .$defaultFn(() => []),
@@ -79,15 +81,15 @@ export const concepts = sqliteTable(
     shortDescription: text("short_description"),
     explanation: text("explanation"),
     difficulty: integer("difficulty"),
-    examples: text("examples", { mode: "json" })
+    examples: jsonb("examples")
       .notNull()
       .$type<string[]>()
       .$defaultFn(() => []),
-    commonMisconceptions: text("common_misconceptions", { mode: "json" })
+    commonMisconceptions: jsonb("common_misconceptions")
       .notNull()
       .$type<string[]>()
       .$defaultFn(() => []),
-    metadata: text("metadata", { mode: "json" })
+    metadata: jsonb("metadata")
       .notNull()
       .$type<Record<string, unknown>>()
       .$defaultFn(() => ({})),
@@ -101,7 +103,7 @@ export const concepts = sqliteTable(
   (t) => [index("concepts_normalized_title_idx").on(t.normalizedTitle)],
 );
 
-export const learningNodes = sqliteTable(
+export const learningNodes = pgTable(
   "learning_nodes",
   {
     id: text("id")
@@ -116,16 +118,16 @@ export const learningNodes = sqliteTable(
     type: text("type").notNull(),
     description: text("description"),
     difficulty: integer("difficulty"),
-    prerequisites: text("prerequisites", { mode: "json" })
+    prerequisites: jsonb("prerequisites")
       .notNull()
       .$type<string[]>(),
-    children: text("children", { mode: "json" }).notNull().$type<string[]>(),
-    detailJson: text("detail_json", { mode: "json" }).$type<NodeDetailResponse>(),
+    children: jsonb("children").notNull().$type<string[]>(),
+    detailJson: jsonb("detail_json").$type<NodeDetailResponse>(),
     conceptId: text("concept_id").references(() => concepts.id, {
       onDelete: "set null",
     }),
     /** 생성 시 기존 Concept 재사용 여부(null = Phase 1 행) */
-    isReusedConcept: integer("is_reused_concept", { mode: "boolean" }),
+    isReusedConcept: boolean("is_reused_concept"),
     createdAt: text("created_at")
       .notNull()
       .$defaultFn(() => new Date().toISOString()),
@@ -134,11 +136,12 @@ export const learningNodes = sqliteTable(
       .$defaultFn(() => new Date().toISOString()),
   },
   (t) => [
+    index("learning_nodes_concept_id_idx").on(t.conceptId),
     uniqueIndex("learning_nodes_tree_id_node_key_uidx").on(t.treeId, t.nodeKey),
   ],
 );
 
-export const userNodeProgress = sqliteTable(
+export const userNodeProgress = pgTable(
   "user_node_progress",
   {
     id: text("id")
@@ -158,6 +161,8 @@ export const userNodeProgress = sqliteTable(
       .$defaultFn(() => new Date().toISOString()),
   },
   (t) => [
+    index("user_node_progress_node_id_idx").on(t.nodeId),
+    index("user_node_progress_tree_id_idx").on(t.treeId),
     uniqueIndex("user_node_progress_user_id_node_id_uidx").on(
       t.userId,
       t.nodeId,
@@ -165,7 +170,7 @@ export const userNodeProgress = sqliteTable(
   ],
 );
 
-export const conceptEdges = sqliteTable(
+export const conceptEdges = pgTable(
   "concept_edges",
   {
     id: text("id")
@@ -189,6 +194,7 @@ export const conceptEdges = sqliteTable(
       .$defaultFn(() => new Date().toISOString()),
   },
   (t) => [
+    index("concept_edges_to_concept_id_idx").on(t.toConceptId),
     uniqueIndex("concept_edges_from_to_type_uidx").on(
       t.fromConceptId,
       t.toConceptId,
@@ -197,7 +203,7 @@ export const conceptEdges = sqliteTable(
   ],
 );
 
-export const learningTreeConcepts = sqliteTable(
+export const learningTreeConcepts = pgTable(
   "learning_tree_concepts",
   {
     id: text("id")
@@ -219,6 +225,8 @@ export const learningTreeConcepts = sqliteTable(
       .$defaultFn(() => new Date().toISOString()),
   },
   (t) => [
+    index("learning_tree_concepts_concept_id_idx").on(t.conceptId),
+    index("learning_tree_concepts_learning_node_id_idx").on(t.learningNodeId),
     uniqueIndex("learning_tree_concepts_tree_node_concept_uidx").on(
       t.treeId,
       t.learningNodeId,
@@ -227,7 +235,7 @@ export const learningTreeConcepts = sqliteTable(
   ],
 );
 
-export const conceptMergeCandidates = sqliteTable(
+export const conceptMergeCandidates = pgTable(
   "concept_merge_candidates",
   {
     id: text("id")
@@ -251,6 +259,7 @@ export const conceptMergeCandidates = sqliteTable(
       .$defaultFn(() => new Date().toISOString()),
   },
   (t) => [
+    index("concept_merge_candidates_target_concept_id_idx").on(t.targetConceptId),
     uniqueIndex("concept_merge_candidates_source_target_uidx").on(
       t.sourceConceptId,
       t.targetConceptId,
@@ -259,7 +268,7 @@ export const conceptMergeCandidates = sqliteTable(
 );
 
 /** Phase 3 Document Store */
-export const documents = sqliteTable("documents", {
+export const documents = pgTable("documents", {
   id: text("id")
     .primaryKey()
     .notNull()
@@ -273,7 +282,7 @@ export const documents = sqliteTable("documents", {
   extractedTextLength: integer("extracted_text_length"),
   processingStatus: text("processing_status").notNull().default("uploaded"),
   processingError: text("processing_error"),
-  metadata: text("metadata", { mode: "json" })
+  metadata: jsonb("metadata")
     .notNull()
     .$type<Record<string, unknown>>()
     .$defaultFn(() => ({})),
@@ -285,7 +294,7 @@ export const documents = sqliteTable("documents", {
     .$defaultFn(() => new Date().toISOString()),
 });
 
-export const documentPages = sqliteTable(
+export const documentPages = pgTable(
   "document_pages",
   {
     id: text("id")
@@ -309,7 +318,7 @@ export const documentPages = sqliteTable(
   ],
 );
 
-export const documentChunks = sqliteTable(
+export const documentChunks = pgTable(
   "document_chunks",
   {
     id: text("id")
@@ -325,7 +334,7 @@ export const documentChunks = sqliteTable(
     sectionTitle: text("section_title"),
     text: text("text").notNull(),
     tokenCount: integer("token_count"),
-    metadata: text("metadata", { mode: "json" })
+    metadata: jsonb("metadata")
       .notNull()
       .$type<Record<string, unknown>>()
       .$defaultFn(() => ({})),
@@ -341,7 +350,7 @@ export const documentChunks = sqliteTable(
   ],
 );
 
-export const documentConcepts = sqliteTable(
+export const documentConcepts = pgTable(
   "document_concepts",
   {
     id: text("id")
@@ -359,7 +368,7 @@ export const documentConcepts = sqliteTable(
     importance: integer("importance"),
     difficulty: integer("difficulty"),
     sourceType: text("source_type").notNull(),
-    evidence: text("evidence", { mode: "json" })
+    evidence: jsonb("evidence")
       .notNull()
       .$type<
         Array<{
@@ -380,6 +389,7 @@ export const documentConcepts = sqliteTable(
       .$defaultFn(() => new Date().toISOString()),
   },
   (t) => [
+    index("document_concepts_concept_id_idx").on(t.conceptId),
     uniqueIndex("document_concepts_document_concept_type_uidx").on(
       t.documentId,
       t.conceptId,
@@ -388,7 +398,7 @@ export const documentConcepts = sqliteTable(
   ],
 );
 
-export const documentLearningTrees = sqliteTable(
+export const documentLearningTrees = pgTable(
   "document_learning_trees",
   {
     id: text("id")
@@ -406,6 +416,7 @@ export const documentLearningTrees = sqliteTable(
       .$defaultFn(() => new Date().toISOString()),
   },
   (t) => [
+    index("document_learning_trees_tree_id_idx").on(t.treeId),
     uniqueIndex("document_learning_trees_document_tree_uidx").on(
       t.documentId,
       t.treeId,
@@ -413,7 +424,7 @@ export const documentLearningTrees = sqliteTable(
   ],
 );
 
-export const userConceptProgress = sqliteTable(
+export const userConceptProgress = pgTable(
   "user_concept_progress",
   {
     id: text("id")
@@ -430,6 +441,7 @@ export const userConceptProgress = sqliteTable(
       .$defaultFn(() => new Date().toISOString()),
   },
   (t) => [
+    index("user_concept_progress_concept_id_idx").on(t.conceptId),
     uniqueIndex("user_concept_progress_user_concept_uidx").on(
       t.userId,
       t.conceptId,

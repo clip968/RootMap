@@ -31,28 +31,27 @@ function client(db: RootMapDbClient): RootMapDbClient {
 }
 
 /** 신규 slug: 충돌 시 짧은 접미 추가 */
-export function allocateUniqueSlug(base: string, db: RootMapDbClient): string {
+export async function allocateUniqueSlug(base: string, db: RootMapDbClient): Promise<string> {
   const d = client(db);
   const prefix = baseSlugFromNormalizedTitle(normalizeTitle(base)) || "concept";
   for (let i = 0; i < 50; i++) {
     const candidate = i === 0 ? prefix : `${prefix}-${i + 1}`;
-    const hit = d.select({ id: concepts.id }).from(concepts).where(eq(concepts.slug, candidate)).all();
+    const hit = await d.select({ id: concepts.id }).from(concepts).where(eq(concepts.slug, candidate));
     if (hit.length === 0) return candidate;
   }
   return `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
-export function findConceptByNormalizedTitle(
+export async function findConceptByNormalizedTitle(
   db: RootMapDbClient,
   normalizedTitle: string,
   domain: string | null | undefined,
-): ConceptRow | null {
+): Promise<ConceptRow | null> {
   const d = client(db);
-  const base = d
+  const base = await d
     .select()
     .from(concepts)
-    .where(eq(concepts.normalizedTitle, normalizedTitle))
-    .all();
+    .where(eq(concepts.normalizedTitle, normalizedTitle));
   if (base.length === 0) return null;
   if (domain) {
     const dom = base.filter((r) => r.domain === domain);
@@ -63,19 +62,18 @@ export function findConceptByNormalizedTitle(
   return base.sort((a, b) => a.title.localeCompare(b.title))[0]!;
 }
 
-export function findConceptByAlias(
+export async function findConceptByAlias(
   db: RootMapDbClient,
   aliasNormalized: string,
   domain: string | null | undefined,
-): ConceptRow | null {
+): Promise<ConceptRow | null> {
   const d = client(db);
-  const rows = d
+  const rows = await d
     .select()
     .from(concepts)
     .where(
-      sql`exists (select 1 from json_each(${concepts.aliases}) j where lower(trim(j.value)) = ${aliasNormalized})`,
-    )
-    .all();
+      sql`exists (select 1 from jsonb_array_elements_text(${concepts.aliases}) as j(value) where lower(trim(j.value)) = ${aliasNormalized})`,
+    );
   if (rows.length === 0) return null;
   if (domain) {
     const dom = rows.filter((r) => r.domain === domain);
@@ -85,18 +83,17 @@ export function findConceptByAlias(
 }
 
 /** 같은 domain에서 제목이 한쪽이 다른 쪽을 포함하는 보수적 유사 매칭 */
-export function findSimilarConceptInDomain(
+export async function findSimilarConceptInDomain(
   db: RootMapDbClient,
   normalizedTitle: string,
   domain: string | null | undefined,
-): ConceptRow | null {
+): Promise<ConceptRow | null> {
   if (!domain || !normalizedTitle || normalizedTitle.length < 4) return null;
   const d = client(db);
-  const rows = d
+  const rows = await d
     .select()
     .from(concepts)
-    .where(eq(concepts.domain, domain))
-    .all();
+    .where(eq(concepts.domain, domain));
   let best: ConceptRow | null = null;
   for (const r of rows) {
     const nt = r.normalizedTitle;
@@ -120,14 +117,14 @@ export type ResolveReuseResult =
  * reuse가 true일 때 기존 Concept 탐색.
  * 정확 일치·alias만 재사용. 제목 포함 일치 등 애매한 유사는 신규 생성 후 병합 후보로 처리한다.
  */
-export function resolveConceptForReuse(
+export async function resolveConceptForReuse(
   db: RootMapDbClient,
   cand: ConceptCandidate,
-): ResolveReuseResult {
+): Promise<ResolveReuseResult> {
   const nt = normalizeTitle(cand.canonical_title);
   if (!nt) return { kind: "none" };
 
-  const byTitle = findConceptByNormalizedTitle(db, nt, cand.domain);
+  const byTitle = await findConceptByNormalizedTitle(db, nt, cand.domain);
   if (byTitle) {
     return { kind: "reused", concept: byTitle };
   }
@@ -135,13 +132,13 @@ export function resolveConceptForReuse(
   for (const a of cand.aliases) {
     const an = normalizeTitle(a);
     if (!an) continue;
-    const byAlias = findConceptByAlias(db, an, cand.domain);
+    const byAlias = await findConceptByAlias(db, an, cand.domain);
     if (byAlias) {
       return { kind: "reused", concept: byAlias };
     }
   }
 
-  const similar = findSimilarConceptInDomain(db, nt, cand.domain);
+  const similar = await findSimilarConceptInDomain(db, nt, cand.domain);
   if (similar) {
     return { kind: "ambiguous_similar", similar };
   }
@@ -149,15 +146,15 @@ export function resolveConceptForReuse(
   return { kind: "none" };
 }
 
-export function insertConceptFromCandidate(
+export async function insertConceptFromCandidate(
   db: RootMapDbClient,
   cand: ConceptCandidate,
   slug: string,
-): ConceptRow {
+): Promise<ConceptRow> {
   const d = client(db);
   const ts = nowIso();
   const nt = normalizeTitle(cand.canonical_title);
-  const rows = d
+  const rows = await d
     .insert(concepts)
     .values({
       slug,
@@ -174,17 +171,16 @@ export function insertConceptFromCandidate(
       createdAt: ts,
       updatedAt: ts,
     })
-    .returning()
-    .all();
+    .returning();
   const row = rows[0];
   if (!row) throw new Error("concepts insert failed");
   return row;
 }
 
-export function addAliasesIfNew(db: RootMapDbClient, conceptId: string, next: string[]): void {
+export async function addAliasesIfNew(db: RootMapDbClient, conceptId: string, next: string[]): Promise<void> {
   if (next.length === 0) return;
   const d = client(db);
-  const cur = d.select({ aliases: concepts.aliases }).from(concepts).where(eq(concepts.id, conceptId)).all();
+  const cur = await d.select({ aliases: concepts.aliases }).from(concepts).where(eq(concepts.id, conceptId));
   const row = cur[0];
   if (!row) return;
   const set = new Set(
@@ -198,71 +194,62 @@ export function addAliasesIfNew(db: RootMapDbClient, conceptId: string, next: st
     merged.push(a);
   }
   if (merged.length === row.aliases.length) return;
-  d.update(concepts)
+  await d.update(concepts)
     .set({ aliases: merged, updatedAt: nowIso() })
-    .where(eq(concepts.id, conceptId))
-    .run();
+    .where(eq(concepts.id, conceptId));
 }
 
-export function tryRecordMergeCandidate(
+export async function tryRecordMergeCandidate(
   db: RootMapDbClient,
   sourceId: string,
   targetId: string,
   score: number,
   reason: string,
-): void {
+): Promise<void> {
   if (sourceId === targetId) return;
   const d = client(db);
-  try {
-    d.insert(conceptMergeCandidates)
-      .values({
-        sourceConceptId: sourceId,
-        targetConceptId: targetId,
-        similarityScore: score,
-        reason,
-        status: "pending",
-        createdAt: nowIso(),
-        updatedAt: nowIso(),
-      })
-      .run();
-  } catch {
-    /* UNIQUE 등은 무시 */
-  }
+  await d.insert(conceptMergeCandidates)
+    .values({
+      sourceConceptId: sourceId,
+      targetConceptId: targetId,
+      similarityScore: score,
+      reason,
+      status: "pending",
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    })
+    .onConflictDoNothing();
 }
 
-export function upsertConceptEdge(
+export async function upsertConceptEdge(
   db: RootMapDbClient,
   fromId: string,
   toId: string,
   relationType: string,
   reason?: string | null,
-): void {
+): Promise<void> {
   if (fromId === toId) return;
   const d = client(db);
   const ts = nowIso();
-  try {
-    d.insert(conceptEdges)
-      .values({
-        fromConceptId: fromId,
-        toConceptId: toId,
-        relationType,
-        reason: reason ?? null,
-        strength: 1,
-        createdAt: ts,
-        updatedAt: ts,
-      })
-      .run();
-  } catch {
-    /* UNIQUE */
-  }
+  await d.insert(conceptEdges)
+    .values({
+      fromConceptId: fromId,
+      toConceptId: toId,
+      relationType,
+      reason: reason ?? null,
+      strength: 1,
+      createdAt: ts,
+      updatedAt: ts,
+    })
+    .onConflictDoNothing();
 }
 
 /** 트리 생성 프롬프트에 넣을 최근·검색 Concept 스니펫 */
-export function searchConceptsForPromptContext(
+export async function searchConceptsForPromptContext(
   db: RootMapDbClient,
   topic: string,
   limit: number,
-): ConceptRow[] {
+): Promise<ConceptRow[]> {
   const d = client(db);
   const tokens = topic
     .toLowerCase()
@@ -270,23 +257,21 @@ export function searchConceptsForPromptContext(
     .map((t) => t.trim())
     .filter((t) => t.length >= 2)
     .slice(0, 6);
-  const recent = d
+  const recent = await d
     .select()
     .from(concepts)
     .orderBy(desc(concepts.updatedAt))
-    .limit(Math.min(limit, 40))
-    .all();
+    .limit(Math.min(limit, 40));
 
   if (tokens.length === 0) return recent.slice(0, limit);
 
   const patterns = tokens.map((t) => like(concepts.normalizedTitle, `%${t}%`));
-  const match = d
+  const match = await d
     .select()
     .from(concepts)
     .where(or(...patterns))
     .orderBy(desc(concepts.updatedAt))
-    .limit(limit)
-    .all();
+    .limit(limit);
 
   const seen = new Set<string>();
   const out: ConceptRow[] = [];
@@ -311,16 +296,15 @@ export function formatConceptsForPrompt(rows: ConceptRow[]): string {
     .join("\n");
 }
 
-export function getConceptById(db: RootMapDbClient, id: string): ConceptRow | null {
-  const rows = client(db)
+export async function getConceptById(db: RootMapDbClient, id: string): Promise<ConceptRow | null> {
+  const rows = await client(db)
     .select()
     .from(concepts)
-    .where(eq(concepts.id, id))
-    .all();
+    .where(eq(concepts.id, id));
   return rows[0] ?? null;
 }
 
-export function updateConceptPatch(
+export async function updateConceptPatch(
   db: RootMapDbClient,
   id: string,
   patch: {
@@ -329,7 +313,7 @@ export function updateConceptPatch(
     difficulty?: number | null;
     explanation?: string | null;
   },
-): boolean {
+): Promise<boolean> {
   const d = client(db);
   const ts = nowIso();
   const updates: Partial<typeof concepts.$inferInsert> = { updatedAt: ts };
@@ -338,14 +322,14 @@ export function updateConceptPatch(
     updates.shortDescription = patch.shortDescription ?? null;
   if (patch.difficulty !== undefined) updates.difficulty = patch.difficulty ?? null;
   if (patch.explanation !== undefined) updates.explanation = patch.explanation ?? null;
-  const r = d.update(concepts).set(updates).where(eq(concepts.id, id)).run();
-  return r.changes > 0;
+  const rows = await d.update(concepts).set(updates).where(eq(concepts.id, id)).returning({ id: concepts.id });
+  return rows.length > 0;
 }
 
-export function listConcepts(
+export async function listConcepts(
   db: RootMapDbClient,
   q: { search?: string; domain?: string; limit: number },
-): ConceptRow[] {
+): Promise<ConceptRow[]> {
   const d = client(db);
   const conds = [];
   if (q.search?.trim()) {
@@ -356,7 +340,7 @@ export function listConcepts(
       or(
         like(concepts.normalizedTitle, s),
         like(concepts.title, `%${raw}%`),
-        sql`exists (select 1 from json_each(${concepts.aliases}) j where j.value like ${"%" + raw.replace(/%/g, "") + "%"})`,
+        sql`exists (select 1 from jsonb_array_elements_text(${concepts.aliases}) as j(value) where j.value like ${"%" + raw.replace(/%/g, "") + "%"})`,
       ),
     );
   }
@@ -364,61 +348,56 @@ export function listConcepts(
     conds.push(eq(concepts.domain, q.domain.trim()));
   }
   if (conds.length === 0) {
-    return d
+    return await d
       .select()
       .from(concepts)
       .orderBy(desc(concepts.updatedAt))
-      .limit(q.limit)
-      .all();
+      .limit(q.limit);
   }
   const w = conds.length === 1 ? conds[0]! : and(...conds);
-  return d
+  return await d
     .select()
     .from(concepts)
     .where(w)
     .orderBy(desc(concepts.updatedAt))
-    .limit(q.limit)
-    .all();
+    .limit(q.limit);
 }
 
 
-export function listConceptDomains(db: RootMapDbClient): string[] {
-  const rows = client(db)
+export async function listConceptDomains(db: RootMapDbClient): Promise<string[]> {
+  const rows = await client(db)
     .select({ domain: concepts.domain })
     .from(concepts)
     .where(sql`${concepts.domain} is not null and trim(${concepts.domain}) <> ''`)
     .groupBy(concepts.domain)
-    .orderBy(concepts.domain)
-    .all();
+    .orderBy(concepts.domain);
   return rows
     .map((r) => r.domain)
     .filter((domain): domain is string => typeof domain === "string" && domain.length > 0);
 }
 
-export function listConceptMergeCandidates(
+export async function listConceptMergeCandidates(
   db: RootMapDbClient,
   q: { status?: string; limit: number },
-): ConceptMergeCandidateListItem[] {
+): Promise<ConceptMergeCandidateListItem[]> {
   const d = client(db);
   const limit = Math.min(Math.max(q.limit, 1), 100);
-  const rows = q.status?.trim()
+  const rows = await (q.status?.trim()
     ? d
         .select()
         .from(conceptMergeCandidates)
         .where(eq(conceptMergeCandidates.status, q.status.trim()))
         .orderBy(desc(conceptMergeCandidates.updatedAt))
         .limit(limit)
-        .all()
     : d
         .select()
         .from(conceptMergeCandidates)
         .orderBy(desc(conceptMergeCandidates.updatedAt))
-        .limit(limit)
-        .all();
+        .limit(limit));
 
-  return rows.map((r) => {
-    const source = getConceptById(db, r.sourceConceptId);
-    const target = getConceptById(db, r.targetConceptId);
+  return Promise.all(rows.map(async (r) => {
+    const source = await getConceptById(db, r.sourceConceptId);
+    const target = await getConceptById(db, r.targetConceptId);
     return {
       id: r.id,
       sourceConceptId: r.sourceConceptId,
@@ -445,14 +424,14 @@ export function listConceptMergeCandidates(
           }
         : null,
     };
-  });
+  }));
 }
 
-export function listEdgesForConcept(
+export async function listEdgesForConcept(
   db: RootMapDbClient,
   conceptId: string,
-): (typeof conceptEdges.$inferSelect)[] {
-  return client(db)
+): Promise<(typeof conceptEdges.$inferSelect)[]> {
+  return await client(db)
     .select()
     .from(conceptEdges)
     .where(
@@ -460,15 +439,14 @@ export function listEdgesForConcept(
         eq(conceptEdges.fromConceptId, conceptId),
         eq(conceptEdges.toConceptId, conceptId),
       ),
-    )
-    .all();
+    );
 }
 
-export function listTreesUsingConcept(
+export async function listTreesUsingConcept(
   db: RootMapDbClient,
   conceptId: string,
-): { treeId: string; topic: string; roleInTree: string }[] {
-  return client(db)
+): Promise<{ treeId: string; topic: string; roleInTree: string }[]> {
+  return await client(db)
     .select({
       treeId: learningTrees.id,
       topic: learningTrees.topic,
@@ -480,5 +458,5 @@ export function listTreesUsingConcept(
       eq(learningTreeConcepts.treeId, learningTrees.id),
     )
     .where(eq(learningTreeConcepts.conceptId, conceptId))
-    .all();
+    ;
 }

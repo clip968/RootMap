@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 export async function GET() {
-  const trees = listLearningTreeHistory(DEFAULT_USER_ID).map((tree) => ({
+  const trees = (await listLearningTreeHistory(DEFAULT_USER_ID)).map((tree) => ({
     tree_id: tree.id,
     topic: tree.topic,
     summary: tree.summary ?? "",

@@ -15,13 +15,13 @@ export async function POST(
   { params }: { params: Promise<{ documentId: string }> },
 ) {
   const { documentId } = await params;
-  const document = getDocumentForUser(documentId, DEFAULT_USER_ID);
+  const document = await getDocumentForUser(documentId, DEFAULT_USER_ID);
   if (!document) {
     return jsonError("NOT_FOUND", "문서를 찾을 수 없습니다.", 404);
   }
 
   if (document.processingStatus === "tree_generated") {
-    const bundle = getDocumentLearningTreeForUser(documentId, DEFAULT_USER_ID);
+    const bundle = await getDocumentLearningTreeForUser(documentId, DEFAULT_USER_ID);
     return NextResponse.json({
       document_id: documentId,
       processing_status: document.processingStatus,

@@ -22,11 +22,11 @@ type Ctx = { params: Promise<{ conceptId: string }> };
 export async function GET(_req: Request, ctx: Ctx) {
   const { conceptId } = await ctx.params;
   const db = getDb();
-  const c = getConceptById(db, conceptId);
+  const c = await getConceptById(db, conceptId);
   if (!c) {
     return jsonError("NOT_FOUND", "개념을 찾을 수 없습니다.", 404);
   }
-  const edges = listEdgesForConcept(db, conceptId);
+  const edges = await listEdgesForConcept(db, conceptId);
   const prerequisites: Array<{
     relation_type: string;
     target_concept_id: string;
@@ -39,7 +39,7 @@ export async function GET(_req: Request, ctx: Ctx) {
   for (const e of edges) {
     const isOut = e.fromConceptId === conceptId;
     const targetId = isOut ? e.toConceptId : e.fromConceptId;
-    const target = getConceptById(db, targetId);
+    const target = await getConceptById(db, targetId);
     if (!target) continue;
     const row = {
       relation_type: e.relationType,
@@ -91,7 +91,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 
   const db = getDb();
-  const ok = updateConceptPatch(db, conceptId, {
+  const ok = await updateConceptPatch(db, conceptId, {
     aliases: parsed.data.aliases,
     shortDescription: parsed.data.short_description,
     difficulty: parsed.data.difficulty,

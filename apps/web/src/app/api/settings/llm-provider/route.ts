@@ -31,12 +31,12 @@ function safeMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback;
 }
 
-function statusBody() {
+async function statusBody() {
   return getLlmProviderStatus();
 }
 
 export async function GET() {
-  return NextResponse.json(statusBody());
+  return NextResponse.json(await statusBody());
 }
 
 export async function PUT(req: Request) {
@@ -60,7 +60,7 @@ export async function PUT(req: Request) {
     typeof body.apiKey === "string" ? body.apiKey.trim()
     : typeof body.api_key === "string" ? body.api_key.trim()
     : "";
-  const existing = getActiveLlmProviderSetting();
+  const existing = await getActiveLlmProviderSetting();
   if (!apiKey && !existing?.apiKeyEncrypted) {
     return jsonError("INVALID_REQUEST", "API key를 입력해 주세요.", 400);
   }
@@ -86,7 +86,7 @@ export async function PUT(req: Request) {
       };
 
   try {
-    const row = saveActiveLlmProviderSetting({
+    const row = await saveActiveLlmProviderSetting({
       providerType,
       name: providerDisplayName(providerType),
       baseUrl,
@@ -117,7 +117,6 @@ export async function PUT(req: Request) {
 }
 
 export async function DELETE() {
-  deleteActiveLlmProviderSetting();
+  await deleteActiveLlmProviderSetting();
   return NextResponse.json(getEnvLlmProviderStatus());
 }
-

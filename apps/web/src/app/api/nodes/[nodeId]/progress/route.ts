@@ -40,12 +40,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
     );
   }
 
-  const node = getNodeById(nodeId);
+  const node = await getNodeById(nodeId);
   if (!node) {
     return jsonError("NOT_FOUND", "노드를 찾을 수 없습니다.", 404);
   }
 
-  const bundle = getLearningTree(node.treeId, DEFAULT_USER_ID);
+  const bundle = await getLearningTree(node.treeId, DEFAULT_USER_ID);
   if (!bundle) {
     return jsonError(
       "FORBIDDEN",
@@ -54,14 +54,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
     );
   }
 
-  upsertNodeProgress(
+  await upsertNodeProgress(
     DEFAULT_USER_ID,
     node.treeId,
     nodeId,
     parsed.data.status,
   );
   if (node.conceptId) {
-    upsertUserConceptProgress(
+    await upsertUserConceptProgress(
       DEFAULT_USER_ID,
       node.conceptId,
       parsed.data.status,
