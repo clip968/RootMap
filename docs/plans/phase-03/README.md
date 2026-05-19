@@ -41,6 +41,9 @@ RootMap을 단순 주제 입력 기반 서비스에서 문서 기반 학습 서�
 - [x] 09. [09-document-tree-and-node-detail-ui.md](./09-document-tree-and-node-detail-ui.md) - 문서 기반 트리 표시, source type/evidence/snippet, 노드 상세 확장
 - [x] 10. [10-document-recommendations-quality-and-tests.md](./10-document-recommendations-quality-and-tests.md) - 문서 기반 추천, 오류·품질 기준, 테스트 케이스, 완료 조건 검증
 - [x] 11. [11-progressive-tree-generation.md](./11-progressive-tree-generation.md) - 점진적 트리 생성: 구조/상세 분할, 노드 상세 지연 생성, lazy detail UI
+- [ ] 12. [12-async-document-processing.md](./12-async-document-processing.md) - 비동기 문서 처리 job 전환 및 상태 polling 안정화
+- [ ] 13. [13-node-detail-generation-quality.md](./13-node-detail-generation-quality.md) - 노드 상세 생성 품질 기준과 실패 처리 보강
+- [x] 14. [14-llm-provider-settings.md](./14-llm-provider-settings.md) - LLM provider 설정 저장/조회/삭제, 암호화, 연결 테스트, 설정 UI
 
 
 ## Phase 3 범위 요약

@@ -27,6 +27,39 @@ export const learningTrees = sqliteTable("learning_trees", {
     .$defaultFn(() => new Date().toISOString()),
 });
 
+/** Phase 3 LLM provider 설정: API key 원문은 저장하지 않고 AES-GCM 결과만 보관한다. */
+export const llmProviderSettings = sqliteTable(
+  "llm_provider_settings",
+  {
+    id: text("id")
+      .primaryKey()
+      .notNull()
+      .$defaultFn(() => crypto.randomUUID()),
+    providerType: text("provider_type").notNull(),
+    name: text("name").notNull(),
+    baseUrl: text("base_url").notNull(),
+    model: text("model"),
+    jsonMode: text("json_mode").notNull().default("auto"),
+    apiKeyEncrypted: text("api_key_encrypted").notNull(),
+    apiKeyIv: text("api_key_iv").notNull(),
+    apiKeyTag: text("api_key_tag").notNull(),
+    apiKeyHint: text("api_key_hint").notNull(),
+    isActive: integer("is_active", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    createdAt: text("created_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+    updatedAt: text("updated_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (t) => [
+    index("llm_provider_settings_active_idx").on(t.isActive),
+    index("llm_provider_settings_provider_type_idx").on(t.providerType),
+  ],
+);
+
 /** Phase 2 Concept Node Store */
 export const concepts = sqliteTable(
   "concepts",

@@ -5,6 +5,7 @@
 "use client";
 
 import type { ApiTreeHistoryItem } from "@/types/learning";
+import { Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -173,6 +174,13 @@ export function AppShell({ children }: AppShellProps) {
             className="rounded-lg px-2 py-1.5 text-sm font-semibold text-zinc-800 hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-900"
           >
             RootMap
+          </Link>
+          <Link
+            href="/settings/llm-provider"
+            className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900"
+          >
+            <Settings size={15} aria-hidden="true" />
+            LLM 설정
           </Link>
         </div>
         {/* 각 페이지(`page.tsx`)가 여기로 렌더된다. */}

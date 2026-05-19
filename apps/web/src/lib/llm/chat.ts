@@ -1,4 +1,13 @@
 import { LlmTransportError } from "@/lib/llm/errors";
+import {
+  buildChatCompletionsUrl,
+  buildLlmProviderHeaders,
+  getLlmProviderMaxAttempts,
+  getLlmProviderTimeoutMs,
+  resolveLlmProviderConfig,
+  shouldSendJsonResponseFormat,
+  type ResolvedLlmProviderConfig,
+} from "@/lib/llm/provider-config";
 
 export type ChatRole = "system" | "user" | "assistant";
 
@@ -14,59 +23,52 @@ interface OpenRouterChoiceMessage {
 interface OpenRouterChatCompletionResponse {
   choices?: Array<{ message?: OpenRouterChoiceMessage }>;
   error?: { message?: string };
-}
-
-function getBaseUrl(): string {
-  const u = process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1";
-  return u.replace(/\/$/, "");
-}
-
-function jsonObjectModeEnabled(): boolean {
-  return process.env.OPENROUTER_JSON_MODE !== "false";
+  model?: string;
 }
 
 export function getOpenRouterTimeoutMs(): number {
-  const raw = process.env.OPENROUTER_TIMEOUT_MS;
-  if (!raw) return 60_000;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60_000;
+  return getLlmProviderTimeoutMs();
 }
 
 export function getOpenRouterMaxAttempts(): number {
-  const raw = process.env.OPENROUTER_MAX_ATTEMPTS;
-  if (!raw) return 3;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 3;
+  return getLlmProviderMaxAttempts();
 }
 
 /**
- * OpenRouter Chat Completions. 서버 전용(환경 변수 사용).
+ * OpenAI-compatible Chat Completions. 서버 전용(DB 또는 환경 변수의 API key 사용).
  *
- * 공식 OpenRouter API는 OpenAI Chat Completions와 유사한 요청/응답 스키마를 사용한다.
+ * provider 설정이 있으면 DB 값을 우선 사용하고, 없으면 기존 OpenRouter 환경 변수 fallback을 유지한다.
  */
-export async function createChatCompletion(messages: ChatMessage[]): Promise<{
+export async function createChatCompletion(
+  messages: ChatMessage[],
+  options: { providerConfig?: ResolvedLlmProviderConfig } = {},
+): Promise<{
   rawText: string;
   status: number;
+  model: string | null;
 }> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    throw new LlmTransportError("OPENROUTER_API_KEY가 설정되어 있지 않습니다.", 0);
+  let config: ResolvedLlmProviderConfig;
+  try {
+    config = options.providerConfig ?? resolveLlmProviderConfig();
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "LLM provider 설정을 확인해 주세요.";
+    throw new LlmTransportError(message, 0);
   }
 
-  const model = process.env.OPENROUTER_MODEL;
   const body: Record<string, unknown> = {
     messages,
     temperature: 0.4,
   };
-  if (model) {
-    body.model = model;
+  if (config.model) {
+    body.model = config.model;
   }
 
-  if (jsonObjectModeEnabled()) {
+  if (shouldSendJsonResponseFormat(config.providerType, config.jsonMode)) {
     body.response_format = { type: "json_object" };
   }
 
-  const timeoutMs = getOpenRouterTimeoutMs();
+  const timeoutMs = config.timeoutMs;
   const controller = new AbortController();
   // standalone smoke와 서버 라우트 모두에서 LLM 호출 하나가 무기한 대기하지 않도록 제한한다.
   const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
@@ -75,19 +77,10 @@ export async function createChatCompletion(messages: ChatMessage[]): Promise<{
   let status = 0;
   let json: OpenRouterChatCompletionResponse;
   try {
-    res = await fetch(`${getBaseUrl()}/chat/completions`, {
+    res = await fetch(buildChatCompletionsUrl(config.baseUrl), {
       method: "POST",
       signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-        ...(process.env.OPENROUTER_SITE_URL
-          ? { "HTTP-Referer": process.env.OPENROUTER_SITE_URL }
-          : {}),
-        ...(process.env.OPENROUTER_APP_NAME
-          ? { "X-OpenRouter-Title": process.env.OPENROUTER_APP_NAME }
-          : {}),
-      },
+      headers: buildLlmProviderHeaders(config),
       body: JSON.stringify(body),
     });
     status = res.status;
@@ -113,5 +106,5 @@ export async function createChatCompletion(messages: ChatMessage[]): Promise<{
     throw new LlmTransportError("LLM 응답 본문이 비어 있습니다.", status);
   }
 
-  return { rawText: content, status };
+  return { rawText: content, status, model: json.model ?? config.model };
 }

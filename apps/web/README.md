@@ -16,8 +16,13 @@ cp .env.example .env.local
 OPENROUTER_API_KEY=sk-or-...
 # 선택: 비워두면 OpenRouter 계정 기본 모델 사용
 OPENROUTER_MODEL=google/gemini-2.5-flash
+# 설정 화면에서 저장하는 provider API key를 암호화하는 서버 전용 secret
+LLM_SETTINGS_SECRET=change-this-long-random-secret
 DATABASE_URL=file:./data/rootmap.db
 ```
+
+LLM provider는 기본적으로 위 `OPENROUTER_*` 환경 변수를 fallback으로 사용합니다.
+앱 실행 후 `/settings/llm-provider`에서 OpenRouter, CrofAI, OpenAI-compatible `Base URL`/`API Key`/`Model`/`JSON mode`를 저장하면 DB 설정이 fallback보다 우선됩니다.
 
 DB 테이블을 준비하고 개발 서버를 실행합니다.
 
@@ -49,7 +54,7 @@ cd apps/web
 npm run check
 ```
 
-`check`는 lint, DB smoke, LLM 파싱 smoke, Phase 1 MVP fixture smoke, Phase 2 Concept Store fixture smoke, production build/type check를 순서대로 실행합니다.
+`check`는 lint, DB smoke, LLM 파싱 smoke, LLM provider 설정 smoke, Phase 1 MVP fixture smoke, Phase 2 Concept Store fixture smoke, production build/type check를 순서대로 실행합니다.
 
 ## Phase 2 관리자/개발자 화면
 
