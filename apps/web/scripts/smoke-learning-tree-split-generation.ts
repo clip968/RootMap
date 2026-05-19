@@ -19,57 +19,65 @@ const outline = {
       id: "computer_system",
       title: "컴퓨터 시스템",
       type: "prerequisite",
+      community: "시스템 기초",
+      priority: 1,
       prerequisites: [],
-      children: ["process", "memory"],
     },
     {
       id: "process",
       title: "프로세스 (Process)",
       type: "prerequisite",
+      community: "실행 모델",
+      priority: 2,
       prerequisites: ["computer_system"],
-      children: ["scheduling"],
     },
     {
       id: "memory",
       title: "메모리 (Memory)",
       type: "prerequisite",
+      community: "메모리 관리",
+      priority: 3,
       prerequisites: ["computer_system"],
-      children: ["virtual_memory"],
     },
     {
       id: "scheduling",
       title: "스케줄링 (Scheduling)",
       type: "core",
+      community: "실행 모델",
+      priority: 4,
       prerequisites: ["process"],
-      children: ["cpu_utilization"],
     },
     {
       id: "virtual_memory",
       title: "가상 메모리 (Virtual Memory)",
       type: "core",
+      community: "메모리 관리",
+      priority: 5,
       prerequisites: ["memory"],
-      children: [],
     },
     {
       id: "cpu_utilization",
       title: "CPU 이용률 (CPU Utilization)",
       type: "core",
+      community: "실행 모델",
+      priority: 6,
       prerequisites: ["scheduling"],
-      children: [],
     },
     {
       id: "deadlock_misconception",
       title: "데드락 오해",
       type: "misconception",
+      community: "동시성",
+      priority: 7,
       prerequisites: ["process"],
-      children: [],
     },
     {
       id: "scheduler_quiz",
       title: "스케줄러 점검 질문",
       type: "quiz",
+      community: "실행 모델",
+      priority: 8,
       prerequisites: ["scheduling"],
-      children: [],
     },
   ],
   edges: [
@@ -117,7 +125,7 @@ const completion: ChatCompletionRunner = async (messages) => {
   const user = messages[1]?.content ?? "";
   calls.push(system);
 
-  if (system.includes("compact outline")) {
+  if (system.includes("graph outline phase")) {
     return { rawText: json(outline), status: 200, model: "test-model" };
   }
   if (user.includes("computer_system")) {
@@ -157,6 +165,18 @@ async function main() {
   assert(
     result.tree.recommended_order[0] === "computer_system",
     "expected outline recommended_order to be preserved",
+  );
+  assert(
+    result.tree.nodes.find((node) => node.id === "computer_system")?.children.includes("process"),
+    "expected children to be derived from prerequisites",
+  );
+  assert(
+    result.tree.nodes.find((node) => node.id === "cpu_utilization")?.depth === 3,
+    "expected prerequisite depth to be derived",
+  );
+  assert(
+    result.tree.communities?.some((community) => community.name === "실행 모델"),
+    "expected community grouping to be preserved",
   );
 
   console.log("split learning tree generation smoke passed");

@@ -32,6 +32,7 @@ import {
 import {
   learningTreeQualityWarnings,
 } from "@/lib/llm/schemas";
+import { deriveLearningGraphView } from "@/lib/tree/concept-graph";
 import type {
   ConceptCandidate,
   LearningTreeNode,
@@ -180,13 +181,15 @@ async function runLlmPhase<T>(
 function nodesForPhase(
   outline: LearningTreeOutlineResponse,
   phase: DetailPhase,
-): Array<{ id: string; title: string; type: NodeType }> {
+): Array<{ id: string; title: string; type: NodeType; community?: string; priority?: number }> {
   return outline.nodes
     .filter((node) => phase.types.includes(node.type))
     .map((node) => ({
       id: node.id,
       title: node.title,
       type: node.type,
+      community: node.community,
+      priority: node.priority,
     }));
 }
 
@@ -220,6 +223,8 @@ function assembleLearningTree(
   outline: LearningTreeOutlineResponse,
   detailResponses: LearningTreeDetailResponse[],
 ): LearningTreeResponse {
+  const graph = deriveLearningGraphView(outline.nodes);
+  const graphById = new Map(graph.nodes.map((node) => [node.id, node]));
   const detailById = new Map(
     detailResponses.flatMap((response) =>
       response.nodes.map((node) => [node.id, node] as const),
@@ -228,6 +233,7 @@ function assembleLearningTree(
 
   const nodes: LearningTreeNode[] = outline.nodes.map((node) => {
     const detail = detailById.get(node.id);
+    const graphNode = graphById.get(node.id);
     return {
       id: node.id,
       title: node.title,
@@ -235,7 +241,10 @@ function assembleLearningTree(
       description: detail?.description ?? `${node.title}를 학습합니다.`,
       difficulty: detail?.difficulty ?? 2,
       prerequisites: node.prerequisites,
-      children: node.children,
+      children: graphNode?.children ?? [],
+      community: graphNode?.community ?? node.community,
+      priority: graphNode?.priority ?? node.priority,
+      depth: graphNode?.depth ?? 0,
       concept_candidate: normalizeConceptCandidate(
         detail?.concept_candidate,
         node,
@@ -249,7 +258,8 @@ function assembleLearningTree(
       summary: outline.summary,
       nodes,
       edges: outline.edges,
-      recommended_order: outline.recommended_order,
+      communities: graph.communities,
+      recommended_order: graph.recommended_order,
     }),
   );
 }

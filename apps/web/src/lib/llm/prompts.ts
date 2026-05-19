@@ -98,22 +98,24 @@ The app UI language is Korean. Return Korean learner-facing content, while prese
 Return only a single JSON object matching the schema above.`;
 }
 
-export const LEARNING_TREE_OUTLINE_SYSTEM_PROMPT = `You are an AI learning path designer.
+export const LEARNING_TREE_OUTLINE_SYSTEM_PROMPT = `You are an AI learning map designer.
 
-Create only a compact outline for a prerequisite decomposition tree. This is the outline phase.
-Do not write long explanations yet.
+Create concept cards for a community-based knowledge graph. This is the graph outline phase.
+Do not force a finished visual tree shape and do not write long explanations yet.
 
 Requirements:
 - Return valid JSON only.
 - Do not include markdown outside JSON.
 - Generate 8 to 12 nodes total.
 - Include at least 3 prerequisite nodes, 3 core nodes, 1 misconception node, and 1 quiz node.
-- Keep the hierarchy top-down: parent concept -> prerequisite children -> more basic prerequisite grandchildren.
+- Assign every node to a concise Korean community name, e.g. "실행 모델", "메모리 관리", "동시성".
+- Assign priority so lower numbers are learned earlier. Use gaps like 10, 20, 30.
+- Use prerequisites to describe what must be learned before this node.
+- Do not include children. The app calculates children and depth from prerequisites and priority.
 - Use stable lowercase ASCII snake_case node ids.
 - Write learner-facing title and summary text in Korean.
-- Use node ids in prerequisites, children, recommended_order, and edges.
-- recommended_order must list prerequisite nodes before concepts that depend on them.
-- Keep edges[] to essential relationships only.
+- Keep edges[] to essential non-tree relationships or important prerequisite relationships only.
+- recommended_order is optional. If included, it must follow learning priority.
 
 JSON schema:
 {
@@ -124,8 +126,9 @@ JSON schema:
       "id": string,
       "title": string,
       "type": "prerequisite" | "core" | "supplementary" | "misconception" | "quiz",
-      "prerequisites": string[],
-      "children": string[]
+      "community": string,
+      "priority": number,
+      "prerequisites": string[]
     }
   ],
   "edges": [
@@ -150,7 +153,7 @@ export function buildLearningTreeOutlineUserMessage(
   return `The user wants to learn the following topic:
 ${topic}
 ${ctx}
-Return only the compact outline JSON. Details will be requested in later phases.`;
+Return only the compact concept graph outline JSON. Details will be requested in later phases.`;
 }
 
 export const LEARNING_TREE_DETAIL_SYSTEM_PROMPT = `You fill details for an existing learning tree outline.
@@ -186,7 +189,7 @@ JSON schema:
 
 export function buildLearningTreeDetailUserMessage(
   topic: string,
-  nodes: Array<{ id: string; title: string; type: string }>,
+  nodes: Array<{ id: string; title: string; type: string; community?: string; priority?: number }>,
 ): string {
   return `Learning topic:
 ${topic}

@@ -10,6 +10,7 @@
  */
 
 import type { ApiTreeResponse } from "@/lib/tree/bundle-to-api";
+import { buildDeepDiveGenerationTopic } from "@/lib/tree/deep-dive";
 import type { ApiNodeDetailResponse } from "@/lib/services/node-detail";
 import type {
   ApiLearningNode,
@@ -103,7 +104,13 @@ const FOCUS_OPTIONS = [
   { id: "next", label: "다음 단계" },
 ] as const;
 
+const VIEW_OPTIONS = [
+  { id: "path", label: "Learning Path", icon: Route },
+  { id: "community", label: "Community Map", icon: GitBranch },
+] as const;
+
 type FocusMode = (typeof FOCUS_OPTIONS)[number]["id"];
+type ViewMode = (typeof VIEW_OPTIONS)[number]["id"];
 type DocumentEvidenceItem = NonNullable<
   ApiLearningNode["document_context"]
 >["evidence"][number];
@@ -149,11 +156,11 @@ function documentSourceTypeTone(sourceType: DocumentSourceType): string {
 }
 
 function generationStageMessage(elapsedSeconds: number): string {
-  if (elapsedSeconds < 8) return "트리의 전체 뼈대를 먼저 잡고 있어요.";
-  if (elapsedSeconds < 24) return "선수지식 노드의 설명을 채우고 있어요.";
-  if (elapsedSeconds < 40) return "핵심 개념 노드의 설명을 채우고 있어요.";
-  if (elapsedSeconds < 56) return "오해, 보조 개념, 점검 질문을 정리하고 있어요.";
-  return "생성된 조각을 검증하고 Tree로 저장하고 있어요.";
+  if (elapsedSeconds < 8) return "개념 카드를 분류하고 있어요.";
+  if (elapsedSeconds < 24) return "선수관계를 계산하고 있어요.";
+  if (elapsedSeconds < 40) return "커뮤니티를 묶고 있어요.";
+  if (elapsedSeconds < 56) return "학습 순서를 정리하고 있어요.";
+  return "생성 결과를 검증하고 저장하고 있어요.";
 }
 
 function statusIcon(status: ProgressStatus) {
@@ -293,6 +300,7 @@ function buildFlowElements(
   tree: ApiTreeResponse,
   selectedId: string | null,
   recommendations: ApiRecommendationItem[],
+  viewMode: ViewMode,
   focusMode: FocusMode,
   enabledTypes: NodeType[],
   progressBusy: string | null,
@@ -308,39 +316,88 @@ function buildFlowElements(
   );
 
   const levels = new Map<number, ApiLearningNode[]>();
-  for (const node of tree.nodes) {
-    if (!visibleIds.has(node.id)) continue;
-    const depth = depthByKey.get(node.node_key) ?? 0;
-    const level = levels.get(depth) ?? [];
-    level.push(node);
-    levels.set(depth, level);
-  }
-
   const flowNodes: Node<RootMapNodeData>[] = [];
-  const sortedDepths = [...levels.keys()].sort((a, b) => a - b);
-  for (const depth of sortedDepths) {
-    const level = (levels.get(depth) ?? []).sort((a, b) =>
-      compareNodeKeys(a, b, recommendedIndex),
-    );
-    const rowWidth = (level.length - 1) * 270;
-    level.forEach((node, index) => {
-      flowNodes.push({
-        id: node.id,
-        type: "rootmap",
-        position: {
-          x: index * 270 - rowWidth / 2,
-          y: depth * 190,
-        },
-        data: {
-          node,
-          selected: selectedId === node.id,
-          related: relatedIds.has(node.id),
-          recommended: recommendedSet.has(node.id),
-          progressBusy: progressBusy === node.id,
-          onProgressChange,
-        },
+  if (viewMode === "community") {
+    const communityOrder = new Map<string, number>();
+    for (const community of tree.communities ?? []) {
+      communityOrder.set(community.name, communityOrder.size);
+    }
+    for (const node of tree.nodes) {
+      const name = node.community ?? "기타";
+      if (!communityOrder.has(name)) communityOrder.set(name, communityOrder.size);
+    }
+
+    const communityNodes = new Map<string, ApiLearningNode[]>();
+    for (const node of tree.nodes) {
+      if (!visibleIds.has(node.id)) continue;
+      const name = node.community ?? "기타";
+      const group = communityNodes.get(name) ?? [];
+      group.push(node);
+      communityNodes.set(name, group);
+    }
+
+    const groupCount = Math.max(communityNodes.size, 1);
+    const groupWidth = 320;
+    const totalWidth = (groupCount - 1) * groupWidth;
+    for (const [community, nodes] of [...communityNodes.entries()].sort(
+      ([a], [b]) => (communityOrder.get(a) ?? 0) - (communityOrder.get(b) ?? 0),
+    )) {
+      const column = communityOrder.get(community) ?? 0;
+      nodes
+        .sort((a, b) => compareNodeKeys(a, b, recommendedIndex))
+        .forEach((node, index) => {
+          flowNodes.push({
+            id: node.id,
+            type: "rootmap",
+            position: {
+              x: column * groupWidth - totalWidth / 2,
+              y: (node.depth ?? depthByKey.get(node.node_key) ?? index) * 130 + index * 42,
+            },
+            data: {
+              node,
+              selected: selectedId === node.id,
+              related: relatedIds.has(node.id),
+              recommended: recommendedSet.has(node.id),
+              progressBusy: progressBusy === node.id,
+              onProgressChange,
+            },
+          });
+        });
+    }
+  } else {
+    for (const node of tree.nodes) {
+      if (!visibleIds.has(node.id)) continue;
+      const depth = node.depth ?? depthByKey.get(node.node_key) ?? 0;
+      const level = levels.get(depth) ?? [];
+      level.push(node);
+      levels.set(depth, level);
+    }
+
+    const sortedDepths = [...levels.keys()].sort((a, b) => a - b);
+    for (const depth of sortedDepths) {
+      const level = (levels.get(depth) ?? []).sort((a, b) =>
+        compareNodeKeys(a, b, recommendedIndex),
+      );
+      const rowWidth = (level.length - 1) * 270;
+      level.forEach((node, index) => {
+        flowNodes.push({
+          id: node.id,
+          type: "rootmap",
+          position: {
+            x: index * 270 - rowWidth / 2,
+            y: depth * 190,
+          },
+          data: {
+            node,
+            selected: selectedId === node.id,
+            related: relatedIds.has(node.id),
+            recommended: recommendedSet.has(node.id),
+            progressBusy: progressBusy === node.id,
+            onProgressChange,
+          },
+        });
       });
-    });
+    }
   }
 
   const flowEdges: Edge[] = [];
@@ -425,6 +482,9 @@ function RootMapFlowNode({ data }: NodeProps<Node<RootMapNodeData>>) {
         </span>
         {data.recommended ? <span className="node-status">추천</span> : null}
       </div>
+      {data.node.community ? (
+        <span className="node-status">{data.node.community}</span>
+      ) : null}
       <strong>{data.node.title}</strong>
       <p>
         {data.node.description ||
@@ -469,6 +529,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   const [regenElapsedSeconds, setRegenElapsedSeconds] = useState(0);
   const [regenError, setRegenError] = useState<string | null>(null);
   const [reuseConcepts, setReuseConcepts] = useState(true);
+  const [viewMode, setViewMode] = useState<ViewMode>("path");
   const [focusMode, setFocusMode] = useState<FocusMode>("all");
   const [enabledTypes, setEnabledTypes] = useState<NodeType[]>(SECTION_ORDER);
   const [progressBusy, setProgressBusy] = useState<string | null>(null);
@@ -583,6 +644,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
       tree,
       selectedId,
       recommendations,
+      viewMode,
       focusMode,
       enabledTypes,
       progressBusy,
@@ -596,6 +658,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     recommendations,
     selectedId,
     tree,
+    viewMode,
   ]);
 
   const loadDetail = useCallback(async (nodeId: string) => {
@@ -715,6 +778,37 @@ export function TreePageClient({ treeId }: { treeId: string }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setRegenError(data?.error?.message ?? "다시 생성하지 못했습니다.");
+        return;
+      }
+      const nextId = (data as { tree_id?: string }).tree_id;
+      if (nextId) router.push(`/tree/${nextId}`);
+    } finally {
+      setRegenLoading(false);
+    }
+  };
+
+  const onDeepDive = async (node: ApiLearningNode) => {
+    if (!tree) return;
+    const relationTitles = nodeRelations(tree, node)
+      .slice(0, 4)
+      .map((relation) => relation.node.title);
+    const topic = buildDeepDiveGenerationTopic(node.title, relationTitles);
+
+    setRegenElapsedSeconds(0);
+    setRegenLoading(true);
+    setRegenError(null);
+    try {
+      const res = await fetch("/api/trees/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic,
+          reuse_concepts: true,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setRegenError(data?.error?.message ?? "세부 맵을 생성하지 못했습니다.");
         return;
       }
       const nextId = (data as { tree_id?: string }).tree_id;
@@ -960,6 +1054,27 @@ export function TreePageClient({ treeId }: { treeId: string }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-3 border-b border-zinc-800 bg-black px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-zinc-400">View</span>
+              <div className="inline-flex rounded-lg border border-zinc-800 bg-zinc-950 p-1">
+                {VIEW_OPTIONS.map((option) => {
+                  const Icon = option.icon;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => setViewMode(option.id)}
+                      className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold ${
+                        viewMode === option.id ? "bg-emerald-700 text-white" : "text-zinc-400"
+                      }`}
+                    >
+                      <Icon size={13} />
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-zinc-400">Focus</span>
               <div className="inline-flex rounded-lg border border-zinc-800 bg-zinc-950 p-1">
@@ -1207,6 +1322,14 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                           ))}
                         </select>
                       </label>
+                      <button
+                        type="button"
+                        className="detail-inline-button mt-3"
+                        disabled={regenLoading}
+                        onClick={() => void onDeepDive(selectedNode)}
+                      >
+                        {regenLoading ? "세부 맵 생성 중" : "이 개념을 더 쪼개기"}
+                      </button>
                     </div>
 
                     {renderDocumentNodeContext(selectedNode)}

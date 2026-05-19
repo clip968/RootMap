@@ -27,8 +27,12 @@ export function bundleToApiTreeResponse(
   const progressByNode = new Map(
     bundle.progress.map((p) => [p.node_id, p.status]),
   );
+  const snapshotByKey = new Map(
+    bundle.tree.treeJson.nodes.map((node) => [node.id, node]),
+  );
 
   const nodes: ApiLearningNode[] = bundle.nodes.map((n) => {
+    const snapshot = snapshotByKey.get(n.nodeKey);
     const documentContext = findDocumentContextForNode(
       options?.documentContext ?? null,
       n.title,
@@ -45,6 +49,9 @@ export function bundleToApiTreeResponse(
       difficulty: n.difficulty ?? 0,
       prerequisites: n.prerequisites,
       children: n.children,
+      community: snapshot?.community,
+      priority: snapshot?.priority,
+      depth: snapshot?.depth,
       has_detail: n.detailJson != null,
       progress: progressByNode.get(n.id) ?? "unknown",
       concept_id: conceptId,
@@ -77,6 +84,7 @@ export function bundleToApiTreeResponse(
     summary: bundle.tree.summary ?? "",
     nodes,
     recommended_order: bundle.tree.treeJson.recommended_order,
+    communities: bundle.tree.treeJson.communities ?? [],
     progress: bundle.progress,
   };
 }

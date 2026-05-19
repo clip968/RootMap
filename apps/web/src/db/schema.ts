@@ -235,6 +235,64 @@ export const learningTreeConcepts = pgTable(
   ],
 );
 
+export const conceptCommunities = pgTable(
+  "concept_communities",
+  {
+    id: text("id")
+      .primaryKey()
+      .notNull()
+      .$defaultFn(() => crypto.randomUUID()),
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => learningTrees.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    summary: text("summary"),
+    priority: integer("priority").notNull().default(0),
+    createdAt: text("created_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+    updatedAt: text("updated_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (t) => [
+    index("concept_communities_tree_id_idx").on(t.treeId),
+    uniqueIndex("concept_communities_tree_name_uidx").on(t.treeId, t.name),
+  ],
+);
+
+export const communityMembers = pgTable(
+  "community_members",
+  {
+    id: text("id")
+      .primaryKey()
+      .notNull()
+      .$defaultFn(() => crypto.randomUUID()),
+    communityId: text("community_id")
+      .notNull()
+      .references(() => conceptCommunities.id, { onDelete: "cascade" }),
+    conceptId: text("concept_id")
+      .notNull()
+      .references(() => concepts.id, { onDelete: "cascade" }),
+    learningNodeId: text("learning_node_id").references(() => learningNodes.id, {
+      onDelete: "cascade",
+    }),
+    role: text("role").notNull(),
+    priority: integer("priority").notNull().default(0),
+    createdAt: text("created_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (t) => [
+    index("community_members_concept_id_idx").on(t.conceptId),
+    index("community_members_learning_node_id_idx").on(t.learningNodeId),
+    uniqueIndex("community_members_community_concept_uidx").on(
+      t.communityId,
+      t.conceptId,
+    ),
+  ],
+);
+
 export const conceptMergeCandidates = pgTable(
   "concept_merge_candidates",
   {

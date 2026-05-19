@@ -49,6 +49,9 @@ export const learningTreeNodeSchema = z.object({
   difficulty: z.number().min(1).max(5).transform((v) => Math.max(1, Math.min(5, Math.round(v)))),
   prerequisites: z.array(z.string()),
   children: z.array(z.string()),
+  community: z.string().optional(),
+  priority: z.number().optional(),
+  depth: z.number().int().min(0).optional(),
   concept_candidate: conceptCandidateSchema.optional(),
 });
 
@@ -56,8 +59,16 @@ export const learningTreeOutlineNodeSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
   type: nodeTypeSchema,
+  community: z.string().min(1),
+  priority: z.number(),
   prerequisites: z.array(z.string()),
-  children: z.array(z.string()),
+});
+
+export const learningTreeCommunitySchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  priority: z.number(),
+  node_ids: z.array(z.string()),
 });
 
 export const learningTreeOutlineResponseSchema = z
@@ -65,7 +76,7 @@ export const learningTreeOutlineResponseSchema = z
     topic: z.string().min(1),
     summary: z.string(),
     nodes: z.array(learningTreeOutlineNodeSchema),
-    recommended_order: z.array(z.string()),
+    recommended_order: z.array(z.string()).optional(),
     edges: z.array(llmConceptEdgeSchema).optional(),
   })
   .superRefine((data, ctx) => {
@@ -95,10 +106,9 @@ export const learningTreeOutlineResponseSchema = z
 
     data.nodes.forEach((node, i) => {
       checkRefs(node.prerequisites, i, "prerequisites");
-      checkRefs(node.children, i, "children");
     });
 
-    data.recommended_order.forEach((id, i) => {
+    (data.recommended_order ?? []).forEach((id, i) => {
       if (id && !ids.has(id)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -128,6 +138,7 @@ export const learningTreeOutlineResponseSchema = z
   .transform((data) => ({
     ...data,
     edges: data.edges ?? [],
+    recommended_order: data.recommended_order ?? [],
   }));
 
 export const learningTreeDetailNodeSchema = z.object({
@@ -151,6 +162,7 @@ export const learningTreeResponseSchema = z
     summary: z.string(),
     nodes: z.array(learningTreeNodeSchema),
     recommended_order: z.array(z.string()),
+    communities: z.array(learningTreeCommunitySchema).optional(),
     edges: z.array(llmConceptEdgeSchema).optional(),
   })
   .superRefine((data, ctx) => {
@@ -225,6 +237,7 @@ export const learningTreeResponseSchema = z
   .transform((data): LearningTreeResponse => ({
     ...data,
     edges: data.edges ?? [],
+    communities: data.communities ?? [],
     nodes: data.nodes.map((node) => {
       const cc =
         node.concept_candidate ?

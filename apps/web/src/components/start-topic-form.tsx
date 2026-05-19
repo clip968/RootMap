@@ -80,11 +80,11 @@ interface DocumentTreeResponse extends ApiTreeResponse {
  * 경과 시간만 보여주는 것보다 사용자에게 진행 중임을 알려 주는 용도.
  */
 function generationStageMessage(elapsedSeconds: number): string {
-  if (elapsedSeconds < 8) return "트리의 전체 뼈대를 먼저 잡고 있어요.";
-  if (elapsedSeconds < 24) return "선수지식 노드의 설명을 채우고 있어요.";
-  if (elapsedSeconds < 40) return "핵심 개념 노드의 설명을 채우고 있어요.";
-  if (elapsedSeconds < 56) return "오해, 보조 개념, 점검 질문을 정리하고 있어요.";
-  return "생성된 조각을 검증하고 Tree로 저장하고 있어요.";
+  if (elapsedSeconds < 8) return "개념 카드를 분류하고 있어요.";
+  if (elapsedSeconds < 24) return "선수관계를 계산하고 있어요.";
+  if (elapsedSeconds < 40) return "커뮤니티를 묶고 있어요.";
+  if (elapsedSeconds < 56) return "학습 순서를 정리하고 있어요.";
+  return "생성 결과를 검증하고 저장하고 있어요.";
 }
 
 /** 파일명만 보고도 브라우저에서 즉시 막을 수 있는 확장자 검증. 서버에서도 같은 검증을 다시 수행한다. */

@@ -44,6 +44,9 @@ export interface LearningTreeNode {
   difficulty: number;
   prerequisites: string[];
   children: string[];
+  community?: string;
+  priority?: number;
+  depth?: number;
   /** Phase 2: 없으면 서버/파서가 title 기반으로 보충 */
   concept_candidate?: ConceptCandidate;
 }
@@ -53,6 +56,12 @@ export interface LearningTreeResponse {
   summary: string;
   nodes: LearningTreeNode[];
   recommended_order: string[];
+  communities?: Array<{
+    id: string;
+    name: string;
+    priority: number;
+    node_ids: string[];
+  }>;
   /** Phase 2: 노드 id 간 Concept 관계 */
   edges?: LlmConceptEdge[];
 }
@@ -83,6 +92,9 @@ export interface ApiLearningNode {
   difficulty: number;
   prerequisites: string[];
   children: string[];
+  community?: string;
+  priority?: number;
+  depth?: number;
   has_detail: boolean;
   progress: ProgressStatus;
   /** Phase 2 */
@@ -119,6 +131,12 @@ export interface ApiTreePayload {
   summary: string;
   nodes: ApiLearningNode[];
   recommended_order: string[];
+  communities?: Array<{
+    id: string;
+    name: string;
+    priority: number;
+    node_ids: string[];
+  }>;
 }
 
 export interface ApiTreeHistoryItem {

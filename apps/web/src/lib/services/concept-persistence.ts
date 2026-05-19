@@ -1,6 +1,11 @@
 import { eq } from "drizzle-orm";
 import type { RootMapDbClient } from "@/db/client";
-import { learningNodes, learningTreeConcepts } from "@/db/schema";
+import {
+  communityMembers,
+  conceptCommunities,
+  learningNodes,
+  learningTreeConcepts,
+} from "@/db/schema";
 import type { ConceptCandidate } from "@/types/learning";
 import type { LearningTreeResponse } from "@/types/learning";
 import {
@@ -161,6 +166,65 @@ export async function persistPhase2Concepts(
         conceptId,
       });
     }
+  }
+
+  const communityStartedAt = Date.now();
+  const communityNameToId = new Map<string, string>();
+  const communityPriorityByName = new Map(
+    (tree.communities ?? []).map((community) => [
+      community.name,
+      community.priority,
+    ]),
+  );
+  for (const n of tree.nodes) {
+    if (n.community && !communityPriorityByName.has(n.community)) {
+      communityPriorityByName.set(n.community, n.priority ?? 0);
+    }
+  }
+
+  for (const [name, priority] of [...communityPriorityByName.entries()].sort(
+    (a, b) => a[1] - b[1] || a[0].localeCompare(b[0]),
+  )) {
+    const inserted = await db
+      .insert(conceptCommunities)
+      .values({
+        treeId,
+        name,
+        priority,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
+      .returning({ id: conceptCommunities.id });
+    const communityId = inserted[0]?.id;
+    if (communityId) communityNameToId.set(name, communityId);
+  }
+
+  const memberRows = tree.nodes
+    .map((n) => {
+      const communityId = n.community ? communityNameToId.get(n.community) : null;
+      const conceptId = nodeKeyToConceptId.get(n.id);
+      if (!communityId || !conceptId) return null;
+      return {
+        communityId,
+        conceptId,
+        learningNodeId: nodeKeyToDbId.get(n.id) ?? null,
+        role: n.type,
+        priority: n.priority ?? 0,
+        createdAt: new Date().toISOString(),
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => row != null);
+  if (memberRows.length > 0) {
+    await db.insert(communityMembers).values(memberRows).onConflictDoNothing();
+  }
+
+  if (requestId) {
+    logConceptPersistence("communities_persisted", {
+      requestId,
+      durationMs: Date.now() - communityStartedAt,
+      communityCount: communityNameToId.size,
+      memberCount: memberRows.length,
+    });
   }
 
   const edges = tree.edges ?? [];
