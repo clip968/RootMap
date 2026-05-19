@@ -563,6 +563,148 @@ body {
   padding-left: 18px;
 }
 
+.detail-learning-blocks {
+  display: grid;
+  gap: 12px;
+}
+
+.detail-learning-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #164e3f;
+  border-radius: 8px;
+  padding: 14px;
+  background: linear-gradient(135deg, rgba(6, 78, 59, 0.28), rgba(9, 9, 11, 0.96));
+}
+
+.detail-learning-card h3,
+.detail-learning-summary span {
+  margin: 0;
+  color: #a7f3d0;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.detail-learning-summary strong {
+  color: #ffffff;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.concept-fact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.concept-fact-grid div {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 10px;
+  background: #000000;
+}
+
+.concept-fact-grid span,
+.relation-column span,
+.relation-current span,
+.misconception-card-list span {
+  color: #34d399;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.concept-fact-grid strong {
+  color: #ffffff;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.detail-relation-flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 170px minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.relation-column,
+.relation-current {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 10px;
+  background: #000000;
+}
+
+.relation-current {
+  place-items: center;
+  text-align: center;
+  border-color: #047857;
+  background: #022c22;
+}
+
+.relation-column button {
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 8px;
+  color: #f4f4f5;
+  text-align: left;
+  background: #09090b;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.relation-column button:hover {
+  border-color: #047857;
+}
+
+.relation-column em {
+  color: #71717a;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.relation-current strong {
+  color: #ffffff;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.detail-example-card p {
+  margin: 0;
+  border-radius: 8px;
+  padding: 12px;
+  color: #e4e4e7;
+  background: #000000;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.misconception-card-list {
+  display: grid;
+  gap: 8px;
+}
+
+.misconception-card-list div {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #3f3f46;
+  border-radius: 8px;
+  padding: 10px;
+  background: #000000;
+}
+
+.misconception-card-list p {
+  margin: 0;
+  color: #d4d4d8;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .detail-code {
   margin: 0;
   overflow-x: auto;
@@ -671,6 +813,10 @@ body {
   .modal-main {
     border-right: 0;
     border-bottom: 1px solid #27272a;
+  }
+
+  .detail-relation-flow {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -10,6 +10,7 @@
  */
 
 import type { ApiTreeResponse } from "@/lib/tree/bundle-to-api";
+import { DetailLearningBlocks } from "@/components/detail-learning-blocks";
 import { GenerationLoadingPanel } from "@/components/generation-loading-panel";
 import { buildDeepDiveGenerationTopic } from "@/lib/tree/deep-dive";
 import type { ApiNodeDetailResponse } from "@/lib/services/node-detail";
@@ -1223,6 +1224,14 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                               "이 노드의 선수/후속 관계를 맵에서 확인하세요."}
                           </p>
                         </div>
+
+                        <DetailLearningBlocks
+                          node={selectedNode}
+                          detail={detail}
+                          relations={relations}
+                          sectionLabel={SECTION_LABEL}
+                          onOpenNode={(nodeId) => void openNode(nodeId)}
+                        />
 
                         {detail?.document_context ? (
                           <div className="detail-section">
