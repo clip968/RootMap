@@ -109,6 +109,12 @@ const VIEW_OPTIONS = [
   { id: "community", label: "Community Map", icon: GitBranch },
 ] as const;
 
+const FLOW_PATH_COLUMN_GAP = 340;
+const FLOW_PATH_LEVEL_GAP = 260;
+const FLOW_COMMUNITY_COLUMN_GAP = 390;
+const FLOW_COMMUNITY_NODE_GAP = 210;
+const FLOW_COMMUNITY_DEPTH_OFFSET = 28;
+
 type FocusMode = (typeof FOCUS_OPTIONS)[number]["id"];
 type ViewMode = (typeof VIEW_OPTIONS)[number]["id"];
 type DocumentEvidenceItem = NonNullable<
@@ -337,7 +343,7 @@ function buildFlowElements(
     }
 
     const groupCount = Math.max(communityNodes.size, 1);
-    const groupWidth = 320;
+    const groupWidth = FLOW_COMMUNITY_COLUMN_GAP;
     const totalWidth = (groupCount - 1) * groupWidth;
     for (const [community, nodes] of [...communityNodes.entries()].sort(
       ([a], [b]) => (communityOrder.get(a) ?? 0) - (communityOrder.get(b) ?? 0),
@@ -351,7 +357,10 @@ function buildFlowElements(
             type: "rootmap",
             position: {
               x: column * groupWidth - totalWidth / 2,
-              y: (node.depth ?? depthByKey.get(node.node_key) ?? index) * 130 + index * 42,
+              y:
+                index * FLOW_COMMUNITY_NODE_GAP +
+                (node.depth ?? depthByKey.get(node.node_key) ?? 0) *
+                  FLOW_COMMUNITY_DEPTH_OFFSET,
             },
             data: {
               node,
@@ -378,14 +387,14 @@ function buildFlowElements(
       const level = (levels.get(depth) ?? []).sort((a, b) =>
         compareNodeKeys(a, b, recommendedIndex),
       );
-      const rowWidth = (level.length - 1) * 270;
+      const rowWidth = (level.length - 1) * FLOW_PATH_COLUMN_GAP;
       level.forEach((node, index) => {
         flowNodes.push({
           id: node.id,
           type: "rootmap",
           position: {
-            x: index * 270 - rowWidth / 2,
-            y: depth * 190,
+            x: index * FLOW_PATH_COLUMN_GAP - rowWidth / 2,
+            y: depth * FLOW_PATH_LEVEL_GAP,
           },
           data: {
             node,
@@ -1121,7 +1130,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
               nodeTypes={nodeTypes}
               fitView
               fitViewOptions={{ padding: 0.18 }}
-              minZoom={0.32}
+              minZoom={0.2}
               maxZoom={1.25}
               onNodeClick={(_, node) => void openNode(node.id)}
               proOptions={{ hideAttribution: true }}
