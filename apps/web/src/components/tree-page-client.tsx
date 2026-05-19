@@ -3,16 +3,10 @@
 /**
  * `/tree/[treeId]` 페이지의 클라이언트 본문.
  *
- * 데이터 흐름 요약:
- * - 마운트 시 `GET /api/trees/:id`로 트리 본문, 이어서 `GET .../recommendations`로 추천 목록
- * - 노드 클릭 시 `POST /api/nodes/:nodeId/detail`로 확장 설명(모달)
- * - 이해 정도 변경 시 `PATCH /api/nodes/:id/progress` 후 추천 재조회
- * - "다시 생성"은 홈과 동일하게 `POST /api/trees/generate` 후 새 `tree_id`로 라우팅
- *
- * UI:
- * - Tree 보기: API `children` 링크로 재귀 가지 + 순환/공유 시 "참조" 배지
- * - 섹션 보기: 노드 타입별(선수지식/핵심/…) 리스트
- * - 트리 뷰포트: 휠로 zoom, 빈 영역 드래그로 패닝
+ * learning-tree 프로젝트와 같은 흐름으로 렌더링한다:
+ * - 좌측 패널: 주제, 추천, 학습 경로, 노드 목록
+ * - 우측 맵: ReactFlow 기반 지식 맵 + 포커스/타입 필터
+ * - 노드 클릭: 선택 상태를 바꾸고 상세 모달을 연다
  */
 
 import type { ApiTreeResponse } from "@/lib/tree/bundle-to-api";
@@ -24,11 +18,32 @@ import type {
   NodeType,
   ProgressStatus,
 } from "@/types/learning";
+import type { Edge, Node, NodeProps } from "@xyflow/react";
+import {
+  Background,
+  Controls,
+  Handle,
+  MarkerType,
+  MiniMap,
+  Position,
+  ReactFlow,
+} from "@xyflow/react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  AlertTriangle,
+  BookOpen,
+  CheckCircle2,
+  CircleHelp,
+  GitBranch,
+  Route,
+  Search,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-/** 섹션·Tree 정렬에 쓰는 노드 타입 순서(화면 표시 순 고정) */
 const SECTION_ORDER: NodeType[] = [
   "prerequisite",
   "core",
@@ -37,7 +52,6 @@ const SECTION_ORDER: NodeType[] = [
   "quiz",
 ];
 
-/** 노드 타입 → 섹션/카드 제목에 쓰는 짧은 한글 */
 const SECTION_LABEL: Record<NodeType, string> = {
   prerequisite: "선수지식",
   core: "핵심 개념",
@@ -46,30 +60,68 @@ const SECTION_LABEL: Record<NodeType, string> = {
   quiz: "이해 점검",
 };
 
-/** 진행 상태 Enum → `<select>` 옵션 라벨 */
 const PROGRESS_LABEL: Record<ProgressStatus, string> = {
   known: "안다",
   partial: "조금 안다",
   unknown: "모른다",
 };
 
-/** 트리 캔버스 zoom 한계(너무 작게/크게 못 하게) */
-const MIN_TREE_SCALE = 0.2;
-const MAX_TREE_SCALE = 1;
-const TREE_SCALE_STEP = 0.05;
+const NODE_KIND_CONFIG: Record<
+  NodeType,
+  { className: string; icon: LucideIcon; minimapColor: string }
+> = {
+  prerequisite: {
+    className: "kind-prerequisite",
+    icon: GitBranch,
+    minimapColor: "#2563eb",
+  },
+  core: {
+    className: "kind-core",
+    icon: BookOpen,
+    minimapColor: "#0f766e",
+  },
+  supplementary: {
+    className: "kind-supplementary",
+    icon: Route,
+    minimapColor: "#7c3aed",
+  },
+  misconception: {
+    className: "kind-misconception",
+    icon: AlertTriangle,
+    minimapColor: "#dc2626",
+  },
+  quiz: {
+    className: "kind-quiz",
+    icon: CircleHelp,
+    minimapColor: "#ca8a04",
+  },
+};
 
-function clampTreeScale(value: number): number {
-  return Math.min(MAX_TREE_SCALE, Math.max(MIN_TREE_SCALE, value));
-}
+const FOCUS_OPTIONS = [
+  { id: "all", label: "전체" },
+  { id: "near", label: "선택 주변" },
+  { id: "next", label: "다음 단계" },
+] as const;
 
-function formatTreeScale(value: number): string {
-  return `${Math.round(value * 100)}%`;
-}
-
-type TreeViewMode = "tree" | "sections";
+type FocusMode = (typeof FOCUS_OPTIONS)[number]["id"];
 type DocumentEvidenceItem = NonNullable<
   ApiLearningNode["document_context"]
 >["evidence"][number];
+
+interface RootMapNodeData {
+  [key: string]: unknown;
+  node: ApiLearningNode;
+  selected: boolean;
+  related: boolean;
+  recommended: boolean;
+  progressBusy: boolean;
+  onProgressChange: (nodeId: string, status: ProgressStatus) => void;
+}
+
+interface NodeRelation {
+  node: ApiLearningNode;
+  direction: "parent" | "child";
+}
 
 export function documentSourceTypeLabel(sourceType: DocumentSourceType): string {
   if (sourceType === "explicit") return "문서에 직접 등장";
@@ -91,16 +143,11 @@ export function formatDocumentEvidenceLocation(
 }
 
 function documentSourceTypeTone(sourceType: DocumentSourceType): string {
-  if (sourceType === "explicit") {
-    return "bg-teal-100 text-teal-900 dark:bg-teal-950/60 dark:text-teal-200";
-  }
-  if (sourceType === "inferred") {
-    return "bg-indigo-100 text-indigo-900 dark:bg-indigo-950/60 dark:text-indigo-200";
-  }
-  return "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
+  if (sourceType === "explicit") return "bg-zinc-950 text-white";
+  if (sourceType === "inferred") return "bg-zinc-200 text-zinc-950";
+  return "bg-white text-zinc-700 ring-1 ring-inset ring-zinc-300";
 }
 
-/** 트리 "다시 생성" 배너에서 경과 시간만큼 로테이션하는 안내 문구(start-topic-form과 동일 취지) */
 function generationStageMessage(elapsedSeconds: number): string {
   if (elapsedSeconds < 5) return "주제를 분석하고 학습 목표를 정리하는 중입니다.";
   if (elapsedSeconds < 20) return "학습 경로와 선수지식 Tree를 생성하는 중입니다.";
@@ -108,205 +155,339 @@ function generationStageMessage(elapsedSeconds: number): string {
   return "생성 결과를 검증하고 Tree로 저장하는 중입니다.";
 }
 
-/**
- * 트리 UI 한 줄(재귀 `renderTreeBranch`가 이 구조를 소비).
- * - `isReference`: 같은 노드가 이미 위쪽에서 펼쳐졌거나 순환 경로상이면 자식 없이 링크만 표시
- */
-interface TreeBranch {
-  key: string;
-  node: ApiLearningNode;
-  children: TreeBranch[];
-  isReference: boolean;
+function statusIcon(status: ProgressStatus) {
+  if (status === "known") return <CheckCircle2 size={16} />;
+  if (status === "partial") return <CircleHelp size={16} />;
+  return <AlertTriangle size={16} />;
 }
 
-/** 타입별 Tailwind 팔레트 — 카드 테두리/배지/세로 연결선 */
-const NODE_TYPE_TONE: Record<NodeType, { card: string; badge: string; connector: string }> = {
-  prerequisite: {
-    card: "border-blue-200 bg-blue-50/80 dark:border-blue-900 dark:bg-blue-950/25",
-    badge: "bg-blue-100 text-blue-900 dark:bg-blue-950/60 dark:text-blue-200",
-    connector: "bg-blue-300 dark:bg-blue-800",
-  },
-  core: {
-    card: "border-emerald-200 bg-emerald-50/80 dark:border-emerald-900 dark:bg-emerald-950/25",
-    badge: "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200",
-    connector: "bg-emerald-300 dark:bg-emerald-800",
-  },
-  supplementary: {
-    card: "border-violet-200 bg-violet-50/80 dark:border-violet-900 dark:bg-violet-950/25",
-    badge: "bg-violet-100 text-violet-900 dark:bg-violet-950/60 dark:text-violet-200",
-    connector: "bg-violet-300 dark:bg-violet-800",
-  },
-  misconception: {
-    card: "border-rose-200 bg-rose-50/80 dark:border-rose-900 dark:bg-rose-950/25",
-    badge: "bg-rose-100 text-rose-900 dark:bg-rose-950/60 dark:text-rose-200",
-    connector: "bg-rose-300 dark:bg-rose-800",
-  },
-  quiz: {
-    card: "border-amber-200 bg-amber-50/80 dark:border-amber-900 dark:bg-amber-950/25",
-    badge: "bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200",
-    connector: "bg-amber-300 dark:bg-amber-800",
-  },
-};
+function compareNodeKeys(
+  a: ApiLearningNode,
+  b: ApiLearningNode,
+  recommendedIndex: Map<string, number>,
+): number {
+  const aIndex = recommendedIndex.get(a.node_key) ?? Number.MAX_SAFE_INTEGER;
+  const bIndex = recommendedIndex.get(b.node_key) ?? Number.MAX_SAFE_INTEGER;
+  if (aIndex !== bIndex) return aIndex - bIndex;
+  return SECTION_ORDER.indexOf(a.type) - SECTION_ORDER.indexOf(b.type);
+}
 
-/** `compareNodeKeys`에서 recommended_order 동률일 때 타입 섹션 순으로 재정렬 */
-const TYPE_ORDER_INDEX = new Map<NodeType, number>(
-  SECTION_ORDER.map((type, index) => [type, index]),
-);
+function orderedTreeNodes(tree: ApiTreeResponse): ApiLearningNode[] {
+  const nodeByKey = new Map(tree.nodes.map((node) => [node.node_key, node]));
+  const seenIds = new Set<string>();
+  const ordered: ApiLearningNode[] = [];
 
-/**
- * 플랫 노드 배열 → 루트에서 아래로만 펼치는 가지 구조.
- *
- * - 간선: API의 `node.children` 만 사용(LLM이 준 “배우는 순서” 방향). `prerequisites` 역간선은 만들지 않음.
- * - 루트: 부모에서 가리키지 않는 노드들.
- * - 사이클·다중 부모: `expanded`와 `path`로 이미 방문한 노드는 참조 노드로 잘라 무한 재귀 방지.
- */
-function buildTreeBranches(
-  nodes: ApiLearningNode[],
-  recommendedOrder: string[],
-): TreeBranch[] {
-  const nodeByKey = new Map(nodes.map((node) => [node.node_key, node]));
-  const recommendedIndex = new Map(
-    recommendedOrder.map((nodeKey, index) => [nodeKey, index]),
-  );
-
-  const compareNodeKeys = (a: string, b: string) => {
-    const nodeA = nodeByKey.get(a);
-    const nodeB = nodeByKey.get(b);
-    const orderA = recommendedIndex.get(a) ?? Number.MAX_SAFE_INTEGER;
-    const orderB = recommendedIndex.get(b) ?? Number.MAX_SAFE_INTEGER;
-    if (orderA !== orderB) return orderA - orderB;
-    const typeA = nodeA ? (TYPE_ORDER_INDEX.get(nodeA.type) ?? 99) : 99;
-    const typeB = nodeB ? (TYPE_ORDER_INDEX.get(nodeB.type) ?? 99) : 99;
-    if (typeA !== typeB) return typeA - typeB;
-    return (nodeA?.title ?? a).localeCompare(nodeB?.title ?? b, "ko");
-  };
-
-  const childKeysByKey = new Map<string, Set<string>>();
-  for (const node of nodes) {
-    childKeysByKey.set(node.node_key, new Set());
+  for (const nodeKey of tree.recommended_order) {
+    const node = nodeByKey.get(nodeKey);
+    if (!node || seenIds.has(node.id)) continue;
+    seenIds.add(node.id);
+    ordered.push(node);
   }
 
-  for (const node of nodes) {
-    const childSet = childKeysByKey.get(node.node_key)!;
+  for (const node of tree.nodes) {
+    if (seenIds.has(node.id)) continue;
+    seenIds.add(node.id);
+    ordered.push(node);
+  }
+
+  return ordered;
+}
+
+function initialSelectedId(tree: ApiTreeResponse): string | null {
+  const nodeByKey = new Map(tree.nodes.map((node) => [node.node_key, node]));
+  for (const nodeKey of tree.recommended_order) {
+    const node = nodeByKey.get(nodeKey);
+    if (node) return node.id;
+  }
+  return tree.nodes[0]?.id ?? null;
+}
+
+function relatedNodeIds(tree: ApiTreeResponse, selectedId: string | null): Set<string> {
+  const related = new Set<string>();
+  if (!selectedId) return related;
+
+  const selected = tree.nodes.find((node) => node.id === selectedId);
+  if (!selected) return related;
+
+  const nodeByKey = new Map(tree.nodes.map((node) => [node.node_key, node]));
+  for (const childKey of selected.children) {
+    const child = nodeByKey.get(childKey);
+    if (child) related.add(child.id);
+  }
+
+  for (const node of tree.nodes) {
+    if (node.children.includes(selected.node_key)) related.add(node.id);
+  }
+
+  return related;
+}
+
+function visibleNodeIds(
+  tree: ApiTreeResponse,
+  selectedId: string | null,
+  focusMode: FocusMode,
+  enabledTypes: NodeType[],
+  recommendedSet: Set<string>,
+): Set<string> {
+  const typeSet = new Set(enabledTypes);
+  const allowedByType = tree.nodes.filter((node) => typeSet.has(node.type));
+  if (focusMode === "all" || !selectedId) {
+    return new Set(allowedByType.map((node) => node.id));
+  }
+
+  if (focusMode === "next") {
+    return new Set(
+      allowedByType
+        .filter((node) => node.id === selectedId || recommendedSet.has(node.id))
+        .map((node) => node.id),
+    );
+  }
+
+  const related = relatedNodeIds(tree, selectedId);
+  related.add(selectedId);
+  return new Set(
+    allowedByType.filter((node) => related.has(node.id)).map((node) => node.id),
+  );
+}
+
+function nodeDepths(tree: ApiTreeResponse): Map<string, number> {
+  const nodeByKey = new Map(tree.nodes.map((node) => [node.node_key, node]));
+  const parentCount = new Map(tree.nodes.map((node) => [node.node_key, 0]));
+  for (const node of tree.nodes) {
     for (const childKey of node.children) {
-      if (nodeByKey.has(childKey) && childKey !== node.node_key) {
-        childSet.add(childKey);
+      if (parentCount.has(childKey)) {
+        parentCount.set(childKey, (parentCount.get(childKey) ?? 0) + 1);
       }
     }
   }
 
-  // children은 부모 목표/개념을 이해하기 위한 직접 선수지식으로 해석한다.
-  // prerequisites를 뒤집어 선수지식 -> 의존 개념 간선으로 보강하지 않는다.
+  const roots = tree.nodes.filter((node) => (parentCount.get(node.node_key) ?? 0) === 0);
+  const queue = roots.length > 0 ? roots : tree.nodes.slice(0, 1);
+  const depthByKey = new Map<string, number>();
+  for (const root of queue) depthByKey.set(root.node_key, 0);
 
-  const normalizedChildKeysByKey = new Map<string, string[]>();
-  const incomingCount = new Map(nodes.map((node) => [node.node_key, 0]));
-  for (const [nodeKey, childSet] of childKeysByKey) {
-    const childKeys = [...childSet].sort(compareNodeKeys);
-    normalizedChildKeysByKey.set(nodeKey, childKeys);
-    for (const childKey of childKeys) {
-      incomingCount.set(childKey, (incomingCount.get(childKey) ?? 0) + 1);
+  let cursor = 0;
+  while (cursor < queue.length) {
+    const current = queue[cursor++];
+    const currentDepth = depthByKey.get(current.node_key) ?? 0;
+    for (const childKey of current.children) {
+      const child = nodeByKey.get(childKey);
+      if (!child) continue;
+      const nextDepth = currentDepth + 1;
+      if ((depthByKey.get(childKey) ?? -1) < nextDepth) {
+        depthByKey.set(childKey, nextDepth);
+        queue.push(child);
+      }
     }
   }
 
-  const sortedNodeKeys = nodes.map((node) => node.node_key).sort(compareNodeKeys);
-  const rootKeys = sortedNodeKeys.filter(
-    (nodeKey) => (incomingCount.get(nodeKey) ?? 0) === 0,
-  );
-  if (rootKeys.length === 0 && sortedNodeKeys.length > 0) {
-    rootKeys.push(sortedNodeKeys[0]!);
+  for (const node of tree.nodes) {
+    if (!depthByKey.has(node.node_key)) depthByKey.set(node.node_key, 0);
   }
 
-  const expanded = new Set<string>();
-
-  const buildBranch = (nodeKey: string, path: Set<string>): TreeBranch | null => {
-    const node = nodeByKey.get(nodeKey);
-    if (!node) return null;
-
-    const isReference = expanded.has(nodeKey) || path.has(nodeKey);
-    if (isReference) {
-      return { key: nodeKey, node, children: [], isReference: true };
-    }
-
-    expanded.add(nodeKey);
-    const nextPath = new Set(path);
-    nextPath.add(nodeKey);
-
-    const children: TreeBranch[] = [];
-    for (const childKey of normalizedChildKeysByKey.get(nodeKey) ?? []) {
-      const child = buildBranch(childKey, nextPath);
-      if (child) children.push(child);
-    }
-
-    return { key: nodeKey, node, children, isReference: false };
-  };
-
-  const branches: TreeBranch[] = [];
-  for (const rootKey of rootKeys) {
-    const branch = buildBranch(rootKey, new Set());
-    if (branch) branches.push(branch);
-  }
-
-  // 순환·공유 참조 때문에 루트에서 펼치지 못한 노드도 놓치지 않고 별도 가지로 표시한다.
-  for (const nodeKey of sortedNodeKeys) {
-    if (expanded.has(nodeKey)) continue;
-    const branch = buildBranch(nodeKey, new Set());
-    if (branch) branches.push(branch);
-  }
-
-  return branches;
+  return depthByKey;
 }
 
-/** `tree/[treeId]/page.tsx`에서 넘기는 URL 세그먼트 */
+function buildFlowElements(
+  tree: ApiTreeResponse,
+  selectedId: string | null,
+  recommendations: ApiRecommendationItem[],
+  focusMode: FocusMode,
+  enabledTypes: NodeType[],
+  progressBusy: string | null,
+  onProgressChange: (nodeId: string, status: ProgressStatus) => void,
+): { nodes: Node<RootMapNodeData>[]; edges: Edge[]; visibleCount: number } {
+  const recommendedSet = new Set(recommendations.map((item) => item.node_id));
+  const visibleIds = visibleNodeIds(tree, selectedId, focusMode, enabledTypes, recommendedSet);
+  const relatedIds = relatedNodeIds(tree, selectedId);
+  const depthByKey = nodeDepths(tree);
+  const nodeByKey = new Map(tree.nodes.map((node) => [node.node_key, node]));
+  const recommendedIndex = new Map(
+    tree.recommended_order.map((nodeKey, index) => [nodeKey, index]),
+  );
+
+  const levels = new Map<number, ApiLearningNode[]>();
+  for (const node of tree.nodes) {
+    if (!visibleIds.has(node.id)) continue;
+    const depth = depthByKey.get(node.node_key) ?? 0;
+    const level = levels.get(depth) ?? [];
+    level.push(node);
+    levels.set(depth, level);
+  }
+
+  const flowNodes: Node<RootMapNodeData>[] = [];
+  const sortedDepths = [...levels.keys()].sort((a, b) => a - b);
+  for (const depth of sortedDepths) {
+    const level = (levels.get(depth) ?? []).sort((a, b) =>
+      compareNodeKeys(a, b, recommendedIndex),
+    );
+    const rowWidth = (level.length - 1) * 270;
+    level.forEach((node, index) => {
+      flowNodes.push({
+        id: node.id,
+        type: "rootmap",
+        position: {
+          x: index * 270 - rowWidth / 2,
+          y: depth * 190,
+        },
+        data: {
+          node,
+          selected: selectedId === node.id,
+          related: relatedIds.has(node.id),
+          recommended: recommendedSet.has(node.id),
+          progressBusy: progressBusy === node.id,
+          onProgressChange,
+        },
+      });
+    });
+  }
+
+  const flowEdges: Edge[] = [];
+  for (const source of tree.nodes) {
+    if (!visibleIds.has(source.id)) continue;
+    for (const childKey of source.children) {
+      const target = nodeByKey.get(childKey);
+      if (!target || !visibleIds.has(target.id)) continue;
+      const active = source.id === selectedId || target.id === selectedId;
+      flowEdges.push({
+        id: `${source.id}-${target.id}`,
+        source: source.id,
+        target: target.id,
+        type: "smoothstep",
+        animated: true,
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: edgeColorForNodeType(target.type),
+        },
+        style: { stroke: edgeColorForNodeType(target.type) },
+        className: [
+          active ? "rootmap-edge-active" : "rootmap-edge-muted",
+          edgeClassForNodeType(target.type),
+        ].join(" "),
+      });
+    }
+  }
+
+  return { nodes: flowNodes, edges: flowEdges, visibleCount: flowNodes.length };
+}
+
+function nodeRelations(tree: ApiTreeResponse, selected: ApiLearningNode | null): NodeRelation[] {
+  if (!selected) return [];
+  const nodeByKey = new Map(tree.nodes.map((node) => [node.node_key, node]));
+  const relations: NodeRelation[] = [];
+
+  for (const parent of tree.nodes) {
+    if (parent.children.includes(selected.node_key)) {
+      relations.push({ node: parent, direction: "parent" });
+    }
+  }
+
+  for (const childKey of selected.children) {
+    const child = nodeByKey.get(childKey);
+    if (child) relations.push({ node: child, direction: "child" });
+  }
+
+  return relations;
+}
+
+function edgeClassForNodeType(type: NodeType): string {
+  if (type === "prerequisite") return "edge-prerequisite";
+  if (type === "core") return "edge-core";
+  if (type === "supplementary") return "edge-supplementary";
+  if (type === "misconception") return "edge-misconception";
+  return "edge-quiz";
+}
+
+function edgeColorForNodeType(type: NodeType): string {
+  return NODE_KIND_CONFIG[type].minimapColor;
+}
+
+function RootMapFlowNode({ data }: NodeProps<Node<RootMapNodeData>>) {
+  const config = NODE_KIND_CONFIG[data.node.type];
+  const Icon = config.icon;
+
+  return (
+    <div
+      className={[
+        "rootmap-flow-node",
+        config.className,
+        data.selected ? "is-selected" : "",
+        data.related ? "is-related" : "",
+        data.recommended ? "is-recommended" : "",
+      ].join(" ")}
+    >
+      <Handle type="target" position={Position.Top} />
+      <div className="node-topline">
+        <span className="node-kind">
+          <Icon size={14} />
+          {SECTION_LABEL[data.node.type]}
+        </span>
+        {data.recommended ? <span className="node-status">추천</span> : null}
+      </div>
+      <strong>{data.node.title}</strong>
+      <p>
+        {data.node.description ||
+          (data.node.document_context ? "상세 설명을 생성할 수 있습니다." : "설명 없음")}
+      </p>
+      <label className="node-progress" onClick={(event) => event.stopPropagation()}>
+        <span>이해 정도</span>
+        <select
+          value={data.node.progress}
+          disabled={data.progressBusy}
+          onChange={(event) =>
+            data.onProgressChange(data.node.id, event.target.value as ProgressStatus)
+          }
+        >
+          {(Object.keys(PROGRESS_LABEL) as ProgressStatus[]).map((status) => (
+            <option key={status} value={status}>
+              {PROGRESS_LABEL[status]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  );
+}
+
+const nodeTypes = { rootmap: RootMapFlowNode };
+
 export function TreePageClient({ treeId }: { treeId: string }) {
   const router = useRouter();
-  /** 서버에서 복원한 트리 전체(ApiTreeResponse). 없으면 로딩/에러 분기 */
   const [tree, setTree] = useState<ApiTreeResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [recommendations, setRecommendations] = useState<
-    ApiRecommendationItem[]
-  >([]);
+  const [recommendations, setRecommendations] = useState<ApiRecommendationItem[]>([]);
   const [recoError, setRecoError] = useState<string | null>(null);
-
-  /** 선택한 학습 노드(DB uuid) — 상세 모달·하이라이트 */
+  const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const [detail, setDetail] = useState<ApiNodeDetailResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
-
-  /** 같은 주제로 새 트리를 만들 때(현재 페이지에 머무르지 않고 새 id로 이동) */
   const [regenLoading, setRegenLoading] = useState(false);
   const [regenElapsedSeconds, setRegenElapsedSeconds] = useState(0);
   const [regenError, setRegenError] = useState<string | null>(null);
   const [reuseConcepts, setReuseConcepts] = useState(true);
-  const [viewMode, setViewMode] = useState<TreeViewMode>("tree");
-  /** 트리 캔버스 CSS transform scale (0.2~1) */
-  const [treeScale, setTreeScale] = useState(0.55);
-  /** 스크롤 가능한 트리 컨테이너 — 패닝·휠 zoom 리스너 부착 대상 */
-  const treeViewportRef = useRef<HTMLDivElement | null>(null);
-  /** 포인터 캡처 드래그 중 시작 스크롤 위치 저장 */
-  const dragStateRef = useRef<{
-    pointerId: number;
-    startX: number;
-    startY: number;
-    scrollLeft: number;
-    scrollTop: number;
-  } | null>(null);
-  const [isTreeDragging, setIsTreeDragging] = useState(false);
-  /** PATCH progress 중인 노드 id — 해당 행만 셀렉트 비활성 */
+  const [focusMode, setFocusMode] = useState<FocusMode>("all");
+  const [enabledTypes, setEnabledTypes] = useState<NodeType[]>(SECTION_ORDER);
   const [progressBusy, setProgressBusy] = useState<string | null>(null);
 
-  const loadTree = useCallback(async () => {
+  const loadTree = useCallback(async (): Promise<boolean> => {
     setLoadError(null);
     const res = await fetch(`/api/trees/${treeId}`);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setLoadError(
-        data?.error?.message ?? "트리를 불러오지 못했습니다.",
-      );
+      setLoadError(data?.error?.message ?? "트리를 불러오지 못했습니다.");
       setTree(null);
       return false;
     }
-    setTree(data as ApiTreeResponse);
+    const nextTree = data as ApiTreeResponse;
+    setTree(nextTree);
+    setSelectedId((current) =>
+      current && nextTree.nodes.some((node) => node.id === current)
+        ? current
+        : initialSelectedId(nextTree),
+    );
     return true;
   }, [treeId]);
 
@@ -320,12 +501,10 @@ export function TreePageClient({ treeId }: { treeId: string }) {
       return;
     }
     setRecommendations(
-      (data as { recommended_nodes: ApiRecommendationItem[] })
-        .recommended_nodes ?? [],
+      (data as { recommended_nodes: ApiRecommendationItem[] }).recommended_nodes ?? [],
     );
   }, [treeId]);
 
-  /** `treeId` 변경 시 트리→추천 순으로 로드(언마운트 시 in-flight 무시) */
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -338,303 +517,228 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     };
   }, [treeId, loadTree, loadRecommendations]);
 
-  /** 추천 목록에 든 노드 id — 카드 테두리·배지 하이라이트용 Set */
-  const recommendSet = useMemo(
-    () => new Set(recommendations.map((r) => r.node_id)),
+  const isDocumentTree = Boolean(tree?.document_id);
+
+  const selectedNode = useMemo(() => {
+    if (!tree || !selectedId) return null;
+    return tree.nodes.find((node) => node.id === selectedId) ?? null;
+  }, [selectedId, tree]);
+
+  const orderedNodes = useMemo(() => (tree ? orderedTreeNodes(tree) : []), [tree]);
+
+  const recommendedSet = useMemo(
+    () => new Set(recommendations.map((item) => item.node_id)),
     [recommendations],
   );
 
-  /** 섹션 보기: 타입별로 노드 그룹핑 */
-  const grouped = useMemo(() => {
-    if (!tree) return null;
-    const m = new Map<NodeType, ApiLearningNode[]>();
-    for (const t of SECTION_ORDER) m.set(t, []);
-    for (const n of tree.nodes) {
-      m.get(n.type)!.push(n);
-    }
-    return m;
-  }, [tree]);
+  const filteredNodes = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return orderedNodes;
+    return orderedNodes.filter((node) =>
+      [node.title, node.description, SECTION_LABEL[node.type], PROGRESS_LABEL[node.progress]]
+        .join(" ")
+        .toLowerCase()
+        .includes(needle),
+    );
+  }, [orderedNodes, query]);
 
-  /** Tree 보기: 순환 안전한 재귀 가지 */
-  const treeBranches = useMemo(() => {
-    if (!tree) return [];
-    return buildTreeBranches(tree.nodes, tree.recommended_order);
-  }, [tree]);
+  const relations = useMemo(
+    () => (tree ? nodeRelations(tree, selectedNode) : []),
+    [selectedNode, tree],
+  );
 
-  /** scale이 작을수록 내부 박스 너비/최소 높이를 크게 잡아 스크롤 영역 확보 */
-  const scaledTreeWidth = `${100 / treeScale}%`;
-  const scaledTreeMinHeight = `max(100%, ${100 / treeScale}%)`;
-
-  /**
-   * 트리 패닝: 버튼·링크가 아닌 빈 배경에서만 드래그 시작.
-   * `setPointerCapture`로 커서가 뷰포트 밖으로 나가도 move 이벤트 수신.
-   */
-  const onTreePointerDown = (ev: React.PointerEvent<HTMLDivElement>) => {
-    const viewport = treeViewportRef.current;
-    if (!viewport) return;
-    if (ev.button !== 0) return;
-    const target = ev.target as HTMLElement;
-    if (target.closest("button, input, select, textarea, a, label")) return;
-
-    ev.preventDefault();
-    dragStateRef.current = {
-      pointerId: ev.pointerId,
-      startX: ev.clientX,
-      startY: ev.clientY,
-      scrollLeft: viewport.scrollLeft,
-      scrollTop: viewport.scrollTop,
-    };
-    viewport.setPointerCapture(ev.pointerId);
-    setIsTreeDragging(true);
-  };
-
-  const onTreePointerMove = (ev: React.PointerEvent<HTMLDivElement>) => {
-    const viewport = treeViewportRef.current;
-    const drag = dragStateRef.current;
-    if (!viewport || !drag || drag.pointerId !== ev.pointerId) return;
-
-    const deltaX = ev.clientX - drag.startX;
-    const deltaY = ev.clientY - drag.startY;
-    ev.preventDefault();
-    viewport.scrollLeft = drag.scrollLeft - deltaX;
-    viewport.scrollTop = drag.scrollTop - deltaY;
-  };
-
-  const endTreeDrag = (ev: React.PointerEvent<HTMLDivElement>) => {
-    const viewport = treeViewportRef.current;
-    const drag = dragStateRef.current;
-    if (!viewport || !drag || drag.pointerId !== ev.pointerId) return;
-
-    if (viewport.hasPointerCapture(ev.pointerId)) {
-      viewport.releasePointerCapture(ev.pointerId);
-    }
-    dragStateRef.current = null;
-    setIsTreeDragging(false);
-  };
-
-
-  /** 트리 구조 변경·모드 전환 후 첫 프레임에 스크롤 위치를 중앙 상단으로 */
-  const centerTreeViewport = () => {
-    const viewport = treeViewportRef.current;
-    if (!viewport) return;
-    viewport.scrollLeft = Math.max(0, (viewport.scrollWidth - viewport.clientWidth) / 2);
-    viewport.scrollTop = 0;
-  };
-
-  useEffect(() => {
-    if (viewMode !== "tree") return;
-    const frame = window.requestAnimationFrame(centerTreeViewport);
-    return () => window.cancelAnimationFrame(frame);
-  }, [treeBranches.length, viewMode]);
-
-  /** 트리 뷰포트에서 휠 = 페이지 스크롤이 아니라 확대/축소(캡처 단계에서 가로챔) */
-  useEffect(() => {
-    if (viewMode !== "tree") return;
-    const viewport = treeViewportRef.current;
-    if (!viewport) return;
-
-    const onWheel = (ev: WheelEvent) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      ev.stopImmediatePropagation();
-
-      const primaryDelta =
-        Math.abs(ev.deltaY) >= Math.abs(ev.deltaX) ? ev.deltaY : ev.deltaX;
-      if (primaryDelta === 0) return;
-
-      const direction = primaryDelta > 0 ? -1 : 1;
-      setTreeScale((scale) =>
-        clampTreeScale(scale + direction * TREE_SCALE_STEP),
-      );
-    };
-
-    viewport.addEventListener("wheel", onWheel, {
-      capture: true,
-      passive: false,
-    });
-    return () => viewport.removeEventListener("wheel", onWheel, { capture: true });
-  }, [viewMode, tree?.tree_id]);
-
-  const loadDetail = useCallback(
-    async (nodeId: string) => {
-      setDetailError(null);
-      setDetailLoading(true);
-      setDetail(null);
+  const onProgressChange = useCallback(
+    async (nodeId: string, status: ProgressStatus) => {
+      setProgressBusy(nodeId);
       try {
-        const res = await fetch(`/api/nodes/${nodeId}/detail`, {
-          method: "POST",
+        const res = await fetch(`/api/nodes/${nodeId}/progress`, {
+          method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tree_id: treeId }),
+          body: JSON.stringify({ status }),
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          setDetailError(
-            data?.error?.message ??
-              "노드 설명을 불러오지 못했습니다. 다시 시도해 주세요.",
-          );
-          return;
-        }
-        setDetail(data as ApiNodeDetailResponse);
+        if (!res.ok) throw new Error(data?.error?.message ?? "이해 정도 저장 실패");
         setTree((prev) =>
           prev
             ? {
                 ...prev,
-                nodes: prev.nodes.map((n) =>
-                  n.id === nodeId ? { ...n, has_detail: true } : n,
+                nodes: prev.nodes.map((node) =>
+                  node.id === nodeId ? { ...node, progress: status } : node,
                 ),
               }
             : prev,
         );
+        await loadRecommendations();
       } finally {
-        setDetailLoading(false);
+        setProgressBusy(null);
       }
     },
-    [treeId],
+    [loadRecommendations],
   );
 
-  const onSelectNode = async (nodeId: string) => {
-    setSelectedId(nodeId);
+  const flow = useMemo(() => {
+    if (!tree) return { nodes: [], edges: [], visibleCount: 0 };
+    return buildFlowElements(
+      tree,
+      selectedId,
+      recommendations,
+      focusMode,
+      enabledTypes,
+      progressBusy,
+      (nodeId, status) => void onProgressChange(nodeId, status),
+    );
+  }, [
+    enabledTypes,
+    focusMode,
+    onProgressChange,
+    progressBusy,
+    recommendations,
+    selectedId,
+    tree,
+  ]);
 
-    // Phase 3 Task 11: 문서 트리의 빈 description 노드는 지연 생성
-    if (isDocumentTree && tree) {
-      const apiNode = tree.nodes.find((n) => n.id === nodeId);
-      if (apiNode && !apiNode.description) {
-        try {
-          const genRes = await fetch(`/api/trees/${treeId}/nodes/${nodeId}/generate-detail`, {
-            method: "POST",
-          });
-          if (genRes.ok) {
-            const genData = await genRes.json().catch(() => ({}));
-            // description 업데이트 (캐시 응답에도 포함)
-            if (genData.description || genData.detail) {
-              const newDesc = genData.description || genData.detail?.document_context_summary || genData.detail?.easy_explanation || "";
-              setTree((prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      nodes: prev.nodes.map((n) =>
-                        n.id === nodeId ? { ...n, description: newDesc, has_detail: true } : n,
-                      ),
-                    }
-                  : prev,
-              );
+  const loadDetail = useCallback(async (nodeId: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    setDetail(null);
+    try {
+      const res = await fetch(`/api/nodes/${nodeId}/detail`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tree_id: treeId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error?.message ?? "상세 설명을 불러오지 못했습니다.");
+      }
+      setDetail(data as ApiNodeDetailResponse);
+      setTree((prev) =>
+        prev
+          ? {
+              ...prev,
+              nodes: prev.nodes.map((node) =>
+                node.id === nodeId ? { ...node, has_detail: true } : node,
+              ),
             }
+          : prev,
+      );
+    } catch (error) {
+      setDetailError(
+        error instanceof Error ? error.message : "상세 설명을 불러오지 못했습니다.",
+      );
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [treeId]);
+
+  const openNode = useCallback(
+    async (nodeId: string) => {
+      setSelectedId(nodeId);
+      setModalOpen(true);
+
+      if (isDocumentTree && tree) {
+        const apiNode = tree.nodes.find((node) => node.id === nodeId);
+        if (apiNode && !apiNode.description) {
+          try {
+            const genRes = await fetch(`/api/trees/${treeId}/nodes/${nodeId}/generate-detail`, {
+              method: "POST",
+            });
+            if (genRes.ok) {
+              const genData = await genRes.json().catch(() => ({}));
+              const newDesc =
+                genData.description ||
+                genData.detail?.document_context_summary ||
+                genData.detail?.easy_explanation ||
+                "";
+              if (newDesc) {
+                setTree((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        nodes: prev.nodes.map((node) =>
+                          node.id === nodeId
+                            ? { ...node, description: newDesc, has_detail: true }
+                            : node,
+                        ),
+                      }
+                    : prev,
+                );
+              }
+            }
+          } catch {
+            // 기존 detail API fallback을 그대로 사용한다.
           }
-        } catch {
-          // generate-detail 실패는 무시 (기존 detail API fallback)
         }
       }
-    }
 
-    void loadDetail(nodeId);
-  };
+      void loadDetail(nodeId);
+    },
+    [isDocumentTree, loadDetail, tree, treeId],
+  );
 
   const closeDetailModal = useCallback(() => {
-    setSelectedId(null);
-    setDetail(null);
-    setDetailError(null);
-    setDetailLoading(false);
+    setModalOpen(false);
   }, []);
 
   useEffect(() => {
-    if (!selectedId) return;
-
-    const onKeyDown = (ev: KeyboardEvent) => {
-      if (ev.key === "Escape") closeDetailModal();
+    if (!modalOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeDetailModal();
     };
-
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [closeDetailModal, selectedId]);
-
-  const onProgressChange = async (
-    nodeId: string,
-    status: ProgressStatus,
-  ) => {
-    setProgressBusy(nodeId);
-    const prevTree = tree;
-    setTree((t) =>
-      t
-        ? {
-            ...t,
-            nodes: t.nodes.map((n) =>
-              n.id === nodeId ? { ...n, progress: status } : n,
-            ),
-            progress: t.progress.some((p) => p.node_id === nodeId)
-              ? t.progress.map((p) =>
-                  p.node_id === nodeId ? { ...p, status } : p,
-                )
-              : [...t.progress, { node_id: nodeId, status }],
-          }
-        : t,
-    );
-    try {
-      const res = await fetch(`/api/nodes/${nodeId}/progress`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (!res.ok) {
-        setTree(prevTree);
-        return;
-      }
-      await loadRecommendations();
-    } finally {
-      setProgressBusy(null);
-    }
-  };
+  }, [closeDetailModal, modalOpen]);
 
   useEffect(() => {
     if (!regenLoading) return;
-    const startedAt = Date.now();
     const timer = window.setInterval(() => {
-      setRegenElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+      setRegenElapsedSeconds((seconds) => seconds + 1);
     }, 1000);
     return () => window.clearInterval(timer);
   }, [regenLoading]);
 
   const onRegenerate = async () => {
     if (!tree) return;
-    setRegenLoading(true);
     setRegenElapsedSeconds(0);
+    setRegenLoading(true);
     setRegenError(null);
     try {
       const res = await fetch("/api/trees/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: tree.topic, reuse_concepts: reuseConcepts }),
+        body: JSON.stringify({
+          topic: tree.topic,
+          reuse_concepts: reuseConcepts,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setRegenError(
-          data?.error?.message ??
-            "트리를 다시 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.",
-        );
+        setRegenError(data?.error?.message ?? "다시 생성하지 못했습니다.");
         return;
       }
-      const newId = (data as ApiTreeResponse).tree_id;
-      if (newId) router.push(`/tree/${newId}`);
+      const nextId = (data as { tree_id?: string }).tree_id;
+      if (nextId) router.push(`/tree/${nextId}`);
     } finally {
       setRegenLoading(false);
     }
   };
 
-  const isDocumentTree = Boolean(tree?.document_id);
+  const toggleType = (type: NodeType) => {
+    setEnabledTypes((current) => {
+      if (current.includes(type)) {
+        return current.length === 1 ? current : current.filter((item) => item !== type);
+      }
+      return [...current, type];
+    });
+  };
 
-  const renderDocumentNodeContext = (
-    node: ApiLearningNode,
-    variant: "tree" | "section",
-  ) => {
+  const renderDocumentNodeContext = (node: ApiLearningNode) => {
     const ctx = node.document_context;
     if (!ctx) return null;
     const firstEvidence = ctx.evidence[0];
 
     return (
-      <div
-        className={`mt-2 space-y-1 rounded-xl border border-teal-100 bg-white/65 px-3 py-2 text-xs dark:border-teal-900/60 dark:bg-zinc-950/50 ${
-          variant === "section" ? "max-w-2xl" : ""
-        }`}
-      >
+      <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs">
         <div className="flex flex-wrap items-center gap-1.5">
           <span
             className={`rounded-full px-2 py-0.5 font-medium ${documentSourceTypeTone(
@@ -643,158 +747,31 @@ export function TreePageClient({ treeId }: { treeId: string }) {
           >
             {documentSourceTypeLabel(ctx.source_type)}
           </span>
-          {firstEvidence ? (
-            <span className="text-zinc-500 dark:text-zinc-400">
-              {formatDocumentEvidenceLocation(firstEvidence)}
-            </span>
-          ) : (
-            <span className="text-zinc-500 dark:text-zinc-400">
-              직접 출처 없음
-            </span>
-          )}
+          <span className="text-zinc-500">
+            {firstEvidence ? formatDocumentEvidenceLocation(firstEvidence) : "직접 출처 없음"}
+          </span>
         </div>
         {firstEvidence?.snippet ? (
-          <p className="line-clamp-2 leading-relaxed text-zinc-600 dark:text-zinc-300">
+          <p className="mt-1 line-clamp-2 leading-relaxed text-zinc-600">
             {firstEvidence.snippet}
-          </p>
-        ) : ctx.source_type === "inferred" ? (
-          <p className="leading-relaxed text-zinc-600 dark:text-zinc-300">
-            문서에 직접 나온 표현이 아니라, 이 문서를 이해하려고 보강한 선수지식입니다.
           </p>
         ) : null}
       </div>
     );
   };
 
-  const renderTreeBranch = (branch: TreeBranch, pathKey: string) => {
-    const n = branch.node;
-    const highlighted = recommendSet.has(n.id);
-    const tone = NODE_TYPE_TONE[n.type];
-    const selected = selectedId === n.id;
-
-    return (
-      <li key={pathKey} className="flex flex-col items-center">
-        <div
-          className={`w-72 rounded-2xl border px-4 py-3 shadow-sm transition ${tone.card} ${
-            highlighted
-              ? "ring-2 ring-emerald-400 dark:ring-emerald-500"
-              : selected
-                ? "ring-2 ring-zinc-400 dark:ring-zinc-500"
-                : ""
-          }`}
-        >
-          <button
-            type="button"
-            onClick={() => onSelectNode(n.id)}
-            className="block w-full text-left"
-          >
-            <span className="flex flex-wrap items-center gap-1.5 text-xs font-medium">
-              <span className={`rounded-full px-2 py-0.5 ${tone.badge}`}>
-                {SECTION_LABEL[n.type]}
-              </span>
-              {n.is_reused_concept === true ? (
-                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-sky-900 dark:bg-sky-950/60 dark:text-sky-200">
-                  이전에 본 개념
-                </span>
-              ) : n.is_reused_concept === false ? (
-                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200">
-                  새 개념
-                </span>
-              ) : null}
-              {highlighted ? (
-                <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-white">
-                  추천
-                </span>
-              ) : null}
-              {branch.isReference ? (
-                <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                  참조
-                </span>
-              ) : null}
-              {n.document_context ? (
-                <span
-                  className={`rounded-full px-2 py-0.5 ${documentSourceTypeTone(
-                    n.document_context.source_type,
-                  )}`}
-                >
-                  {documentSourceTypeLabel(n.document_context.source_type)}
-                </span>
-              ) : null}
-            </span>
-            <span className="mt-2 block font-semibold leading-snug text-zinc-950 dark:text-zinc-50">
-              {n.title}
-            </span>
-            <span className="mt-1 line-clamp-3 block text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
-              {n.description || (isDocumentTree ? (
-                <span className="italic text-zinc-400">노드를 클릭하면 상세 설명이 생성됩니다</span>
-              ) : (
-                <span className="text-zinc-400">설명 없음</span>
-              ))}
-            </span>
-            {renderDocumentNodeContext(n, "tree")}
-            {n.concept_tree_count != null && n.concept_tree_count > 1 ? (
-              <span className="mt-2 block text-xs text-zinc-500 dark:text-zinc-400">
-                다른 학습 주제에서도 쓰임 · 총 {n.concept_tree_count}개 트리
-              </span>
-            ) : null}
-          </button>
-          <label className="mt-3 flex items-center justify-between gap-2 text-xs text-zinc-700 dark:text-zinc-300">
-            <span>이해 정도</span>
-            <select
-              value={n.progress}
-              disabled={progressBusy === n.id}
-              onChange={(e) =>
-                void onProgressChange(n.id, e.target.value as ProgressStatus)
-              }
-              onClick={(ev) => ev.stopPropagation()}
-              className="rounded-lg border border-zinc-300 bg-white px-2 py-1 dark:border-zinc-600 dark:bg-zinc-900"
-            >
-              {(Object.keys(PROGRESS_LABEL) as ProgressStatus[]).map((s) => (
-                <option key={s} value={s}>
-                  {PROGRESS_LABEL[s]}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        {branch.children.length > 0 ? (
-          <>
-            <div className={`h-6 w-px ${tone.connector}`} />
-            <ul
-              className={`flex items-start justify-start gap-4 pt-6 ${
-                branch.children.length > 1
-                  ? "border-t border-zinc-300 dark:border-zinc-700"
-                  : ""
-              }`}
-            >
-              {branch.children.map((child, index) =>
-                renderTreeBranch(child, `${pathKey}-${child.key}-${index}`),
-              )}
-            </ul>
-          </>
-        ) : null}
-      </li>
-    );
-  };
-
-
-
   if (loadError) {
     return (
       <div className="mx-auto flex max-w-lg flex-col gap-4 px-4 py-16 text-center">
         <p className="text-zinc-700 dark:text-zinc-300">{loadError}</p>
-        <Link
-          href="/"
-          className="text-emerald-700 underline dark:text-emerald-400"
-        >
+        <Link href="/" className="text-zinc-900 underline dark:text-zinc-100">
           처음으로
         </Link>
       </div>
     );
   }
 
-  if (!tree || !grouped) {
+  if (!tree) {
     return (
       <div className="flex flex-1 items-center justify-center py-24 text-zinc-500">
         불러오는 중…
@@ -803,36 +780,33 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6">
-      <div className="min-w-0 flex-1 space-y-6 px-4 py-6 sm:px-6">
-        <header className="space-y-2 border-b border-zinc-200 pb-6 dark:border-zinc-800">
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-            RootMap
-          </p>
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-            {tree.topic}
-          </h1>
-          <p className="text-zinc-600 dark:text-zinc-400">{tree.summary}</p>
-          {isDocumentTree ? (
-            <div className="flex flex-wrap gap-2 pt-1 text-xs">
-              <span className="rounded-full bg-teal-100 px-2.5 py-1 font-medium text-teal-900 dark:bg-teal-950/60 dark:text-teal-200">
-                문서 기반 학습 트리
-              </span>
-              {tree.document_title ? (
-                <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
-                  원본: {tree.document_title}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-          <div className="flex flex-wrap gap-2 pt-2">
-            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs text-zinc-700 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200">
+    <div className="flex min-h-0 flex-1 flex-col bg-black text-zinc-950">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 p-4 xl:h-[calc(100dvh-3rem)] xl:grid-cols-[320px_minmax(0,1fr)]">
+        <aside className="flex min-h-0 flex-col gap-3 rounded-lg border border-zinc-700 bg-white p-4 shadow-[0_18px_42px_rgba(0,0,0,0.24)]">
+          <div className="grid gap-1">
+            <span className="text-sm font-semibold text-zinc-500">RootMap</span>
+            <strong className="text-2xl leading-tight text-zinc-950">{tree.topic}</strong>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-600">{tree.summary}</p>
+          </div>
+
+          <label className="flex h-10 items-center gap-2 rounded-lg border border-zinc-300 bg-zinc-50 px-3 text-zinc-500">
+            <Search size={16} />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="노드 검색"
+              className="min-w-0 flex-1 bg-transparent text-sm text-zinc-950 outline-none placeholder:text-zinc-400"
+            />
+          </label>
+
+          <div className="flex flex-wrap gap-2">
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs text-zinc-700">
               <input
                 type="checkbox"
                 checked={reuseConcepts}
-                onChange={(e) => setReuseConcepts(e.target.checked)}
+                onChange={(event) => setReuseConcepts(event.target.checked)}
                 disabled={regenLoading}
-                className="rounded border-zinc-400 disabled:opacity-60"
+                className="rounded border-zinc-400 accent-zinc-950 disabled:opacity-60"
               />
               개념 재사용
             </label>
@@ -840,603 +814,451 @@ export function TreePageClient({ treeId }: { treeId: string }) {
               type="button"
               onClick={() => void onRegenerate()}
               disabled={regenLoading}
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+              className="rounded-lg border border-zinc-950 bg-zinc-950 px-3 py-1.5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
             >
               {regenLoading ? `재생성 중 · ${regenElapsedSeconds}초` : "다시 생성"}
             </button>
-            <span className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+            <span className="rounded-lg border border-zinc-300 bg-zinc-100 px-3 py-1.5 text-sm text-zinc-700">
               저장됨
             </span>
-            <Link
-              href="/"
-              className="rounded-lg px-3 py-1.5 text-sm text-zinc-600 underline dark:text-zinc-400"
-            >
+            <Link href="/" className="rounded-lg px-3 py-1.5 text-sm text-zinc-600 underline">
               새 주제
             </Link>
           </div>
+
           {regenLoading ? (
-            <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/80 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
-              <p className="font-medium">
-                재생성 중 · {regenElapsedSeconds}초 경과
-              </p>
-              <p className="mt-1 text-xs">
-                {generationStageMessage(regenElapsedSeconds)}
-              </p>
+            <div className="rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm text-zinc-900">
+              <p className="font-medium">재생성 중 · {regenElapsedSeconds}초 경과</p>
+              <p className="mt-1 text-xs">{generationStageMessage(regenElapsedSeconds)}</p>
               {reuseConcepts ? (
-                <p className="mt-1 text-xs text-emerald-800/80 dark:text-emerald-200/80">
+                <p className="mt-1 text-xs text-zinc-600">
                   저장된 Concept과 비교해 중복을 줄이는 중이라 조금 더 걸릴 수 있습니다.
                 </p>
               ) : null}
             </div>
           ) : null}
           {regenError ? (
-            <p className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               {regenError} 다시 생성 버튼으로 재시도할 수 있습니다.
             </p>
           ) : null}
-          <div className="flex flex-wrap items-center gap-2 pt-2">
-            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-              보기 방식
-            </span>
-            {(["tree", "sections"] as TreeViewMode[]).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setViewMode(mode)}
-                className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${
-                  viewMode === mode
-                    ? "border-emerald-500 bg-emerald-600 text-white dark:border-emerald-400 dark:bg-emerald-500 dark:text-zinc-950"
-                    : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
-                }`}
-              >
-                {mode === "tree" ? "Tree 보기" : "섹션 보기"}
-              </button>
-            ))}
-          </div>
-        </header>
 
-        {recoError ? (
-          <p className="text-sm text-amber-700 dark:text-amber-400">
-            {recoError}
-          </p>
-        ) : null}
-
-        {recommendations.length > 0 ? (
-          <section className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
-            <h2 className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
-              다음에 볼 만한 노드
-            </h2>
-            <ul className="mt-2 space-y-2">
-              {recommendations.map((r) => (
-                <li key={r.node_id}>
+          <section className="rounded-lg border border-zinc-300 bg-zinc-50 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-zinc-950">다음에 볼 만한 노드</h2>
+              <span className="rounded-full bg-zinc-950 px-2 py-0.5 text-xs font-medium text-white">
+                {recommendations.length}
+              </span>
+            </div>
+            {recoError ? (
+              <p className="mt-2 text-sm text-zinc-500">{recoError}</p>
+            ) : recommendations.length > 0 ? (
+              <div className="mt-2 grid gap-2">
+                {recommendations.map((item) => (
                   <button
+                    key={item.node_id}
                     type="button"
-                    onClick={() => onSelectNode(r.node_id)}
-                    className="text-left text-sm text-emerald-900 underline decoration-emerald-400 decoration-2 underline-offset-2 dark:text-emerald-100"
+                    onClick={() => void openNode(item.node_id)}
+                    className="rounded-md border border-zinc-200 bg-white px-3 py-2 text-left text-sm transition hover:border-zinc-950"
                   >
-                    <span className="font-medium">{r.title}</span>
-                    <span className="mt-0.5 block text-xs font-normal text-emerald-800/90 dark:text-emerald-200/90">
-                      {r.reason}
+                    <strong className="block text-zinc-950">{item.title}</strong>
+                    <span className="mt-0.5 line-clamp-2 block text-xs text-zinc-600">
+                      {item.reason}
                     </span>
                   </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-
-        {viewMode === "tree" ? (
-          <section className="rounded-2xl border border-zinc-200 bg-white/70 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
-            <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                  학습 Tree
-                </h2>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                  마우스 휠로 확대/축소하고, 빈 공간을 좌클릭 드래그해 상하좌우로 이동합니다.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-1 text-xs">
-                {SECTION_ORDER.map((type) => (
-                  <span
-                    key={type}
-                    className={`rounded-full px-2 py-0.5 ${NODE_TYPE_TONE[type].badge}`}
-                  >
-                    {SECTION_LABEL[type]}
-                  </span>
                 ))}
-                {isDocumentTree ? (
-                  <>
-                    {(["explicit", "inferred", "generated"] as DocumentSourceType[]).map(
-                      (sourceType) => (
-                        <span
-                          key={sourceType}
-                          className={`rounded-full px-2 py-0.5 ${documentSourceTypeTone(
-                            sourceType,
-                          )}`}
-                        >
-                          {documentSourceTypeLabel(sourceType)}
-                        </span>
-                      ),
-                    )}
-                  </>
-                ) : null}
               </div>
-              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs dark:border-zinc-800 dark:bg-zinc-900/70">
-                <span className="font-medium text-zinc-600 dark:text-zinc-300">
-                  Zoom
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setTreeScale(0.35)}
-                  className="rounded-lg border border-zinc-300 bg-white px-2 py-1 font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
-                >
-                  한눈에
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTreeScale((s) => clampTreeScale(s - TREE_SCALE_STEP))}
-                  className="rounded-lg border border-zinc-300 bg-white px-2 py-1 font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
-                  aria-label="트리 축소"
-                >
-                  −
-                </button>
-                <input
-                  type="range"
-                  min={MIN_TREE_SCALE}
-                  max={MAX_TREE_SCALE}
-                  step={TREE_SCALE_STEP}
-                  value={treeScale}
-                  onChange={(e) => setTreeScale(Number(e.target.value))}
-                  className="w-28 accent-emerald-600"
-                  aria-label="트리 확대/축소"
-                />
-                <button
-                  type="button"
-                  onClick={() => setTreeScale((s) => clampTreeScale(s + TREE_SCALE_STEP))}
-                  className="rounded-lg border border-zinc-300 bg-white px-2 py-1 font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
-                  aria-label="트리 확대"
-                >
-                  +
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTreeScale(1)}
-                  className="rounded-lg px-2 py-1 font-medium text-zinc-600 underline underline-offset-2 dark:text-zinc-300"
-                >
-                  원본
-                </button>
-                <button
-                  type="button"
-                  onClick={centerTreeViewport}
-                  className="rounded-lg px-2 py-1 font-medium text-zinc-600 underline underline-offset-2 dark:text-zinc-300"
-                >
-                  중앙
-                </button>
-                <span className="tabular-nums text-zinc-500 dark:text-zinc-400">
-                  {formatTreeScale(treeScale)}
-                </span>
-              </div>
+            ) : (
+              <p className="mt-2 text-sm text-zinc-500">이해 상태를 바꾸면 추천이 갱신됩니다.</p>
+            )}
+          </section>
+
+          <section className="min-h-0 flex-1 overflow-y-auto pr-1">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-zinc-500">학습 경로</span>
+              <span className="text-xs font-semibold text-zinc-500">
+                {filteredNodes.length} nodes
+              </span>
             </div>
-            <div
-              ref={treeViewportRef}
-              onPointerDown={onTreePointerDown}
-              onPointerMove={onTreePointerMove}
-              onPointerUp={endTreeDrag}
-              onPointerCancel={endTreeDrag}
-              onLostPointerCapture={endTreeDrag}
-              className={`h-[78vh] touch-none overflow-scroll overscroll-contain rounded-xl border border-zinc-100 bg-zinc-50/40 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:border-zinc-900 dark:bg-zinc-950/30 ${
-                isTreeDragging ? "cursor-grabbing select-none" : "cursor-grab"
-              }`}
-            >
-              <div
-                className="inline-flex min-h-full min-w-full justify-start px-8 py-8 transition-transform"
-                style={{
-                  transform: `scale(${treeScale})`,
-                  transformOrigin: "top left",
-                  width: scaledTreeWidth,
-                  minHeight: scaledTreeMinHeight,
-                }}
-              >
-                <div className="flex flex-col items-center">
-                  <div className="max-w-xl rounded-3xl border border-emerald-300 bg-emerald-600 px-6 py-4 text-center text-white shadow-sm dark:border-emerald-500 dark:bg-emerald-500 dark:text-zinc-950">
-                    <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
-                      Main Topic
-                    </p>
-                    <h2 className="text-xl font-bold leading-tight">{tree.topic}</h2>
-                    {tree.summary ? (
-                      <p className="mt-1 text-sm opacity-90">{tree.summary}</p>
-                    ) : null}
-                  </div>
-                  {treeBranches.length > 0 ? (
-                    <>
-                      <div className="h-8 w-px bg-emerald-300 dark:bg-emerald-700" />
-                      <ul
-                        className={`flex items-start justify-start gap-5 pt-6 ${
-                          treeBranches.length > 1
-                            ? "border-t border-zinc-300 dark:border-zinc-700"
-                            : ""
-                        }`}
-                      >
-                        {treeBranches.map((branch, index) =>
-                          renderTreeBranch(branch, `${branch.key}-${index}`),
-                        )}
-                      </ul>
-                    </>
-                  ) : (
-                    <p className="mt-6 text-sm text-zinc-500">표시할 노드가 없습니다.</p>
-                  )}
-                </div>
-              </div>
+            <div className="grid gap-2">
+              {filteredNodes.map((node, index) => {
+                const active = selectedId === node.id;
+                const config = NODE_KIND_CONFIG[node.type];
+                const Icon = config.icon;
+                return (
+                  <button
+                    key={node.id}
+                    type="button"
+                    onClick={() => void openNode(node.id)}
+                    className={`grid grid-cols-[1.75rem_minmax(0,1fr)] items-start gap-2 rounded-lg border px-3 py-2 text-left text-sm transition ${
+                      active
+                        ? "border-zinc-950 bg-zinc-950 text-white"
+                        : recommendedSet.has(node.id)
+                          ? "border-zinc-950 bg-zinc-100 text-zinc-950"
+                          : "border-zinc-200 bg-white text-zinc-900 hover:border-zinc-950"
+                    }`}
+                  >
+                    <span
+                      className={`grid h-6 w-6 place-items-center rounded-full text-xs font-semibold ${
+                        active ? "bg-white text-zinc-950" : "bg-zinc-200 text-zinc-700"
+                      }`}
+                    >
+                      {index + 1}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-1.5 text-xs font-semibold opacity-75">
+                        <Icon size={13} />
+                        {SECTION_LABEL[node.type]}
+                      </span>
+                      <span className="mt-1 line-clamp-2 block font-semibold leading-snug">
+                        {node.title}
+                      </span>
+                      <span className={`mt-1 block text-xs ${active ? "text-zinc-200" : "text-zinc-500"}`}>
+                        {PROGRESS_LABEL[node.progress]}
+                        {recommendedSet.has(node.id) ? " · 추천" : ""}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </section>
-        ) : (
-          SECTION_ORDER.map((type) => {
-            const nodes = grouped.get(type) ?? [];
-            if (nodes.length === 0) return null;
-            return (
-              <section key={type} className="space-y-3">
-                <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                  {SECTION_LABEL[type]}
-                </h2>
-                <ul className="space-y-2">
-                  {nodes.map((n) => {
-                    const highlighted = recommendSet.has(n.id);
-                    return (
-                      <li key={n.id}>
-                        <div
-                          className={`flex flex-col gap-2 rounded-xl border px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
-                            highlighted
-                              ? "border-emerald-500/70 bg-emerald-50/50 dark:border-emerald-600 dark:bg-emerald-950/25"
-                              : selectedId === n.id
-                                ? "border-zinc-400 bg-zinc-50 dark:border-zinc-500 dark:bg-zinc-900"
-                                : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
-                          }`}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => onSelectNode(n.id)}
-                            className="text-left"
-                          >
-                            <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 font-medium text-zinc-900 dark:text-zinc-50">
-                              {n.title}
-                              {n.is_reused_concept === true ? (
-                                <span className="rounded bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
-                                  이전에 본 개념
-                                </span>
-                              ) : n.is_reused_concept === false ? (
-                                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-                                  새 개념
-                                </span>
-                              ) : null}
-                              {n.document_context ? (
-                                <span
-                                  className={`rounded px-1.5 py-0.5 text-xs font-medium ${documentSourceTypeTone(
-                                    n.document_context.source_type,
-                                  )}`}
-                                >
-                                  {documentSourceTypeLabel(
-                                    n.document_context.source_type,
-                                  )}
-                                </span>
-                              ) : null}
-                            </span>
-                            <p className="mt-1 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">
-                              {n.description || (isDocumentTree ? (
-                                <span className="italic text-zinc-400">노드를 클릭하면 상세 설명이 생성됩니다</span>
-                              ) : (
-                                <span className="text-zinc-400">설명 없음</span>
-                              ))}
-                            </p>
-                            {renderDocumentNodeContext(n, "section")}
-                            {n.concept_tree_count != null &&
-                            n.concept_tree_count > 1 ? (
-                              <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">
-                                다른 학습 주제에서도 쓰인 개념 (총 {n.concept_tree_count}개 트리)
-                              </span>
-                            ) : null}
-                            {highlighted ? (
-                              <span className="mt-1 inline-block text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                                추천
-                              </span>
-                            ) : null}
-                          </button>
-                          <label className="flex shrink-0 items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                            <span className="sr-only">이해 정도</span>
-                            <select
-                              value={n.progress}
-                              disabled={progressBusy === n.id}
-                              onChange={(e) =>
-                                void onProgressChange(
-                                  n.id,
-                                  e.target.value as ProgressStatus,
-                                )
-                              }
-                              onClick={(ev) => ev.stopPropagation()}
-                              className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 dark:border-zinc-600 dark:bg-zinc-900"
-                            >
-                              {(Object.keys(PROGRESS_LABEL) as ProgressStatus[]).map(
-                                (s) => (
-                                  <option key={s} value={s}>
-                                    {PROGRESS_LABEL[s]}
-                                  </option>
-                                ),
-                              )}
-                            </select>
-                          </label>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            );
-          })
-        )}
-      </div>
+        </aside>
 
-      {selectedId ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/60 px-4 py-6 backdrop-blur-sm"
-          role="presentation"
-          onMouseDown={(ev) => {
-            if (ev.target === ev.currentTarget) closeDetailModal();
-          }}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="node-detail-title"
-            className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-3xl border border-zinc-200 bg-amber-50 shadow-2xl dark:border-zinc-700 dark:bg-zinc-950"
-          >
-            <div className="flex items-start justify-between gap-4 border-b border-amber-200 bg-amber-100/70 px-5 py-4 dark:border-zinc-800 dark:bg-zinc-900">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
-                  Node Note
-                </p>
-                <h2
-                  id="node-detail-title"
-                  className="text-lg font-semibold text-zinc-950 dark:text-zinc-50"
-                >
-                  {detail?.title ?? "노드 설명"}
-                </h2>
-              </div>
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-zinc-700 bg-white shadow-[0_18px_42px_rgba(0,0,0,0.24)]">
+          <div className="flex min-h-[86px] flex-col gap-3 border-b border-zinc-200 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <span className="text-sm font-semibold text-zinc-500">
+                {selectedNode ? SECTION_LABEL[selectedNode.type] : "Main Topic"}
+              </span>
+              <h1 className="mt-1 text-2xl font-semibold leading-tight text-zinc-950">
+                {selectedNode?.title ?? tree.topic}
+              </h1>
+              <p className="mt-1 line-clamp-2 max-w-3xl text-sm leading-relaxed text-zinc-600">
+                {selectedNode?.description ||
+                  tree.summary ||
+                  "Tree에서 노드를 선택하면 상세 설명을 확인할 수 있습니다."}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {selectedNode ? (
+                <div className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-zinc-300 bg-zinc-50 px-3 text-sm font-semibold text-zinc-700">
+                  {statusIcon(selectedNode.progress)}
+                  {PROGRESS_LABEL[selectedNode.progress]}
+                </div>
+              ) : null}
               <button
                 type="button"
-                onClick={closeDetailModal}
-                className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
-                aria-label="노트 닫기"
+                onClick={() => selectedNode && void openNode(selectedNode.id)}
+                disabled={!selectedNode}
+                className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-900 hover:border-zinc-950 disabled:opacity-50"
               >
-                닫기
+                상세 보기
               </button>
             </div>
-            <div className="max-h-[calc(92vh-5rem)] overflow-y-auto px-5 py-5 sm:px-7">
-              {detailLoading ? (
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                  설명을 불러오는 중…
-                </p>
-              ) : detailError ? (
-                <div className="space-y-3 rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/30">
-                  <p className="text-sm text-red-700 dark:text-red-300">
-                    {detailError}
-                  </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 border-b border-zinc-200 bg-zinc-50 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-zinc-500">Focus</span>
+              <div className="inline-flex rounded-lg border border-zinc-300 bg-white p-1">
+                {FOCUS_OPTIONS.map((option) => (
                   <button
+                    key={option.id}
                     type="button"
-                    onClick={() => selectedId && void loadDetail(selectedId)}
-                    className="text-sm font-medium text-emerald-700 underline dark:text-emerald-400"
+                    onClick={() => setFocusMode(option.id)}
+                    className={`rounded-md px-3 py-1.5 text-xs font-bold ${
+                      focusMode === option.id ? "bg-zinc-950 text-white" : "text-zinc-600"
+                    }`}
                   >
-                    다시 시도
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-zinc-500">타입 필터</span>
+              {SECTION_ORDER.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => toggleType(type)}
+                  className={`rounded-full border px-2.5 py-1 text-xs font-bold ${
+                    enabledTypes.includes(type)
+                      ? "border-zinc-950 bg-zinc-950 text-white"
+                      : "border-zinc-300 bg-white text-zinc-500"
+                  }`}
+                >
+                  {SECTION_LABEL[type]}
+                </button>
+              ))}
+            </div>
+            <div className="text-xs font-bold text-zinc-500">
+              {flow.visibleCount} cards · {flow.edges.length} links
+            </div>
+          </div>
+
+          <div className="rootmap-flow-frame">
+            <ReactFlow
+              nodes={flow.nodes}
+              edges={flow.edges}
+              nodeTypes={nodeTypes}
+              fitView
+              fitViewOptions={{ padding: 0.18 }}
+              minZoom={0.32}
+              maxZoom={1.25}
+              onNodeClick={(_, node) => void openNode(node.id)}
+              proOptions={{ hideAttribution: true }}
+            >
+              <Background gap={22} color="#d4d4d8" />
+              <Controls showInteractive={false} />
+              <MiniMap
+                pannable
+                zoomable
+                nodeColor={(node) => {
+                  const data = node.data as RootMapNodeData;
+                  return NODE_KIND_CONFIG[data.node.type].minimapColor;
+                }}
+              />
+            </ReactFlow>
+          </div>
+        </section>
+
+        <AnimatePresence>
+          {modalOpen && selectedNode ? (
+            <motion.div
+              className="modal-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onMouseDown={closeDetailModal}
+            >
+              <motion.article
+                className="detail-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="detail-modal-title"
+                initial={{ opacity: 0, y: 24, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 12, scale: 0.98 }}
+                transition={{ duration: 0.18, ease: "easeOut" }}
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <div className="modal-header">
+                  <div>
+                    <div className="detail-kind">{SECTION_LABEL[selectedNode.type]}</div>
+                    <h2 id="detail-modal-title">{selectedNode.title}</h2>
+                    <p className="summary">
+                      {selectedNode.description || "상세 설명을 생성하거나 불러오는 중입니다."}
+                    </p>
+                  </div>
+                  <button
+                    className="modal-close"
+                    onClick={closeDetailModal}
+                    aria-label="상세 창 닫기"
+                  >
+                    <X size={20} />
                   </button>
                 </div>
-              ) : detail ? (
-                <article className="space-y-5 text-sm leading-relaxed">
-                  <header className="rounded-2xl border border-amber-200 bg-white/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
-                    <p className="text-xs uppercase tracking-wide text-zinc-500">
-                      {SECTION_LABEL[detail.type]}
-                    </p>
-                    <h3 className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-                      {detail.title}
-                    </h3>
-                    {detail.document_context ? (
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                        <span
-                          className={`rounded-full px-2.5 py-1 font-medium ${documentSourceTypeTone(
-                            detail.document_context.source_type as DocumentSourceType,
-                          )}`}
+
+                <div className="modal-content">
+                  <div className="modal-main">
+                    {detailLoading ? (
+                      <div className="detail-section">
+                        <h3>불러오는 중</h3>
+                        <p className="section-copy">상세 설명을 준비하고 있습니다.</p>
+                      </div>
+                    ) : detailError ? (
+                      <div className="detail-section">
+                        <h3>불러오지 못했습니다</h3>
+                        <p className="section-copy">{detailError}</p>
+                        <button
+                          type="button"
+                          className="detail-inline-button"
+                          onClick={() => void loadDetail(selectedNode.id)}
                         >
-                          {documentSourceTypeLabel(
-                            detail.document_context.source_type as DocumentSourceType,
+                          다시 시도
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="detail-section">
+                          <h3>이게 뭔가요?</h3>
+                          <p className="section-copy">
+                            {detail?.easy_explanation ||
+                              selectedNode.description ||
+                              "아직 설명이 없습니다."}
+                          </p>
+                        </div>
+
+                        <div className="detail-section">
+                          <h3>왜 중요한가</h3>
+                          <p className="section-copy">
+                            {detail?.why_it_matters_for_document ??
+                              detail?.why_it_matters ??
+                              "이 노드의 선수/후속 관계를 맵에서 확인하세요."}
+                          </p>
+                        </div>
+
+                        {detail?.document_context ? (
+                          <div className="detail-section">
+                            <h3>문서에서의 역할</h3>
+                            <p className="section-copy">
+                              {detail.document_context_summary ||
+                                detail.topic_context_line ||
+                                selectedNode.description ||
+                                "문서 기반 맥락 정보가 연결되어 있습니다."}
+                            </p>
+                            {detail.document_context.evidence.length > 0 ? (
+                              <div className="evidence-list">
+                                {detail.document_context.evidence.map((evidence, index) => (
+                                  <div
+                                    key={`${evidence.section_title ?? "section"}-${index}`}
+                                    className="evidence-item"
+                                  >
+                                    <strong>{formatDocumentEvidenceLocation(evidence)}</strong>
+                                    <p>{evidence.snippet}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+
+                        {detail?.example ? (
+                          <div className="detail-section">
+                            <h3>예시</h3>
+                            <pre className="detail-code">{detail.example}</pre>
+                          </div>
+                        ) : null}
+
+                        {detail?.common_misconceptions?.length ? (
+                          <div className="detail-section">
+                            <h3>자주 하는 오해</h3>
+                            <ul>
+                              {detail.common_misconceptions.map((item) => (
+                                <li key={item}>{item}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+
+                        <div className="detail-section">
+                          <h3>이해 점검</h3>
+                          {detail?.check_questions?.length ? (
+                            <ul>
+                              {detail.check_questions.map((question, index) => (
+                                <li key={`${question.question}-${index}`}>
+                                  <strong>{question.question}</strong>
+                                  <p>{question.answer}</p>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="section-copy">아직 이해 점검 항목이 없습니다.</p>
                           )}
-                        </span>
-                        <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-zinc-700 dark:bg-zinc-950 dark:text-zinc-300">
-                          원본: {detail.document_context.document_title}
-                        </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <aside className="modal-side">
+                    <div className="detail-section">
+                      <h3>연결 관계</h3>
+                      <div className="related-list">
+                        {relations.length > 0 ? (
+                          relations.map((relation) => (
+                            <button
+                              key={`${relation.direction}-${relation.node.id}`}
+                              onClick={() => void openNode(relation.node.id)}
+                            >
+                              <span>
+                                {relation.direction === "parent" ? "이전" : "다음"} ·{" "}
+                                {SECTION_LABEL[relation.node.type]}
+                              </span>
+                              <strong>{relation.node.title}</strong>
+                            </button>
+                          ))
+                        ) : (
+                          <p className="section-copy">연결된 노드가 없습니다.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="detail-section">
+                      <h3>이해 정도</h3>
+                      <label className="modal-progress">
+                        <span>{PROGRESS_LABEL[selectedNode.progress]}</span>
+                        <select
+                          value={selectedNode.progress}
+                          disabled={progressBusy === selectedNode.id}
+                          onChange={(event) =>
+                            void onProgressChange(
+                              selectedNode.id,
+                              event.target.value as ProgressStatus,
+                            )
+                          }
+                        >
+                          {(Object.keys(PROGRESS_LABEL) as ProgressStatus[]).map((status) => (
+                            <option key={status} value={status}>
+                              {PROGRESS_LABEL[status]}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    {renderDocumentNodeContext(selectedNode)}
+
+                    {detail?.prerequisite_concepts?.length ? (
+                      <div className="detail-section">
+                        <h3>선수 개념</h3>
+                        <ul>
+                          {detail.prerequisite_concepts.map((concept) => (
+                            <li key={concept.id}>{concept.title}</li>
+                          ))}
+                        </ul>
                       </div>
                     ) : null}
-                  </header>
-                  {detail.quality_warnings?.length ? (
-                    <ul className="list-inside list-disc rounded-xl bg-amber-100 px-4 py-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-                      {detail.quality_warnings.map((w) => (
-                        <li key={w}>{w}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                  {detail.topic_context_line ? (
-                    <p className="rounded-xl bg-zinc-100 px-4 py-3 text-xs leading-relaxed text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
-                      {detail.topic_context_line}
-                    </p>
-                  ) : null}
-                  {detail.from_concept_store ? (
-                    <p className="text-xs font-medium text-emerald-800 dark:text-emerald-200">
-                      Concept 저장소의 설명을 바탕으로 보여 줍니다.
-                    </p>
-                  ) : null}
-                  {detail.document_context ? (
-                    <section className="rounded-2xl border border-teal-100 bg-white/80 p-4 dark:border-teal-900/60 dark:bg-zinc-900/70">
-                      <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                        이 문서에서의 역할
-                      </h3>
-                      <p className="mt-1 text-zinc-700 dark:text-zinc-300">
-                        {detail.why_it_matters_for_document ??
-                          detail.topic_context_line ??
-                          detail.why_it_matters}
-                      </p>
-                      {detail.document_context_summary || detail.analogy ? (
-                        <p className="mt-3 rounded-xl bg-teal-50 px-3 py-2 text-xs leading-relaxed text-teal-900 dark:bg-teal-950/30 dark:text-teal-100">
-                          {detail.document_context_summary ?? detail.analogy}
-                        </p>
-                      ) : null}
-                      {detail.document_context.evidence.length > 0 ? (
-                        <div className="mt-3 space-y-2">
-                          <h4 className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
-                            관련 문서 문단
-                          </h4>
-                          {detail.document_context.evidence.map((e, i) => (
-                            <div
-                              key={`${e.section_title ?? "section"}-${i}`}
-                              className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-950"
-                            >
-                              <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
-                                {formatDocumentEvidenceLocation(e)}
-                              </p>
-                              <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-zinc-700 dark:text-zinc-300">
-                                {e.snippet}
-                              </p>
-                            </div>
+
+                    {detail?.related_concepts?.length ? (
+                      <div className="detail-section">
+                        <h3>관련 개념</h3>
+                        <ul>
+                          {detail.related_concepts.map((concept) => (
+                            <li key={concept.id}>{concept.title}</li>
                           ))}
-                        </div>
-                      ) : (
-                        <p className="mt-3 rounded-xl bg-indigo-50 px-3 py-2 text-xs leading-relaxed text-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-100">
-                          문서에 직접 나온 문단은 없습니다. 문서를 이해하기 위해 추가한 선수지식으로 표시합니다.
-                        </p>
-                      )}
-                    </section>
-                  ) : null}
-                  <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
-                    <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                      왜 중요한가
-                    </h3>
-                    <p className="mt-1 text-zinc-700 dark:text-zinc-300">
-                      {detail.why_it_matters}
-                    </p>
-                  </section>
-                  <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
-                    <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                      쉬운 설명
-                    </h3>
-                    <p className="mt-1 whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
-                      {detail.easy_explanation}
-                    </p>
-                  </section>
-                  {!detail.document_context ? (
-                    <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
-                      <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                        비유
-                      </h3>
-                      <p className="mt-1 text-zinc-700 dark:text-zinc-300">
-                        {detail.analogy || "—"}
-                      </p>
-                    </section>
-                  ) : null}
-                  <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
-                    <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                      예시
-                    </h3>
-                    <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-xl bg-zinc-100 p-3 text-xs text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
-                      {detail.example}
-                    </pre>
-                  </section>
-                  <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
-                    <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                      자주 하는 오해
-                    </h3>
-                    <ul className="mt-1 list-inside list-disc text-zinc-700 dark:text-zinc-300">
-                      {detail.common_misconceptions.map((m) => (
-                        <li key={m}>{m}</li>
-                      ))}
-                    </ul>
-                  </section>
-                  <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
-                    <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                      이해 점검
-                    </h3>
-                    {detail.check_questions.length === 0 ? (
-                      <p className="mt-1 text-xs text-zinc-500">항목 없음</p>
-                    ) : (
-                      <ul className="mt-2 space-y-3">
-                        {detail.check_questions.map((q, i) => (
-                          <li
-                            key={`${q.question}-${i}`}
-                            className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-700"
-                          >
-                            <p className="font-medium text-zinc-800 dark:text-zinc-200">
-                              {q.question}
-                            </p>
-                            <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-                              {q.answer}
-                            </p>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </section>
-                  {detail.prerequisite_concepts &&
-                  detail.prerequisite_concepts.length > 0 ? (
-                    <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
-                      <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                        선수 개념 (저장소)
-                      </h3>
-                      <ul className="mt-1 list-inside list-disc text-zinc-700 dark:text-zinc-300">
-                        {detail.prerequisite_concepts.map((p) => (
-                          <li key={p.id}>{p.title}</li>
-                        ))}
-                      </ul>
-                    </section>
-                  ) : null}
-                  {detail.related_concepts && detail.related_concepts.length > 0 ? (
-                    <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
-                      <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                        관련 개념
-                      </h3>
-                      <ul className="mt-1 list-inside list-disc text-zinc-700 dark:text-zinc-300">
-                        {detail.related_concepts.map((p) => (
-                          <li key={p.id}>{p.title}</li>
-                        ))}
-                      </ul>
-                    </section>
-                  ) : null}
-                  {detail.used_in_other_trees &&
-                  detail.used_in_other_trees.length > 0 ? (
-                    <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
-                      <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                        다른 학습 주제에서의 사용
-                      </h3>
-                      <ul className="mt-1 space-y-1 text-zinc-700 dark:text-zinc-300">
-                        {detail.used_in_other_trees.map((t) => (
-                          <li key={t.tree_id} className="text-xs">
-                            <span className="font-medium">{t.topic}</span>
-                            <span className="text-zinc-500"> — {t.role_in_tree}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </section>
-                  ) : null}
-                  {detail.next_nodes.length > 0 ? (
-                    <section className="rounded-2xl bg-white/80 p-4 dark:bg-zinc-900/70">
-                      <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
-                        다음에 볼 노드 (키)
-                      </h3>
-                      <p className="mt-1 text-xs text-zinc-500">
-                        {detail.next_nodes.join(", ")}
-                      </p>
-                    </section>
-                  ) : null}
-                </article>
-              ) : null}
-            </div>
-          </section>
-        </div>
-      ) : null}
+                        </ul>
+                      </div>
+                    ) : null}
+
+                    {detail?.used_in_other_trees?.length ? (
+                      <div className="detail-section">
+                        <h3>다른 Tree</h3>
+                        <ul>
+                          {detail.used_in_other_trees.map((item) => (
+                            <li key={item.tree_id}>
+                              <strong>{item.topic}</strong>
+                              <p>{item.role_in_tree}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+
+                    {detail?.next_nodes?.length ? (
+                      <div className="detail-section">
+                        <h3>다음에 볼 것</h3>
+                        <p className="section-copy">{detail.next_nodes.join(", ")}</p>
+                      </div>
+                    ) : null}
+                  </aside>
+                </div>
+              </motion.article>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

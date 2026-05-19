@@ -9,15 +9,6 @@
 - Run only the verification command specified by the active task.
 - If verification fails, stop and report. Do not perform speculative logic fixes.
 
-## Senior / Worker Split
-
-Use ForgeCode project skills only when explicitly triggered:
-
-- `@senior` -> use the `senior-worker-senior` skill.
-- `@worker` -> use the `senior-worker-worker` skill.
-
-Do not read long specs, `.agent/*`, or Senior/Worker skills during greetings, ordinary chat, or unrelated coding tasks.
-
 ## RootMap 작업 체크리스트 운영 지침
 
 이 저장소에서 작업을 진행하는 에이전트는 각 Phase README의 진행 체크리스트를 기준으로 완료 상태를 관리한다.

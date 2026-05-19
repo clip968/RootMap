@@ -1,3 +1,4 @@
+@import "@xyflow/react/dist/style.css";
 @import "tailwindcss";
 
 :root {
@@ -23,4 +24,437 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+.rootmap-flow-frame {
+  flex: 1;
+  min-height: 0;
+  background: #f8fafc;
+}
+
+.rootmap-flow-frame .react-flow__controls {
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.12);
+}
+
+.rootmap-flow-frame .react-flow__controls-button {
+  border-bottom-color: #e4e4e7;
+  color: #18181b;
+}
+
+.rootmap-flow-frame .react-flow__minimap {
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.rootmap-flow-frame .react-flow__edge.rootmap-edge-active path {
+  stroke-width: 2.7;
+  opacity: 1;
+  animation-duration: 680ms;
+}
+
+.rootmap-flow-frame .react-flow__edge.rootmap-edge-muted path {
+  stroke-width: 1.45;
+  opacity: 0.5;
+  animation-duration: 1400ms;
+}
+
+.rootmap-flow-frame .react-flow__edge.edge-prerequisite path {
+  stroke: #2563eb;
+}
+
+.rootmap-flow-frame .react-flow__edge.edge-core path {
+  stroke: #0f766e;
+}
+
+.rootmap-flow-frame .react-flow__edge.edge-supplementary path {
+  stroke: #7c3aed;
+}
+
+.rootmap-flow-frame .react-flow__edge.edge-misconception path {
+  stroke: #dc2626;
+}
+
+.rootmap-flow-frame .react-flow__edge.edge-quiz path {
+  stroke: #ca8a04;
+}
+
+.rootmap-flow-frame .react-flow__edge.animated path {
+  stroke-dasharray: 10 7;
+  animation-name: rootmap-edge-flow;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes rootmap-edge-flow {
+  from {
+    stroke-dashoffset: 17;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.rootmap-flow-frame .react-flow__edge-textbg {
+  fill: rgba(255, 255, 255, 0.88);
+}
+
+.rootmap-flow-node {
+  width: 214px;
+  min-height: 128px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.1);
+}
+
+.rootmap-flow-node.is-selected {
+  border-color: #09090b;
+  box-shadow:
+    0 0 0 3px rgba(9, 9, 11, 0.14),
+    0 18px 38px rgba(15, 23, 42, 0.16);
+}
+
+.rootmap-flow-node.is-related:not(.is-selected) {
+  border-color: #52525b;
+}
+
+.rootmap-flow-node.is-recommended:not(.is-selected) {
+  border-color: #18181b;
+}
+
+.rootmap-flow-node .node-topline {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.rootmap-flow-node .node-kind,
+.rootmap-flow-node .node-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  color: #52525b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.rootmap-flow-node .node-status {
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: #ffffff;
+  background: #09090b;
+}
+
+.rootmap-flow-node strong {
+  display: block;
+  color: #111827;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.rootmap-flow-node p {
+  margin: 7px 0 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.rootmap-flow-node .node-progress {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #e4e4e7;
+  color: #52525b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.rootmap-flow-node .node-progress select {
+  max-width: 86px;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  padding: 3px 7px;
+  background: #ffffff;
+  color: #18181b;
+  font-size: 11px;
+}
+
+.rootmap-flow-node.kind-core {
+  border-color: #09090b;
+}
+
+.rootmap-flow-node.kind-core .node-kind {
+  color: #09090b;
+}
+
+.rootmap-flow-node.kind-misconception {
+  border-style: dashed;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(5px);
+}
+
+.detail-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(1180px, 94vw);
+  max-height: min(900px, 92vh);
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px 28px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.detail-kind {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.modal-header h2 {
+  margin: 4px 0 8px;
+  color: #111827;
+  font-size: clamp(24px, 2.4vw, 34px);
+  line-height: 1.16;
+}
+
+.modal-header .summary {
+  margin: 0;
+  color: #475569;
+  line-height: 1.55;
+}
+
+.modal-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #172033;
+  background: #ffffff;
+}
+
+.modal-close:hover {
+  border-color: #09090b;
+  background: #f8fafc;
+}
+
+.modal-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.modal-main,
+.modal-side {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  padding: 24px 28px 28px;
+}
+
+.modal-main {
+  border-right: 1px solid #e2e8f0;
+}
+
+.modal-side {
+  background: #fbfdff;
+}
+
+.detail-section {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #d7dee9;
+  border-radius: 8px;
+  padding: 14px;
+  background: #ffffff;
+}
+
+.detail-section h3 {
+  margin: 0;
+  color: #172033;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.section-copy,
+.detail-section p,
+.detail-section li {
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.detail-section ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.detail-code {
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  border-radius: 8px;
+  padding: 12px;
+  color: #334155;
+  background: #f8fafc;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.detail-inline-button {
+  justify-self: start;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 7px 11px;
+  color: #111827;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.related-list {
+  display: grid;
+  gap: 8px;
+}
+
+.related-list button {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #d7dee9;
+  border-radius: 8px;
+  padding: 10px;
+  text-align: left;
+  background: #ffffff;
+}
+
+.related-list button:hover {
+  border-color: #09090b;
+}
+
+.related-list span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.related-list strong {
+  color: #172033;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.modal-progress {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.modal-progress span {
+  color: #172033;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.modal-progress select {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: #ffffff;
+  color: #172033;
+}
+
+.evidence-list {
+  display: grid;
+  gap: 8px;
+}
+
+.evidence-item {
+  display: grid;
+  gap: 5px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px;
+  background: #f8fafc;
+}
+
+.evidence-item strong {
+  color: #334155;
+  font-size: 12px;
+}
+
+.evidence-item p {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+
+@media (max-width: 1180px) {
+  .modal-content {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-main {
+    border-right: 0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+}
+
+@media (max-width: 760px) {
+  .modal-backdrop {
+    padding: 10px;
+  }
+
+  .detail-modal {
+    width: 100%;
+    max-height: 96vh;
+  }
+
+  .modal-header,
+  .modal-main,
+  .modal-side {
+    padding: 18px;
+  }
 }

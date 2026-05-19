@@ -135,11 +135,11 @@ export function AppShell({ children }: AppShellProps) {
                     <Link
                       key={item.tree_id}
                       href={href}
-                      className={`block rounded-xl px-3 py-2 text-sm transition ${
-                        active
-                          ? "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-100 dark:ring-emerald-900"
-                          : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
-                      }`}
+                        className={`block rounded-xl px-3 py-2 text-sm transition ${
+                          active
+                            ? "bg-zinc-950 text-white ring-1 ring-zinc-700 dark:bg-white dark:text-zinc-950 dark:ring-zinc-300"
+                            : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                        }`}
                     >
                       <span className="line-clamp-2 font-medium leading-snug">
                         {item.topic}
