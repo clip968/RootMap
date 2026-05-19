@@ -40,7 +40,6 @@ import type {
   ConsolidatedConcept,
   DocumentTreeStructureResponse,
   LearningTreeResponse,
-  DocumentTreeResponse,
 } from "@/types/learning";
 
 // ──────────────────────────────────────────────
@@ -146,53 +145,6 @@ function structureToLearningTreeResponse(
         is_reusable: true,
       },
     })),
-  };
-}
-
-/**
- * DocumentTreeResponse(DocumentTreeNode[]) → LearningTreeResponse(LearningTreeNode[])
- *
- * 문서 기반 트리 노드를 일반 학습 트리 노드로 변환한다.
- * source_type / evidence 정보는 description에 포함시킨다.
- */
-function toLearningTreeResponse(
-  docTree: DocumentTreeResponse,
-): LearningTreeResponse {
-  const nodes: LearningTreeNode[] = docTree.nodes.map((n) => {
-    const evidenceText =
-      n.evidence.length > 0
-        ? n.evidence
-            .map(
-              (e) =>
-                `[출처: ${
-                  e.section_title
-                    ? `${e.section_title} (p.${e.page_start ?? "?"}`
-                    : `p.${e.page_start ?? "?"}`
-                }${e.page_end ? `-${e.page_end}` : ""})]`,
-            )
-            .join(" ")
-        : "";
-
-    return {
-      id: n.id,
-      title: n.title,
-      type: n.type === "document_core" ? "core" : (n.type as LearningTreeNode["type"]),
-      description: evidenceText
-        ? `${n.description}\n\n${evidenceText}`
-        : n.description,
-      difficulty: n.difficulty,
-      prerequisites: n.prerequisites,
-      children: n.children,
-      concept_candidate: n.concept_candidate,
-    };
-  });
-
-  return {
-    topic: docTree.topic,
-    summary: docTree.summary,
-    nodes,
-    recommended_order: docTree.recommended_order,
-    edges: docTree.edges,
   };
 }
 

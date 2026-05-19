@@ -25,6 +25,8 @@ const EXAMPLE_TOPICS = [
 
 const MAX_DOCUMENT_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 const ALLOWED_DOCUMENT_EXTENSIONS = new Set(["pdf", "txt", "md"]);
+const DOCUMENT_PROCESS_POLL_INTERVAL_MS = 2_000;
+const DOCUMENT_PROCESS_TIMEOUT_MS = 10 * 60 * 1_000;
 
 type HomeMode = "topic" | "document";
 type DocumentProcessingStatus =
@@ -299,6 +301,29 @@ export function StartTopicForm() {
     );
   };
 
+  const waitForDocumentProcessingComplete = async (nextDocumentId: string) => {
+    const deadline = Date.now() + DOCUMENT_PROCESS_TIMEOUT_MS;
+
+    while (true) {
+      const latest = await loadDocumentStatus(nextDocumentId);
+      if (latest.processing_status === "tree_generated") return latest;
+      if (latest.processing_status === "failed") {
+        throw new Error(
+          latest.processing_error ??
+            "문서 처리 중 오류가 발생했습니다. 파일 내용을 확인한 뒤 다시 시도해 주세요.",
+        );
+      }
+      if (Date.now() >= deadline) {
+        throw new Error(
+          "문서 처리가 예상보다 오래 걸리고 있습니다. 잠시 후 히스토리에서 다시 확인해 주세요.",
+        );
+      }
+      await new Promise((resolve) =>
+        window.setTimeout(resolve, DOCUMENT_PROCESS_POLL_INTERVAL_MS),
+      );
+    }
+  };
+
   const uploadAndProcessDocument = async () => {
     if (!documentFile) {
       setDocumentError("업로드할 문서를 선택해 주세요.");
@@ -335,41 +360,25 @@ export function StartTopicForm() {
       setDocumentUploading(false);
       setDocumentProcessing(true);
 
-      /**
-       * MVP는 polling 방식이다. 처리 API가 오래 걸려도 DB 상태가 바뀌면 화면에 반영되도록
-       * 별도 간격으로 `/api/documents/:id`를 조회한다.
-       */
-      let stopped = false;
-      const pollTimer = window.setInterval(() => {
-        if (stopped) return;
-        void loadDocumentStatus(uploaded.document_id).catch(() => undefined);
-      }, 2000);
+      await loadDocumentStatus(uploaded.document_id);
+      const processRes = await fetch(
+        `/api/documents/${uploaded.document_id}/process`,
+        { method: "POST" },
+      );
+      const processData = await processRes.json().catch(() => ({}));
 
-      try {
-        await loadDocumentStatus(uploaded.document_id);
-        const processRes = await fetch(
-          `/api/documents/${uploaded.document_id}/process`,
-          { method: "POST" },
+      if (!processRes.ok) {
+        setDocumentError(
+          apiErrorMessage(
+            processData,
+            "문서 처리 중 오류가 발생했습니다. 파일 내용을 확인한 뒤 다시 시도해 주세요.",
+          ),
         );
-        const processData = await processRes.json().catch(() => ({}));
-        const latest = await loadDocumentStatus(uploaded.document_id);
-
-        if (!processRes.ok || latest.processing_status === "failed") {
-          setDocumentError(
-            latest.processing_error ??
-              apiErrorMessage(
-                processData,
-                "문서 처리 중 오류가 발생했습니다. 파일 내용을 확인한 뒤 다시 시도해 주세요.",
-              ),
-          );
-          return;
-        }
-
-        await loadDocumentResult(uploaded.document_id);
-      } finally {
-        stopped = true;
-        window.clearInterval(pollTimer);
+        return;
       }
+
+      await waitForDocumentProcessingComplete(uploaded.document_id);
+      await loadDocumentResult(uploaded.document_id);
     } catch (err) {
       setDocumentError(
         err instanceof Error ?

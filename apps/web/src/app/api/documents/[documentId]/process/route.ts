@@ -1,57 +1,50 @@
 import { DEFAULT_USER_ID } from "@/db/constants";
 import { jsonError } from "@/lib/api-errors";
-import { DocumentProcessorError, processDocument } from "@/lib/document/processor";
-import { NextResponse } from "next/server";
+import { startDocumentProcessingJob } from "@/lib/document/processing-jobs";
+import {
+  getDocumentForUser,
+  getDocumentLearningTreeForUser,
+} from "@/lib/repository/document-repository";
+import { after, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 export async function POST(
   _req: Request,
   { params }: { params: Promise<{ documentId: string }> },
 ) {
   const { documentId } = await params;
+  const document = getDocumentForUser(documentId, DEFAULT_USER_ID);
+  if (!document) {
+    return jsonError("NOT_FOUND", "문서를 찾을 수 없습니다.", 404);
+  }
 
-  try {
-    const result = await processDocument(documentId, DEFAULT_USER_ID);
-
+  if (document.processingStatus === "tree_generated") {
+    const bundle = getDocumentLearningTreeForUser(documentId, DEFAULT_USER_ID);
     return NextResponse.json({
       document_id: documentId,
-      processing_status: "tree_generated",
-      tree_id: result.treeId,
+      processing_status: document.processingStatus,
+      job_status: "already_processed",
+      tree_id: bundle?.tree.id ?? null,
     });
-  } catch (err) {
-    if (err instanceof DocumentProcessorError) {
-      if (err.code === "NOT_FOUND") {
-        return jsonError("NOT_FOUND", err.message, 404);
-      }
-      if (err.code === "INVALID_STATUS" || err.code === "ALREADY_PROCESSED") {
-        return jsonError("INVALID_STATUS", err.message, 409);
-      }
-      if (err.code === "TEXT_EXTRACTION_FAILED") {
-        return jsonError("DOCUMENT_UPLOAD_FAILED", err.message, 422);
-      }
-      if (err.code === "DOCUMENT_TOO_LONG") {
-        return jsonError("INVALID_REQUEST", err.message, 413);
-      }
-      if (
-        err.code === "CONCEPT_EXTRACTION_FAILED" ||
-        err.code === "CONSOLIDATION_FAILED" ||
-        err.code === "LOW_QUALITY"
-      ) {
-        return jsonError("PROCESSING_FAILED", err.message, 422);
-      }
-      if (
-        err.code === "TREE_GENERATION_FAILED" ||
-        err.code === "TREE_PERSIST_FAILED"
-      ) {
-        return jsonError("PROCESSING_FAILED", err.message, 500);
-      }
-      return jsonError("DOCUMENT_UPLOAD_FAILED", err.message, 500);
-    }
-    return jsonError(
-      "DOCUMENT_UPLOAD_FAILED",
-      "문서 처리 중 오류가 발생했습니다.",
-      500,
-    );
   }
+
+  const job = startDocumentProcessingJob({
+    documentId,
+    userId: DEFAULT_USER_ID,
+    schedule: (task) => {
+      after(() => task());
+    },
+  });
+
+  return NextResponse.json(
+    {
+      document_id: documentId,
+      processing_status: document.processingStatus,
+      job_status: job.status,
+      job_id: job.jobId,
+    },
+    { status: 202 },
+  );
 }

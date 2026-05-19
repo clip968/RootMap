@@ -73,27 +73,27 @@ const NODE_KIND_CONFIG: Record<
   prerequisite: {
     className: "kind-prerequisite",
     icon: GitBranch,
-    minimapColor: "#2563eb",
+    minimapColor: "#047857",
   },
   core: {
     className: "kind-core",
     icon: BookOpen,
-    minimapColor: "#0f766e",
+    minimapColor: "#047857",
   },
   supplementary: {
     className: "kind-supplementary",
     icon: Route,
-    minimapColor: "#7c3aed",
+    minimapColor: "#047857",
   },
   misconception: {
     className: "kind-misconception",
     icon: AlertTriangle,
-    minimapColor: "#dc2626",
+    minimapColor: "#047857",
   },
   quiz: {
     className: "kind-quiz",
     icon: CircleHelp,
-    minimapColor: "#ca8a04",
+    minimapColor: "#047857",
   },
 };
 
@@ -780,33 +780,33 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-black text-zinc-950">
+    <div className="flex min-h-0 flex-1 flex-col bg-black text-zinc-50">
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 p-4 xl:h-[calc(100dvh-3rem)] xl:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className="flex min-h-0 flex-col gap-3 rounded-lg border border-zinc-700 bg-white p-4 shadow-[0_18px_42px_rgba(0,0,0,0.24)]">
+        <aside className="flex min-h-0 flex-col gap-3 rounded-lg border border-zinc-800 bg-zinc-950 p-4 shadow-[0_18px_42px_rgba(0,0,0,0.45)]">
           <div className="grid gap-1">
-            <span className="text-sm font-semibold text-zinc-500">RootMap</span>
-            <strong className="text-2xl leading-tight text-zinc-950">{tree.topic}</strong>
-            <p className="mt-2 text-sm leading-relaxed text-zinc-600">{tree.summary}</p>
+            <span className="text-sm font-semibold text-emerald-500">RootMap</span>
+            <strong className="text-2xl leading-tight text-white">{tree.topic}</strong>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-300">{tree.summary}</p>
           </div>
 
-          <label className="flex h-10 items-center gap-2 rounded-lg border border-zinc-300 bg-zinc-50 px-3 text-zinc-500">
+          <label className="flex h-10 items-center gap-2 rounded-lg border border-zinc-800 bg-black px-3 text-zinc-400">
             <Search size={16} />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="노드 검색"
-              className="min-w-0 flex-1 bg-transparent text-sm text-zinc-950 outline-none placeholder:text-zinc-400"
+              className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
             />
           </label>
 
           <div className="flex flex-wrap gap-2">
-            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs text-zinc-700">
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-800 bg-black px-3 py-1.5 text-xs text-zinc-200">
               <input
                 type="checkbox"
                 checked={reuseConcepts}
                 onChange={(event) => setReuseConcepts(event.target.checked)}
                 disabled={regenLoading}
-                className="rounded border-zinc-400 accent-zinc-950 disabled:opacity-60"
+                className="rounded border-zinc-600 accent-emerald-700 disabled:opacity-60"
               />
               개념 재사용
             </label>
@@ -814,24 +814,24 @@ export function TreePageClient({ treeId }: { treeId: string }) {
               type="button"
               onClick={() => void onRegenerate()}
               disabled={regenLoading}
-              className="rounded-lg border border-zinc-950 bg-zinc-950 px-3 py-1.5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
+              className="rounded-lg border border-emerald-700 bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
             >
               {regenLoading ? `재생성 중 · ${regenElapsedSeconds}초` : "다시 생성"}
             </button>
-            <span className="rounded-lg border border-zinc-300 bg-zinc-100 px-3 py-1.5 text-sm text-zinc-700">
+            <span className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300">
               저장됨
             </span>
-            <Link href="/" className="rounded-lg px-3 py-1.5 text-sm text-zinc-600 underline">
+            <Link href="/" className="rounded-lg px-3 py-1.5 text-sm text-zinc-300 underline decoration-emerald-700 underline-offset-4">
               새 주제
             </Link>
           </div>
 
           {regenLoading ? (
-            <div className="rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm text-zinc-900">
+            <div className="rounded-lg border border-emerald-900 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-100">
               <p className="font-medium">재생성 중 · {regenElapsedSeconds}초 경과</p>
               <p className="mt-1 text-xs">{generationStageMessage(regenElapsedSeconds)}</p>
               {reuseConcepts ? (
-                <p className="mt-1 text-xs text-zinc-600">
+                <p className="mt-1 text-xs text-emerald-200/80">
                   저장된 Concept과 비교해 중복을 줄이는 중이라 조금 더 걸릴 수 있습니다.
                 </p>
               ) : null}
@@ -843,15 +843,15 @@ export function TreePageClient({ treeId }: { treeId: string }) {
             </p>
           ) : null}
 
-          <section className="rounded-lg border border-zinc-300 bg-zinc-50 p-3">
+          <section className="rounded-lg border border-zinc-800 bg-black p-3">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-zinc-950">다음에 볼 만한 노드</h2>
-              <span className="rounded-full bg-zinc-950 px-2 py-0.5 text-xs font-medium text-white">
+              <h2 className="text-sm font-semibold text-white">다음에 볼 만한 노드</h2>
+              <span className="rounded-full bg-emerald-700 px-2 py-0.5 text-xs font-medium text-white">
                 {recommendations.length}
               </span>
             </div>
             {recoError ? (
-              <p className="mt-2 text-sm text-zinc-500">{recoError}</p>
+              <p className="mt-2 text-sm text-zinc-400">{recoError}</p>
             ) : recommendations.length > 0 ? (
               <div className="mt-2 grid gap-2">
                 {recommendations.map((item) => (
@@ -859,24 +859,24 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                     key={item.node_id}
                     type="button"
                     onClick={() => void openNode(item.node_id)}
-                    className="rounded-md border border-zinc-200 bg-white px-3 py-2 text-left text-sm transition hover:border-zinc-950"
+                    className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-left text-sm transition hover:border-emerald-700"
                   >
-                    <strong className="block text-zinc-950">{item.title}</strong>
-                    <span className="mt-0.5 line-clamp-2 block text-xs text-zinc-600">
+                    <strong className="block text-white">{item.title}</strong>
+                    <span className="mt-0.5 line-clamp-2 block text-xs text-zinc-400">
                       {item.reason}
                     </span>
                   </button>
                 ))}
               </div>
             ) : (
-              <p className="mt-2 text-sm text-zinc-500">이해 상태를 바꾸면 추천이 갱신됩니다.</p>
+              <p className="mt-2 text-sm text-zinc-400">이해 상태를 바꾸면 추천이 갱신됩니다.</p>
             )}
           </section>
 
           <section className="min-h-0 flex-1 overflow-y-auto pr-1">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold text-zinc-500">학습 경로</span>
-              <span className="text-xs font-semibold text-zinc-500">
+              <span className="text-xs font-semibold text-zinc-400">학습 경로</span>
+              <span className="text-xs font-semibold text-zinc-400">
                 {filteredNodes.length} nodes
               </span>
             </div>
@@ -892,15 +892,15 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                     onClick={() => void openNode(node.id)}
                     className={`grid grid-cols-[1.75rem_minmax(0,1fr)] items-start gap-2 rounded-lg border px-3 py-2 text-left text-sm transition ${
                       active
-                        ? "border-zinc-950 bg-zinc-950 text-white"
+                        ? "border-emerald-700 bg-emerald-700 text-white"
                         : recommendedSet.has(node.id)
-                          ? "border-zinc-950 bg-zinc-100 text-zinc-950"
-                          : "border-zinc-200 bg-white text-zinc-900 hover:border-zinc-950"
+                          ? "border-emerald-800 bg-emerald-950/40 text-white"
+                          : "border-zinc-800 bg-black text-zinc-100 hover:border-emerald-700"
                     }`}
                   >
                     <span
                       className={`grid h-6 w-6 place-items-center rounded-full text-xs font-semibold ${
-                        active ? "bg-white text-zinc-950" : "bg-zinc-200 text-zinc-700"
+                        active ? "bg-white text-emerald-800" : "bg-zinc-900 text-zinc-300"
                       }`}
                     >
                       {index + 1}
@@ -913,7 +913,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                       <span className="mt-1 line-clamp-2 block font-semibold leading-snug">
                         {node.title}
                       </span>
-                      <span className={`mt-1 block text-xs ${active ? "text-zinc-200" : "text-zinc-500"}`}>
+                      <span className={`mt-1 block text-xs ${active ? "text-emerald-50" : "text-zinc-400"}`}>
                         {PROGRESS_LABEL[node.progress]}
                         {recommendedSet.has(node.id) ? " · 추천" : ""}
                       </span>
@@ -925,16 +925,16 @@ export function TreePageClient({ treeId }: { treeId: string }) {
           </section>
         </aside>
 
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-zinc-700 bg-white shadow-[0_18px_42px_rgba(0,0,0,0.24)]">
-          <div className="flex min-h-[86px] flex-col gap-3 border-b border-zinc-200 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 shadow-[0_18px_42px_rgba(0,0,0,0.45)]">
+          <div className="flex min-h-[86px] flex-col gap-3 border-b border-zinc-800 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <span className="text-sm font-semibold text-zinc-500">
+              <span className="text-sm font-semibold text-emerald-500">
                 {selectedNode ? SECTION_LABEL[selectedNode.type] : "Main Topic"}
               </span>
-              <h1 className="mt-1 text-2xl font-semibold leading-tight text-zinc-950">
+              <h1 className="mt-1 text-2xl font-semibold leading-tight text-white">
                 {selectedNode?.title ?? tree.topic}
               </h1>
-              <p className="mt-1 line-clamp-2 max-w-3xl text-sm leading-relaxed text-zinc-600">
+              <p className="mt-1 line-clamp-2 max-w-3xl text-sm leading-relaxed text-zinc-300">
                 {selectedNode?.description ||
                   tree.summary ||
                   "Tree에서 노드를 선택하면 상세 설명을 확인할 수 있습니다."}
@@ -942,7 +942,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               {selectedNode ? (
-                <div className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-zinc-300 bg-zinc-50 px-3 text-sm font-semibold text-zinc-700">
+                <div className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-zinc-800 bg-black px-3 text-sm font-semibold text-zinc-200">
                   {statusIcon(selectedNode.progress)}
                   {PROGRESS_LABEL[selectedNode.progress]}
                 </div>
@@ -951,24 +951,24 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                 type="button"
                 onClick={() => selectedNode && void openNode(selectedNode.id)}
                 disabled={!selectedNode}
-                className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-900 hover:border-zinc-950 disabled:opacity-50"
+                className="rounded-lg border border-zinc-800 bg-black px-3 py-2 text-sm font-semibold text-white hover:border-emerald-700 disabled:opacity-50"
               >
                 상세 보기
               </button>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 border-b border-zinc-200 bg-zinc-50 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-3 border-b border-zinc-800 bg-black px-4 py-3">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-zinc-500">Focus</span>
-              <div className="inline-flex rounded-lg border border-zinc-300 bg-white p-1">
+              <span className="text-xs font-bold text-zinc-400">Focus</span>
+              <div className="inline-flex rounded-lg border border-zinc-800 bg-zinc-950 p-1">
                 {FOCUS_OPTIONS.map((option) => (
                   <button
                     key={option.id}
                     type="button"
                     onClick={() => setFocusMode(option.id)}
                     className={`rounded-md px-3 py-1.5 text-xs font-bold ${
-                      focusMode === option.id ? "bg-zinc-950 text-white" : "text-zinc-600"
+                      focusMode === option.id ? "bg-emerald-700 text-white" : "text-zinc-400"
                     }`}
                   >
                     {option.label}
@@ -977,7 +977,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
               </div>
             </div>
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-              <span className="text-xs font-bold text-zinc-500">타입 필터</span>
+              <span className="text-xs font-bold text-zinc-400">타입 필터</span>
               {SECTION_ORDER.map((type) => (
                 <button
                   key={type}
@@ -985,15 +985,15 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                   onClick={() => toggleType(type)}
                   className={`rounded-full border px-2.5 py-1 text-xs font-bold ${
                     enabledTypes.includes(type)
-                      ? "border-zinc-950 bg-zinc-950 text-white"
-                      : "border-zinc-300 bg-white text-zinc-500"
+                      ? "border-emerald-700 bg-emerald-700 text-white"
+                      : "border-zinc-800 bg-zinc-950 text-zinc-400"
                   }`}
                 >
                   {SECTION_LABEL[type]}
                 </button>
               ))}
             </div>
-            <div className="text-xs font-bold text-zinc-500">
+            <div className="text-xs font-bold text-zinc-400">
               {flow.visibleCount} cards · {flow.edges.length} links
             </div>
           </div>
@@ -1010,7 +1010,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
               onNodeClick={(_, node) => void openNode(node.id)}
               proOptions={{ hideAttribution: true }}
             >
-              <Background gap={22} color="#d4d4d8" />
+              <Background gap={22} color="#14532d" />
               <Controls showInteractive={false} />
               <MiniMap
                 pannable

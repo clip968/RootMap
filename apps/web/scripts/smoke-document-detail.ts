@@ -14,6 +14,7 @@ import { getDb, resetDbSingleton } from "../src/db/client";
 import { DEFAULT_USER_ID } from "../src/db/constants";
 import { generateNodeDetail } from "../src/lib/llm/generate-document-detail";
 import type { GenerateNodeDetailOptions } from "../src/lib/llm/generate-document-detail";
+import type { LearningTreeResponse } from "../src/types/learning";
 // Fix: drizzle insert
 import * as schema from "../src/db/schema";
 
@@ -112,11 +113,19 @@ async function main(): Promise<void> {
       evidence: [],
     });
 
+    const treeJson: LearningTreeResponse = {
+      topic: "Transformer Attention",
+      summary: "",
+      nodes: [],
+      recommended_order: [],
+      edges: [],
+    };
+
     await db.insert(schema.learningTrees).values({
       id: treeId,
       userId: DEFAULT_USER_ID,
       topic: "Transformer Attention",
-      treeJson: { id: treeId, user_id: DEFAULT_USER_ID, topic: "Transformer Attention", summary: "", nodes: [], edges: [] } as any,
+      treeJson,
     });
 
     await db.insert(schema.learningNodes).values({

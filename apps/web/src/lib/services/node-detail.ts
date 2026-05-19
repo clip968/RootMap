@@ -1,8 +1,13 @@
 import {
   generateNodeDetail,
   type GenerateNodeDetailInput,
+  type GenerateNodeDetailResult,
 } from "@/lib/llm/generate-node-detail";
-import { generateDocumentNodeDetail } from "@/lib/llm/generate-document-node-detail";
+import {
+  generateDocumentNodeDetail,
+  type GenerateDocumentNodeDetailInput,
+  type GenerateDocumentNodeDetailResult,
+} from "@/lib/llm/generate-document-node-detail";
 import { getDb } from "@/db/client";
 import type { LearningTreeBundle, LearningNodeRow } from "@/lib/repository/learning-repository";
 import {
@@ -23,6 +28,14 @@ import {
 } from "@/lib/repository/concept-repository";
 import { buildPrerequisitePromptContext } from "@/lib/services/node-detail-context";
 import type { NodeDetailResponse, NodeType } from "@/types/learning";
+
+type GenericNodeDetailGenerator = (
+  input: GenerateNodeDetailInput,
+) => Promise<GenerateNodeDetailResult>;
+
+type DocumentNodeDetailGenerator = (
+  input: GenerateDocumentNodeDetailInput,
+) => Promise<GenerateDocumentNodeDetailResult>;
 
 export interface ApiNodeDetailResponse {
   node_id: string;
@@ -206,6 +219,7 @@ function responseFromStoredConcept(
   c: ConceptRow,
   bundle: LearningTreeBundle,
   treeId: string,
+  qualityWarnings: string[] = [],
 ): ApiNodeDetailResponse {
   const topic = bundle.tree.topic;
   const tline = topicContextLine(topic, nodeRow.title);
@@ -224,7 +238,7 @@ function responseFromStoredConcept(
     common_misconceptions: c.commonMisconceptions,
     check_questions: [],
     next_nodes: nodeRow.children,
-    quality_warnings: [],
+    quality_warnings: qualityWarnings,
     concept_id: c.id,
     topic_context_line: tline,
     from_concept_store: true,
@@ -232,10 +246,33 @@ function responseFromStoredConcept(
   };
 }
 
+function responseFromStoredConceptFallback(
+  dbId: string,
+  nodeKey: string,
+  nodeRow: LearningNodeRow,
+  bundle: LearningTreeBundle,
+  treeId: string,
+): ApiNodeDetailResponse | null {
+  if (!nodeRow.conceptId) return null;
+  const c = getConceptById(getDb(), nodeRow.conceptId);
+  if (!c || !(c.explanation?.trim() || c.shortDescription?.trim())) return null;
+  return responseFromStoredConcept(
+    dbId,
+    nodeKey,
+    nodeRow,
+    c,
+    bundle,
+    treeId,
+    ["LLM_DETAIL_GENERATION_FELL_BACK_TO_CONCEPT_STORE"],
+  );
+}
+
 export async function getOrCreateNodeDetail(params: {
   treeId: string;
   nodeId: string;
   bundle: LearningTreeBundle;
+  generateGenericNodeDetail?: GenericNodeDetailGenerator;
+  generateDocumentDetail?: DocumentNodeDetailGenerator;
 }): Promise<ApiNodeDetailResponse> {
   const { treeId, nodeId, bundle } = params;
   const nodeRow = bundle.nodes.find((n) => n.id === nodeId);
@@ -279,54 +316,6 @@ export async function getOrCreateNodeDetail(params: {
     };
   };
 
-  if (!nodeRow.detailJson && documentNodeContext) {
-    const { detail, qualityWarnings } = await generateDocumentNodeDetail({
-      documentTitle: documentNodeContext.document_title,
-      nodeId: nodeRow.nodeKey,
-      conceptTitle: nodeRow.title,
-      sourceType: documentNodeContext.source_type,
-      evidenceText: formatDocumentEvidenceForPrompt(documentNodeContext),
-      prerequisites: nodeRow.prerequisites.join(", ") || "없음",
-      requestId: `doc-node-${treeId}-${nodeRow.nodeKey}`,
-    });
-    const genericDetail: NodeDetailResponse = {
-      node_id: nodeRow.nodeKey,
-      title: detail.title,
-      type: nodeRow.type,
-      why_it_matters: detail.why_it_matters_for_document,
-      easy_explanation: detail.easy_explanation,
-      analogy: detail.document_context_summary,
-      example: detail.example,
-      common_misconceptions: detail.common_misconceptions,
-      check_questions: detail.check_questions,
-      next_nodes: detail.next_nodes,
-    };
-    const saved = saveNodeDetail(nodeId, genericDetail);
-    if (!saved) {
-      throw new Error("DETAIL_SAVE_FAILED");
-    }
-    return toApiBody(nodeId, nodeRow.nodeKey, genericDetail, qualityWarnings, {
-      ...extrasBase(),
-      from_concept_store: false,
-      why_it_matters_for_document: detail.why_it_matters_for_document,
-      document_context_summary: detail.document_context_summary,
-    });
-  }
-
-  if (!nodeRow.detailJson && nodeRow.conceptId) {
-    const c = getConceptById(getDb(), nodeRow.conceptId);
-    if (c && (c.explanation?.trim() || c.shortDescription?.trim())) {
-      return responseFromStoredConcept(
-        nodeId,
-        nodeRow.nodeKey,
-        nodeRow,
-        c,
-        bundle,
-        treeId,
-      );
-    }
-  }
-
   if (nodeRow.detailJson) {
     return toApiBody(
       nodeId,
@@ -335,6 +324,54 @@ export async function getOrCreateNodeDetail(params: {
       [],
       extrasBase(),
     );
+  }
+
+  if (documentNodeContext) {
+    try {
+      const generateDocumentDetail =
+        params.generateDocumentDetail ?? generateDocumentNodeDetail;
+      const { detail, qualityWarnings } = await generateDocumentDetail({
+        documentTitle: documentNodeContext.document_title,
+        nodeId: nodeRow.nodeKey,
+        conceptTitle: nodeRow.title,
+        sourceType: documentNodeContext.source_type,
+        evidenceText: formatDocumentEvidenceForPrompt(documentNodeContext),
+        prerequisites: nodeRow.prerequisites.join(", ") || "없음",
+        requestId: `doc-node-${treeId}-${nodeRow.nodeKey}`,
+      });
+      const genericDetail: NodeDetailResponse = {
+        node_id: nodeRow.nodeKey,
+        title: detail.title,
+        type: nodeRow.type,
+        why_it_matters: detail.why_it_matters_for_document,
+        easy_explanation: detail.easy_explanation,
+        analogy: detail.document_context_summary,
+        example: detail.example,
+        common_misconceptions: detail.common_misconceptions,
+        check_questions: detail.check_questions,
+        next_nodes: detail.next_nodes,
+      };
+      const saved = saveNodeDetail(nodeId, genericDetail);
+      if (!saved) {
+        throw new Error("DETAIL_SAVE_FAILED");
+      }
+      return toApiBody(nodeId, nodeRow.nodeKey, genericDetail, qualityWarnings, {
+        ...extrasBase(),
+        from_concept_store: false,
+        why_it_matters_for_document: detail.why_it_matters_for_document,
+        document_context_summary: detail.document_context_summary,
+      });
+    } catch (err) {
+      const fallback = responseFromStoredConceptFallback(
+        nodeId,
+        nodeRow.nodeKey,
+        nodeRow,
+        bundle,
+        treeId,
+      );
+      if (fallback) return fallback;
+      throw err;
+    }
   }
 
   const prereqContext = buildPrerequisitePromptContext(
@@ -351,16 +388,30 @@ export async function getOrCreateNodeDetail(params: {
     prerequisitesContext: prereqContext,
   };
 
-  const { detail, qualityWarnings } = await generateNodeDetail(llmInput);
-  const saved = saveNodeDetail(nodeId, detail);
-  if (!saved) {
-    throw new Error("DETAIL_SAVE_FAILED");
-  }
+  try {
+    const generateGenericNodeDetail =
+      params.generateGenericNodeDetail ?? generateNodeDetail;
+    const { detail, qualityWarnings } = await generateGenericNodeDetail(llmInput);
+    const saved = saveNodeDetail(nodeId, detail);
+    if (!saved) {
+      throw new Error("DETAIL_SAVE_FAILED");
+    }
 
-  return toApiBody(nodeId, nodeRow.nodeKey, detail, qualityWarnings, {
-    ...extrasBase(),
-    from_concept_store: false,
-  });
+    return toApiBody(nodeId, nodeRow.nodeKey, detail, qualityWarnings, {
+      ...extrasBase(),
+      from_concept_store: false,
+    });
+  } catch (err) {
+    const fallback = responseFromStoredConceptFallback(
+      nodeId,
+      nodeRow.nodeKey,
+      nodeRow,
+      bundle,
+      treeId,
+    );
+    if (fallback) return fallback;
+    throw err;
+  }
 }
 
 export async function getOrCreateNodeDetailForRequest(

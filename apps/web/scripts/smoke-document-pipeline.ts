@@ -215,6 +215,10 @@ async function main(): Promise<void> {
 
     // ── 품질 검증 (hard fail 아님, warning-only) ──
     const nodeTypes = bundle.nodes.map((n) => n.type);
+    const prerequisiteNodeCount = nodeTypes.filter(
+      (type) => type === "prerequisite",
+    ).length;
+    const coreNodeCount = nodeTypes.filter((type) => type === "core").length;
 
     console.info("");
     console.info(`─── document:pipeline-smoke quality report (target: structure < ${STRUCTURE_TARGET_MS}ms) ───`);
@@ -246,14 +250,14 @@ async function main(): Promise<void> {
       `${bundle.nodes.length}개 < ${QUALITY_MIN_NODES}개 (모델이 충분한 학습 트리를 생성하지 못했습니다)`,
     );
     qualityFails += checkQuality(
-      "prerequisite 노드 존재",
-      nodeTypes.includes("prerequisite"),
-      "선수지식(prerequisite) 노드가 없습니다",
+      "prerequisite 노드 수 >= 최소 기준",
+      prerequisiteNodeCount >= QUALITY_MIN_PREREQ_NODES,
+      `${prerequisiteNodeCount}개 < ${QUALITY_MIN_PREREQ_NODES}개`,
     );
     qualityFails += checkQuality(
-      "core 노드 존재 (document_core)",
-      nodeTypes.includes("core"),
-      "핵심 개념(core) 노드가 없습니다",
+      "core 노드 수 >= 최소 기준",
+      coreNodeCount >= QUALITY_MIN_CORE_NODES,
+      `${coreNodeCount}개 < ${QUALITY_MIN_CORE_NODES}개`,
     );
 
     const qualityResult = qualityFails === 0 ? "ALL PASS" : `${qualityFails} warning(s)`;
