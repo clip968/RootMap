@@ -149,10 +149,11 @@ function documentSourceTypeTone(sourceType: DocumentSourceType): string {
 }
 
 function generationStageMessage(elapsedSeconds: number): string {
-  if (elapsedSeconds < 5) return "주제를 분석하고 학습 목표를 정리하는 중입니다.";
-  if (elapsedSeconds < 20) return "학습 경로와 선수지식 Tree를 생성하는 중입니다.";
-  if (elapsedSeconds < 40) return "Concept 후보와 관계를 연결하는 중입니다.";
-  return "생성 결과를 검증하고 Tree로 저장하는 중입니다.";
+  if (elapsedSeconds < 8) return "트리의 전체 뼈대를 먼저 잡고 있어요.";
+  if (elapsedSeconds < 24) return "선수지식 노드의 설명을 채우고 있어요.";
+  if (elapsedSeconds < 40) return "핵심 개념 노드의 설명을 채우고 있어요.";
+  if (elapsedSeconds < 56) return "오해, 보조 개념, 점검 질문을 정리하고 있어요.";
+  return "생성된 조각을 검증하고 Tree로 저장하고 있어요.";
 }
 
 function statusIcon(status: ProgressStatus) {

@@ -1,5 +1,7 @@
 import { LlmParseError, LlmValidationError } from "@/lib/llm/errors";
 import {
+  learningTreeDetailResponseSchema,
+  learningTreeOutlineResponseSchema,
   learningTreeResponseSchema,
   nodeDetailResponseSchema,
   chunkConceptExtractionResponseSchema,
@@ -17,6 +19,13 @@ import type {
   DocumentTreeStructureResponse,
   DocumentNodeDetailResponse,
 } from "@/types/learning";
+
+export type LearningTreeOutlineResponse = ReturnType<
+  typeof learningTreeOutlineResponseSchema.parse
+>;
+export type LearningTreeDetailResponse = ReturnType<
+  typeof learningTreeDetailResponseSchema.parse
+>;
 
 export function stripLlmFences(raw: string): string {
   let s = raw.trim();
@@ -63,6 +72,28 @@ export function parseLearningTreeResponse(
   const result = learningTreeResponseSchema.safeParse(parsed);
   if (!result.success) {
     throw new LlmValidationError("응답 형식이 올바르지 않습니다.", result.error.issues);
+  }
+  return result.data;
+}
+
+export function parseLearningTreeOutlineResponse(
+  rawModelText: string,
+): LearningTreeOutlineResponse {
+  const parsed = parseJsonObject(rawModelText);
+  const result = learningTreeOutlineResponseSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new LlmValidationError("트리 outline 응답 형식이 올바르지 않습니다.", result.error.issues);
+  }
+  return result.data;
+}
+
+export function parseLearningTreeDetailResponse(
+  rawModelText: string,
+): LearningTreeDetailResponse {
+  const parsed = parseJsonObject(rawModelText);
+  const result = learningTreeDetailResponseSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new LlmValidationError("트리 detail 응답 형식이 올바르지 않습니다.", result.error.issues);
   }
   return result.data;
 }

@@ -98,6 +98,105 @@ The app UI language is Korean. Return Korean learner-facing content, while prese
 Return only a single JSON object matching the schema above.`;
 }
 
+export const LEARNING_TREE_OUTLINE_SYSTEM_PROMPT = `You are an AI learning path designer.
+
+Create only a compact outline for a prerequisite decomposition tree. This is the outline phase.
+Do not write long explanations yet.
+
+Requirements:
+- Return valid JSON only.
+- Do not include markdown outside JSON.
+- Generate 8 to 12 nodes total.
+- Include at least 3 prerequisite nodes, 3 core nodes, 1 misconception node, and 1 quiz node.
+- Keep the hierarchy top-down: parent concept -> prerequisite children -> more basic prerequisite grandchildren.
+- Use stable lowercase ASCII snake_case node ids.
+- Write learner-facing title and summary text in Korean.
+- Use node ids in prerequisites, children, recommended_order, and edges.
+- recommended_order must list prerequisite nodes before concepts that depend on them.
+- Keep edges[] to essential relationships only.
+
+JSON schema:
+{
+  "topic": string,
+  "summary": string,
+  "nodes": [
+    {
+      "id": string,
+      "title": string,
+      "type": "prerequisite" | "core" | "supplementary" | "misconception" | "quiz",
+      "prerequisites": string[],
+      "children": string[]
+    }
+  ],
+  "edges": [
+    {
+      "from": string,
+      "to": string,
+      "relation_type": "prerequisite" | "part_of" | "related" | "misconception_of" | "example_of" | "application_of",
+      "reason": string
+    }
+  ],
+  "recommended_order": string[]
+}`;
+
+export function buildLearningTreeOutlineUserMessage(
+  topic: string,
+  storeContext?: string,
+): string {
+  const ctx =
+    storeContext?.trim() ?
+      `\n\nKnown concepts in store (prefer reusing when they clearly match a node):\n${storeContext}\n`
+    : "";
+  return `The user wants to learn the following topic:
+${topic}
+${ctx}
+Return only the compact outline JSON. Details will be requested in later phases.`;
+}
+
+export const LEARNING_TREE_DETAIL_SYSTEM_PROMPT = `You fill details for an existing learning tree outline.
+
+Only enrich the provided nodes. Do not add, remove, rename, or reorder node ids.
+
+Requirements:
+- Return valid JSON only.
+- Do not include markdown outside JSON.
+- Write description and short_description in Korean.
+- Keep description concise: 1 to 2 Korean sentences, maximum about 180 Korean characters.
+- Keep concept_candidate.short_description to 1 short sentence, maximum about 100 Korean characters.
+- Use difficulty as an integer from 1 to 5.
+- For established English technical terms, canonical_title may be English; aliases should include useful Korean/English names.
+
+JSON schema:
+{
+  "nodes": [
+    {
+      "id": string,
+      "description": string,
+      "difficulty": number,
+      "concept_candidate": {
+        "canonical_title": string,
+        "aliases": string[],
+        "domain": string | null,
+        "short_description": string,
+        "is_reusable": boolean
+      }
+    }
+  ]
+}`;
+
+export function buildLearningTreeDetailUserMessage(
+  topic: string,
+  nodes: Array<{ id: string; title: string; type: string }>,
+): string {
+  return `Learning topic:
+${topic}
+
+Fill details for only these nodes:
+${JSON.stringify(nodes, null, 2)}
+
+Return only the detail JSON object.`;
+}
+
 /**
  * Phase 1 명세 §6 노드 상세 설명 프롬프트
  */

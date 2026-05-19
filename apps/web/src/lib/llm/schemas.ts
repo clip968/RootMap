@@ -52,6 +52,99 @@ export const learningTreeNodeSchema = z.object({
   concept_candidate: conceptCandidateSchema.optional(),
 });
 
+export const learningTreeOutlineNodeSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  type: nodeTypeSchema,
+  prerequisites: z.array(z.string()),
+  children: z.array(z.string()),
+});
+
+export const learningTreeOutlineResponseSchema = z
+  .object({
+    topic: z.string().min(1),
+    summary: z.string(),
+    nodes: z.array(learningTreeOutlineNodeSchema),
+    recommended_order: z.array(z.string()),
+    edges: z.array(llmConceptEdgeSchema).optional(),
+  })
+  .superRefine((data, ctx) => {
+    const ids = new Set<string>();
+    for (const node of data.nodes) {
+      if (ids.has(node.id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `중복된 노드 id: ${node.id}`,
+          path: ["nodes"],
+        });
+      }
+      ids.add(node.id);
+    }
+
+    const checkRefs = (arr: string[], nodeIdx: number, field: string) => {
+      for (const ref of arr) {
+        if (ref && !ids.has(ref)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `존재하지 않는 노드 id 참조: ${ref}`,
+            path: ["nodes", nodeIdx, field],
+          });
+        }
+      }
+    };
+
+    data.nodes.forEach((node, i) => {
+      checkRefs(node.prerequisites, i, "prerequisites");
+      checkRefs(node.children, i, "children");
+    });
+
+    data.recommended_order.forEach((id, i) => {
+      if (id && !ids.has(id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `recommended_order에 존재하지 않는 노드 id: ${id}`,
+          path: ["recommended_order", i],
+        });
+      }
+    });
+
+    (data.edges ?? []).forEach((edge, i) => {
+      if (!ids.has(edge.from)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `edges[${i}].from이 노드 id에 없습니다: ${edge.from}`,
+          path: ["edges", i, "from"],
+        });
+      }
+      if (!ids.has(edge.to)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `edges[${i}].to가 노드 id에 없습니다: ${edge.to}`,
+          path: ["edges", i, "to"],
+        });
+      }
+    });
+  })
+  .transform((data) => ({
+    ...data,
+    edges: data.edges ?? [],
+  }));
+
+export const learningTreeDetailNodeSchema = z.object({
+  id: z.string().min(1),
+  description: z.string().min(1),
+  difficulty: z
+    .number()
+    .min(1)
+    .max(5)
+    .transform((v) => Math.max(1, Math.min(5, Math.round(v)))),
+  concept_candidate: conceptCandidateSchema,
+});
+
+export const learningTreeDetailResponseSchema = z.object({
+  nodes: z.array(learningTreeDetailNodeSchema),
+});
+
 export const learningTreeResponseSchema = z
   .object({
     topic: z.string().min(1),
