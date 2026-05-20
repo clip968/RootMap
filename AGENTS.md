@@ -39,3 +39,15 @@
 체크리스트는 진행 상황을 추적하기 위한 단일 기준이다. 작업 내용이 계획 문서와 달라졌다면 먼저 해당 계획 문서를 업데이트한 뒤 README 체크리스트도 필요한 경우 함께 갱신한다.
 
 모든 코드에는 사용자가 이해할 수 있게 세부적인 주석을 달아야한다.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+When the user types `/graphify`, invoke the `skill` tool with `skill: "graphify"` before doing anything else.
+
+Rules:
+- ALWAYS read graphify-out/GRAPH_REPORT.md before reading any source files, running grep/glob searches, or answering codebase questions. The graph is your primary map of the codebase.
+- IF graphify-out/wiki/index.md EXISTS, navigate it instead of reading raw files
+- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).

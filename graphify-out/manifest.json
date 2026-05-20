@@ -1,0 +1,718 @@
+{
+  "/home/clip968/RootMap/apps/web/postcss.config.mjs": {
+    "mtime": 1779182212.7273738,
+    "hash": "239f3ebf717465dc636818a1a619398d"
+  },
+  "/home/clip968/RootMap/apps/web/drizzle.config.ts": {
+    "mtime": 1779182212.7273738,
+    "hash": "e0695fcbdaa9a609d1e7d22caa639941"
+  },
+  "/home/clip968/RootMap/apps/web/next.config.ts": {
+    "mtime": 1779182212.7273738,
+    "hash": "e6f194202e42aa7777ebe8227b627520"
+  },
+  "/home/clip968/RootMap/apps/web/next-env.d.ts": {
+    "mtime": 1779186570.8512013,
+    "hash": "2a74d3909800ca5467fa83b0ab4a4890"
+  },
+  "/home/clip968/RootMap/apps/web/eslint.config.mjs": {
+    "mtime": 1779182212.7273738,
+    "hash": "dfa1f5f6a7037bf39dc510f30b180002"
+  },
+  "/home/clip968/RootMap/apps/web/src/db/index.ts": {
+    "mtime": 1779298342.7901814,
+    "hash": "828150e4ad7de7b67f5ce5ea1a679bd5"
+  },
+  "/home/clip968/RootMap/apps/web/src/db/client.ts": {
+    "mtime": 1779298342.7901814,
+    "hash": "cb6d886ca5916b97c7443ec1f70f3d24"
+  },
+  "/home/clip968/RootMap/apps/web/src/db/schema.ts": {
+    "mtime": 1779190218.2471,
+    "hash": "5984afd28cd66e03163e1a80018bee76"
+  },
+  "/home/clip968/RootMap/apps/web/src/db/constants.ts": {
+    "mtime": 1779182212.751374,
+    "hash": "c55f30938a37809a8bcadedc9ce8ddb3"
+  },
+  "/home/clip968/RootMap/apps/web/src/components/generation-loading-panel.tsx": {
+    "mtime": 1779200944.0707154,
+    "hash": "f94670ca68f363a8221b233725bf7f18"
+  },
+  "/home/clip968/RootMap/apps/web/src/components/detail-learning-blocks.tsx": {
+    "mtime": 1779205533.7425683,
+    "hash": "24270580dd74c5f0bbf0a06b61ab1d98"
+  },
+  "/home/clip968/RootMap/apps/web/src/components/start-topic-form.tsx": {
+    "mtime": 1779207038.1784978,
+    "hash": "c57fbdc1f4cfad0757dc3ab0b9d1c551"
+  },
+  "/home/clip968/RootMap/apps/web/src/components/llm-provider-settings-panel.tsx": {
+    "mtime": 1779182212.7473738,
+    "hash": "91d645a5e5d5f24d54cf2f9b1a7541c1"
+  },
+  "/home/clip968/RootMap/apps/web/src/components/app-shell.tsx": {
+    "mtime": 1779182212.7473738,
+    "hash": "e57a3de618c8f21d1605524960fc9dce"
+  },
+  "/home/clip968/RootMap/apps/web/src/components/tree-page-client.tsx": {
+    "mtime": 1779204690.4065971,
+    "hash": "3e81f1e061b5dd8486c9a863b559de81"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/api-errors.ts": {
+    "mtime": 1779182212.751374,
+    "hash": "fa159effb91f33d389c68b6777de30ab"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/constants/limits.ts": {
+    "mtime": 1779182212.751374,
+    "hash": "4d6e72ea64599143321019584730917c"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/recommendation/recommend-next.ts": {
+    "mtime": 1779182212.755374,
+    "hash": "4d96595115de7c73c754f779005d859d"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/concepts/normalize.ts": {
+    "mtime": 1779182212.751374,
+    "hash": "d737b5584b412019cb51a6817bd329ed"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/storage/supabase-document-storage.ts": {
+    "mtime": 1779207259.0544996,
+    "hash": "ddc28ffed512d4e569b11fe6b581c6f7"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/services/node-detail.ts": {
+    "mtime": 1779182212.755374,
+    "hash": "6c0497d275607a91e81a29462952358a"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/services/learning-tree-generate.ts": {
+    "mtime": 1779182212.755374,
+    "hash": "7977821ace255bb55a3ab2f68d23f950"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/services/node-detail-context.ts": {
+    "mtime": 1779182212.755374,
+    "hash": "d3221b0b66e9dd5a1f2b5914e3a71ac7"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/services/concept-persistence.ts": {
+    "mtime": 1779191745.5470428,
+    "hash": "bf2ebf43a3e6aa2486ec3a80303c77c9"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/repository/llm-provider-settings-repository.ts": {
+    "mtime": 1779182212.755374,
+    "hash": "06715f741599cc6e6437e104991bda7b"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/repository/learning-repository.ts": {
+    "mtime": 1779182212.755374,
+    "hash": "b92225235261f1a4a32995d4350c1495"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/repository/document-repository.ts": {
+    "mtime": 1779298342.7941813,
+    "hash": "a7c475aa74fdc6114babfc25bf0f2ab5"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/repository/concept-repository.ts": {
+    "mtime": 1779182212.755374,
+    "hash": "fe326e0066ec72a4fd8cbfbdd4013732"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/llm/index.ts": {
+    "mtime": 1779182212.755374,
+    "hash": "b75343d0465c33d9447a7bc803090ecb"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/llm/parse.ts": {
+    "mtime": 1779186337.2719002,
+    "hash": "38f39f3e077e24e1cae6041f075c1144"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/llm/errors.ts": {
+    "mtime": 1779182212.755374,
+    "hash": "1cf9582f33735fe3a6cc0d503e560c54"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/llm/prompts.ts": {
+    "mtime": 1779189705.5231125,
+    "hash": "1f799a5abb9d41e68de8ef4adb5db256"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/llm/generate-node-detail.ts": {
+    "mtime": 1779182212.755374,
+    "hash": "0cb22ecf4f0e22eee7c673d97c3f4f9a"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/llm/generate-tree.ts": {
+    "mtime": 1779189811.335111,
+    "hash": "354f0817ba13c05df52a4e6a4a303e45"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/llm/provider-config.ts": {
+    "mtime": 1779182212.755374,
+    "hash": "ec062adbf455844c1e6d5397d8383c7b"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/llm/generate-document-chunk-concepts.ts": {
+    "mtime": 1779182212.755374,
+    "hash": "daeb6f165f47be40ccf005e1c37418bc"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/llm/generate-document-tree.ts": {
+    "mtime": 1779182212.755374,
+    "hash": "b04ae3328e917d42f5c926367bd19784"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/llm/generate-document-consolidation.ts": {
+    "mtime": 1779182212.755374,
+    "hash": "f56a45020c64952a6a4b9926f8975cc6"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/llm/provider-crypto.ts": {
+    "mtime": 1779182212.755374,
+    "hash": "962bb7f3a1d8f2203e06563b2f3cbf46"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/llm/generate-document-detail.ts": {
+    "mtime": 1779182212.755374,
+    "hash": "ee038038bab02cc3074fedeb4daa5ab2"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/llm/generate-document-node-detail.ts": {
+    "mtime": 1779182212.755374,
+    "hash": "b45c52bf542974cc5bfc0e9198b5bb70"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/llm/generate-document-structure.ts": {
+    "mtime": 1779182212.755374,
+    "hash": "331a29a386a7c74034a8ed574312c8af"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/llm/schemas.ts": {
+    "mtime": 1779189660.375109,
+    "hash": "3dd3957e79ec331aa475aa77a4acd902"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/llm/chat.ts": {
+    "mtime": 1779182212.755374,
+    "hash": "f158b9119cd09501d7f6e1fbb8e510b5"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/document/extract-pdf.ts": {
+    "mtime": 1779209173.026428,
+    "hash": "672d30acaa893b77f5b35ebc128b8344"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/document/upload-validation.ts": {
+    "mtime": 1779207148.4344835,
+    "hash": "69a3b4f2b5d950f59c83d75f271304c4"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/document/chunker.ts": {
+    "mtime": 1779182212.751374,
+    "hash": "eacff519adecdae699ce8bd77461fca2"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/document/processing-queue.ts": {
+    "mtime": 1779298342.7901814,
+    "hash": "9659b9b79e705f3f0a628fd2bcd45b63"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/document/processing-jobs.ts": {
+    "mtime": 1779298342.7901814,
+    "hash": "fc03dfb14765dfe3df89856138592073"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/document/extract-text.ts": {
+    "mtime": 1779182212.751374,
+    "hash": "df59079984d66aac5a0b198251a106ac"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/document/processor.ts": {
+    "mtime": 1779298342.7941813,
+    "hash": "2353b8718f7d369fe49af5a1fc90edef"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/tree/bundle-to-api.ts": {
+    "mtime": 1779189976.1831055,
+    "hash": "d4382e59c323751747b45f8fd7f0f720"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/tree/deep-dive.ts": {
+    "mtime": 1779190388.6350951,
+    "hash": "b7f35484bf3baedd083e98b7884ab2dd"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/tree/concept-graph.ts": {
+    "mtime": 1779190288.6110976,
+    "hash": "2fbb4102c01d32010fd32c3469a96046"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/page.tsx": {
+    "mtime": 1779182212.7473738,
+    "hash": "b3aea099bc84957e60f2464b03525703"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/layout.tsx": {
+    "mtime": 1779182212.7473738,
+    "hash": "65648b3e985244fbc8cefe79e1ff8f6a"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/settings/llm-provider/page.tsx": {
+    "mtime": 1779182212.7473738,
+    "hash": "fb454abdc48f9d11e7ff27b5171952ee"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/admin/concepts/page.tsx": {
+    "mtime": 1779182212.731374,
+    "hash": "2ca6839ea543c7e9c50366bdca1d37cd"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/settings/llm-provider/route.ts": {
+    "mtime": 1779182212.7433739,
+    "hash": "500284482b96a4f3026b0c85ceb7e507"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/settings/llm-provider/test/route.ts": {
+    "mtime": 1779182212.7433739,
+    "hash": "ed4359e597f61b754680ec8bf14d37a7"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/concepts/route.ts": {
+    "mtime": 1779182212.735374,
+    "hash": "4f8a4ffa4e6cd0c54cca3c8172c3dd1e"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/concepts/[conceptId]/route.ts": {
+    "mtime": 1779182212.735374,
+    "hash": "e8e2bcc1e99ca21bf390e96bda08d62b"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/concepts/[conceptId]/edges/route.ts": {
+    "mtime": 1779182212.735374,
+    "hash": "bc4421054730043e31dd4a1719a7e16f"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/concepts/[conceptId]/trees/route.ts": {
+    "mtime": 1779182212.735374,
+    "hash": "82150a10a629b4b43e70842447713a4f"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/documents/upload-url/route.ts": {
+    "mtime": 1779206988.850494,
+    "hash": "02b2d516eb49dadc50d85241a64574c2"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/documents/[documentId]/route.ts": {
+    "mtime": 1779182212.739374,
+    "hash": "75a74c1e07035a6fca24ef9090a8470f"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/documents/[documentId]/process/route.ts": {
+    "mtime": 1779298342.7901814,
+    "hash": "5b23a176a5f93eb17d14bc82e5251228"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/documents/[documentId]/concepts/route.ts": {
+    "mtime": 1779182212.739374,
+    "hash": "e7bdeff5d2511bd9944f811978a1b15b"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/documents/[documentId]/tree/route.ts": {
+    "mtime": 1779182212.739374,
+    "hash": "4574603de4a15f73a447a4ad1726eec5"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/documents/upload/route.ts": {
+    "mtime": 1779206973.8425007,
+    "hash": "c91e29f9d92b28f9c0514d5ae680545f"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/documents/complete-upload/route.ts": {
+    "mtime": 1779207009.3545046,
+    "hash": "06b9b3a0d0f10de1bbc07c1727c7168c"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/workers/document-processing/route.ts": {
+    "mtime": 1779298342.7901814,
+    "hash": "c8fb1a81c1c01934dd90a7b5e4e6dcf0"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/nodes/[nodeId]/detail/route.ts": {
+    "mtime": 1779182212.739374,
+    "hash": "57f332b8ecbee1eb2034b822a41740e4"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/nodes/[nodeId]/progress/route.ts": {
+    "mtime": 1779182212.739374,
+    "hash": "09f37d44bb6e9ccbe5555b8c9a0f825f"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/document-concepts/[documentConceptId]/evidence/route.ts": {
+    "mtime": 1779182212.735374,
+    "hash": "2120e29dabfaf3467d6b9389d61bd34a"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/trees/route.ts": {
+    "mtime": 1779182212.7473738,
+    "hash": "d049c12736eb032adfa1c7714244d5ae"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/trees/[treeId]/route.ts": {
+    "mtime": 1779182212.7433739,
+    "hash": "6583e35e3d7aa059bb1a38759aa7d438"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/trees/[treeId]/nodes/[nodeId]/generate-detail/route.ts": {
+    "mtime": 1779182212.7433739,
+    "hash": "8f6bc0de33c578a0ba440bde1c7a83af"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/trees/[treeId]/recommendations/route.ts": {
+    "mtime": 1779182212.7433739,
+    "hash": "0cb6fb4518a2787e13ff20944dfd6865"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/trees/generate/route.ts": {
+    "mtime": 1779182212.7473738,
+    "hash": "b8f516fe7ae535207320994d7623c1d5"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/tree/[treeId]/page.tsx": {
+    "mtime": 1779182212.7473738,
+    "hash": "b59d2b6f91d1acf4d02a1da5473e8809"
+  },
+  "/home/clip968/RootMap/apps/web/src/types/learning.ts": {
+    "mtime": 1779189614.4911144,
+    "hash": "af165cc71df88a03016320a8fd4f7dbb"
+  },
+  "/home/clip968/RootMap/apps/web/src/types/pdfjs-worker.d.ts": {
+    "mtime": 1779209237.2824302,
+    "hash": "5b80a544e012d3aa6e6bb2a9b8d93f70"
+  },
+  "/home/clip968/RootMap/apps/web/drizzle/0003_document_processing_queue.sql": {
+    "mtime": 1779298342.7901814,
+    "hash": "eaaa7672a11e77d4dacb86503c88a48e"
+  },
+  "/home/clip968/RootMap/apps/web/drizzle/0000_rootmap_postgres_initial.sql": {
+    "mtime": 1779182212.7273738,
+    "hash": "b5348bc4a1eab66755f342bd039e611a"
+  },
+  "/home/clip968/RootMap/apps/web/drizzle/0001_rootmap_postgres_fk_indexes.sql": {
+    "mtime": 1779182212.7273738,
+    "hash": "60eba522a46cc171c273cdc6c646b787"
+  },
+  "/home/clip968/RootMap/apps/web/drizzle/0002_concept_communities.sql": {
+    "mtime": 1779191386.3070552,
+    "hash": "4863ce10a691a3f7647672632ce62426"
+  },
+  "/home/clip968/RootMap/apps/web/scripts/smoke-community-graph-derivation.ts": {
+    "mtime": 1779190408.4910927,
+    "hash": "415bae6bde8e744ef2567aba604d9eb8"
+  },
+  "/home/clip968/RootMap/apps/web/scripts/smoke-learning-tree-split-generation.ts": {
+    "mtime": 1779190111.7791033,
+    "hash": "6e6ec62adcb6e78cd275e437c896410e"
+  },
+  "/home/clip968/RootMap/apps/web/scripts/smoke-document-pipeline.ts": {
+    "mtime": 1779182212.731374,
+    "hash": "318ecdc5f0ce7abbc4b3bd46f1da9c70"
+  },
+  "/home/clip968/RootMap/apps/web/scripts/smoke-llm-provider-settings.ts": {
+    "mtime": 1779182212.731374,
+    "hash": "a17d57c95d6931f49354100b5bb9b9d7"
+  },
+  "/home/clip968/RootMap/apps/web/scripts/smoke-document-upload.ts": {
+    "mtime": 1779182212.731374,
+    "hash": "ea3e852509438f5108efe89c2120c418"
+  },
+  "/home/clip968/RootMap/apps/web/scripts/smoke-document-detail.ts": {
+    "mtime": 1779182212.731374,
+    "hash": "ac4bc4419d2bc336baa82d4d37f7d960"
+  },
+  "/home/clip968/RootMap/apps/web/scripts/smoke-document-llm.ts": {
+    "mtime": 1779182212.731374,
+    "hash": "0027943db6629213eeb2883a5c1830d0"
+  },
+  "/home/clip968/RootMap/apps/web/scripts/smoke-document-extract.ts": {
+    "mtime": 1779182212.731374,
+    "hash": "b4f1b4167e7a26e8b08786d7fe14ccfd"
+  },
+  "/home/clip968/RootMap/apps/web/scripts/smoke-phase2-concepts.ts": {
+    "mtime": 1779182212.731374,
+    "hash": "c44162e1ea7744a9664174a820308bdd"
+  },
+  "/home/clip968/RootMap/apps/web/scripts/smoke-learning-repo.ts": {
+    "mtime": 1779182212.731374,
+    "hash": "2c701282a25b457a21c7ef2db2fda169"
+  },
+  "/home/clip968/RootMap/apps/web/scripts/smoke-llm-parse.ts": {
+    "mtime": 1779182212.731374,
+    "hash": "855f96186c8b11980af73c56c1bb3dc9"
+  },
+  "/home/clip968/RootMap/apps/web/scripts/smoke-phase1-mvp.ts": {
+    "mtime": 1779182212.731374,
+    "hash": "26762d9734f00268beb368b969bbba9f"
+  },
+  "/home/clip968/RootMap/apps/web/scripts/smoke-node-detail-generation.ts": {
+    "mtime": 1779182212.731374,
+    "hash": "2e02780834897e0967febd921f388acf"
+  },
+  "/home/clip968/RootMap/apps/web/scripts/smoke-document-processing-jobs.ts": {
+    "mtime": 1779298342.7901814,
+    "hash": "2231e017ceee3e88f9444d1f23eaa256"
+  },
+  "/home/clip968/RootMap/AGENTS.MD": {
+    "mtime": 1779182212.723374,
+    "hash": "cb6b5f3a1d6d8065c048e29c8a63c69c"
+  },
+  "/home/clip968/RootMap/docs/project-structure.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "e4ac040683cc2a73b6dd02d96590d5bc"
+  },
+  "/home/clip968/RootMap/docs/specs/rootmap_phase_3_spec.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "9ee1d0b7bceaa039047d22be078aac67"
+  },
+  "/home/clip968/RootMap/docs/specs/rootmap_phase_2_spec.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "4f192b89bad80d3d879b673756c0a3a6"
+  },
+  "/home/clip968/RootMap/docs/specs/rootmap_phase_1_spec.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "8aab949bfd76f28d35ec006dc22bab6f"
+  },
+  "/home/clip968/RootMap/docs/specs/README.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "fe3064b8ed82cc76ed2240c1efa62f19"
+  },
+  "/home/clip968/RootMap/docs/specs/rootmap_phase_4_spec.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "d1d6e4e905a6a3eb2d04e5ac2c0fed63"
+  },
+  "/home/clip968/RootMap/docs/plans/README.md": {
+    "mtime": 1779182212.759374,
+    "hash": "c0d722e69349721d6a015c4753751f18"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-05/detail-learning-blocks-minimal-plan.md": {
+    "mtime": 1779204768.6511502,
+    "hash": "482354f0a9134ec545c1fb7e75e65c95"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-05/community-concept-map-plan.md": {
+    "mtime": 1779190379.6750956,
+    "hash": "736b104852f735d14e2935f1bc082c83"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-05/loading-ux-minimal-plan.md": {
+    "mtime": 1779200926.3586957,
+    "hash": "0be20cd6d2c2c48be479663a9f0ddc73"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-02.5/04-tree-generation-latency-and-perceived-performance.md": {
+    "mtime": 1779182212.759374,
+    "hash": "6bc37bbb9df6ce2163f80ebb11264a04"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-02.5/02-tree-view-polish-and-quality.md": {
+    "mtime": 1779182212.759374,
+    "hash": "e8244ba9758484899f4c7be2d4b187e5"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-02.5/README.md": {
+    "mtime": 1779182212.759374,
+    "hash": "3c8bb8e22c995ad22bd4b6c0d0aff28b"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-02.5/01-tree-view-layout.md": {
+    "mtime": 1779182212.759374,
+    "hash": "8de8d723d31f1642190338e0f71ef7a5"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-04/10-phase4-security-quality-and-tests.md": {
+    "mtime": 1779299788.2581277,
+    "hash": "52566dbd3f52dd14ba7c62c8e44de3b5"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-04/02-quiz-misconception-recommendation-report-schema.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "948e15ce086f85ea4c3def9557a8facf"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-04/04-concept-mastery-and-self-assessment.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "2f75f09cfe1823ae78104826e23ea8ef"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-04/08-learning-reports-and-llm-prompts.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "6bcca7710501a22a44235b791adc505e"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-04/03-session-and-learning-events-api.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "290c1d357336d8e58d56207e17f465b0"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-04/phase4-task-breakdown.md": {
+    "mtime": 1779299831.526123,
+    "hash": "547d5a12197a5ad2ff805c85dbcc006f"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-04/07-review-due-and-priority.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "07f6ab3d3ee17abadcc2142828e6d998"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-04/README.md": {
+    "mtime": 1779299831.3461232,
+    "hash": "3a15337f6cff249509b976ba6cb6494a"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-04/06-quiz-evaluation-and-attempts-api.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "f51ec7c1da14b7976d035db55f5b5d4e"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-04/01-learning-sessions-events-and-mastery-schema.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "f4504a560f5cfa6d39a4f4bc0472325c"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-04/09-phase4-personalized-ui.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "3a4529ee17493e8f0b7628865d1179b1"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-04/05-personalized-recommendations-and-tree-api.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "0ef47cc214a5f010330836ee5c1787bb"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-04/00-live-infra-auth-and-deployment-preflight.md": {
+    "mtime": 1779299787.7301278,
+    "hash": "d3a86f95bca5d95f19395d18ee180a20"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-03/12-async-document-processing.md": {
+    "mtime": 1779298342.7941813,
+    "hash": "be64019a5ae905b762cff1f567077b70"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-03/14-llm-provider-settings.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "38ed81a458a4caec4e6ebce6c4f69a5a"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-03/phase3-task-breakdown.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "06d51f7f6adf706fb3d21fa539f259b5"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-03/08-document-upload-and-result-ui.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "dfd3bd34fb096233db50deb471061130"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-03/2026-05-19-supabase-postgres-transition-handoff.md": {
+    "mtime": 1779182556.0433497,
+    "hash": "c922307fae61ddced295e5b3cc675493"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-03/05-document-processing-pipeline.md": {
+    "mtime": 1779182212.759374,
+    "hash": "7a66109fa3921a9eba53441c6cea5199"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-03/03-text-extraction-and-chunking.md": {
+    "mtime": 1779182212.759374,
+    "hash": "62a39c827ada9b312f17b8a9b6eb1963"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-03/06-document-concept-resolution-and-persistence.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "9f7429979387a789bf1f1a259ed2b473"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-03/01-document-schema-and-storage.md": {
+    "mtime": 1779182212.759374,
+    "hash": "e5d3da204b8d6ea7034da153df9dab88"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-03/13-node-detail-generation-quality.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "af22d0b85ad74bd190f61b189b33793b"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-03/README.md": {
+    "mtime": 1779298342.7941813,
+    "hash": "0b4af4929bf46d086a7eed733adc08e1"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-03/07-document-apis-and-query-contracts.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "9007ba988834a37b8cd4d55f20432c6d"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-03/09-document-tree-and-node-detail-ui.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "411aada2a64f466a20aac76558826b6f"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-03/10-document-recommendations-quality-and-tests.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "ef9ade8b0bd8544c9558deae98b64d30"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-03/11-progressive-tree-generation.md": {
+    "mtime": 1779182212.7633739,
+    "hash": "044648276578068b4a2632c04c4ff5ef"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-03/04-document-llm-schemas-and-prompts.md": {
+    "mtime": 1779182212.759374,
+    "hash": "496d5ccd947d2a579eb4178ee308e521"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-03/02-document-upload-and-validation-api.md": {
+    "mtime": 1779182212.759374,
+    "hash": "64440cbe93e8f738f41d8136ef34e136"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-02/07-progress-recommendations-concept-layer.md": {
+    "mtime": 1779182212.759374,
+    "hash": "62348e95e2b8afe15aa18f593174f85d"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-02/phase2-quality-verification.md": {
+    "mtime": 1779182212.759374,
+    "hash": "6eea5eee87a51f0c10e766efcb775097"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-02/06-concepts-api.md": {
+    "mtime": 1779182212.759374,
+    "hash": "41669d6d08c75b369fdc0a3f9dc73f0b"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-02/03-phase2-llm-schema-and-prompts.md": {
+    "mtime": 1779182212.759374,
+    "hash": "a614c58b80fafe30639e02864110b202"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-02/10-admin-and-phase2-quality-tests.md": {
+    "mtime": 1779182212.759374,
+    "hash": "a89f1a84ed9895d4a58c9155cee0ed47"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-02/08-tree-ui-concept-indicators.md": {
+    "mtime": 1779182212.759374,
+    "hash": "82c1785e40d50dad016d04f96821598e"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-02/09-node-detail-topic-context-ui.md": {
+    "mtime": 1779182212.759374,
+    "hash": "db9776960dd2e7075351e4abe308a165"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-02/02-concept-repository-and-resolution.md": {
+    "mtime": 1779182212.759374,
+    "hash": "12bac6b11801ca7da58498ad3bd3fce5"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-02/05-tree-generate-api-extension.md": {
+    "mtime": 1779182212.759374,
+    "hash": "dbf85cef5b64f1e9a1f5a5c3fa56c4bf"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-02/01-concept-schema-and-migrations.md": {
+    "mtime": 1779182212.759374,
+    "hash": "c61ac55600f40c752cc316e0fd57a1a0"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-02/phase2-task-breakdown.md": {
+    "mtime": 1779182212.759374,
+    "hash": "06a0a5172974b2740d8b929d7e65b0db"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-02/README.md": {
+    "mtime": 1779182212.759374,
+    "hash": "c0dfa61f5789af21eb54196f389063f3"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-02/04-post-generation-concept-persistence.md": {
+    "mtime": 1779182212.759374,
+    "hash": "8140447009f9e15588b55c2fe7899ed9"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-01/03-llm-prompts-and-schema.md": {
+    "mtime": 1779182212.759374,
+    "hash": "f25b4792563af4d655b2e84c982c6b33"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-01/04-tree-generation-api.md": {
+    "mtime": 1779182212.759374,
+    "hash": "7d040d22279dc906ab676897e9f4f449"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-01/09-saved-tree-retrieval.md": {
+    "mtime": 1779182212.759374,
+    "hash": "e249e03a0f9a1ea9479ca6da69931161"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-01/05-start-screen.md": {
+    "mtime": 1779182212.759374,
+    "hash": "430c3654e79ce9b9fa56a8e6edb88304"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-01/10-quality-tests-and-polish.md": {
+    "mtime": 1779182212.759374,
+    "hash": "79e8d74fc3a069647356ab9d86620751"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-01/06-tree-result-screen.md": {
+    "mtime": 1779182212.759374,
+    "hash": "6f00c0664924337679e7b6c90a8f93f4"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-01/phase1-task-breakdown.md": {
+    "mtime": 1779182212.759374,
+    "hash": "79420986ca8ca8b578369738c2b53ad1"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-01/README.md": {
+    "mtime": 1779182212.759374,
+    "hash": "0d6b605e44329ad8bc66ca7df84b2b33"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-01/07-node-detail-flow.md": {
+    "mtime": 1779182212.759374,
+    "hash": "15cde8dde77d5981aa909bfbac20619d"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-01/02-data-model-and-storage.md": {
+    "mtime": 1779182212.759374,
+    "hash": "05bad18751670073160984d16bb0c105"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-01/01-project-foundation.md": {
+    "mtime": 1779182212.759374,
+    "hash": "35a379921128b3fec990aed7961ae532"
+  },
+  "/home/clip968/RootMap/docs/plans/phase-01/08-progress-and-recommendations.md": {
+    "mtime": 1779182212.759374,
+    "hash": "8b13d288de00c08551b1b584b8d7299b"
+  },
+  "/home/clip968/RootMap/docs/decisions/README.md": {
+    "mtime": 1779182212.759374,
+    "hash": "fa000dc7dd3ec07d9e2b8464f7d8f54e"
+  },
+  "/home/clip968/RootMap/apps/web/README.md": {
+    "mtime": 1779207319.5545046,
+    "hash": "fba9838147fb1284f779c910ff518436"
+  },
+  "/home/clip968/RootMap/docs/specs/\uc624\ud508ai\uc11c\ube44\uc2a4_\ub514\uc790\uc778_20212985_\ub0a8\uc7ac\uc900 (1).pdf": {
+    "mtime": 1779182212.767374,
+    "hash": "29f095c2b6289138808de5e5031779f3"
+  },
+  "/home/clip968/RootMap/apps/web/public/file.svg": {
+    "mtime": 1779182212.7273738,
+    "hash": "d09f95206c3fa0bb9bd9fefabfd0ea71"
+  },
+  "/home/clip968/RootMap/apps/web/public/vercel.svg": {
+    "mtime": 1779182212.7273738,
+    "hash": "c0af2f507b369b085b35ef4bbe3bcf1e"
+  },
+  "/home/clip968/RootMap/apps/web/public/globe.svg": {
+    "mtime": 1779182212.7273738,
+    "hash": "2aaafa6a49b6563925fe440891e32717"
+  },
+  "/home/clip968/RootMap/apps/web/public/window.svg": {
+    "mtime": 1779182212.7273738,
+    "hash": "a2760511c65806022ad20adf74370ff3"
+  },
+  "/home/clip968/RootMap/apps/web/public/next.svg": {
+    "mtime": 1779182212.7273738,
+    "hash": "8e061864f388b47f33a1c3780831193e"
+  }
+}
