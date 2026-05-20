@@ -2,7 +2,18 @@
 
 ## 목적
 
-`docs/spec/rootmap_phase_4_spec.md`를 실행 가능한 개발 태스크로 변환한 문서다. 각 태스크는 `docs/plan/phase-04/01-*` ~ `10-*` 문서에 상세 계획이 있다.
+`docs/specs/rootmap_phase_4_spec.md`를 실행 가능한 개발 태스크로 변환한 문서다. 각 태스크는 `docs/plans/phase-04/00-*` ~ `10-*` 문서에 상세 계획이 있다.
+
+## Milestone 0: Live 인프라·인증 선행 게이트
+
+### 0. Vercel/Supabase live 상태와 사용자 격리 기준
+
+- Vercel production 배포, live API smoke, Supabase project/table/storage 상태를 Phase 4 시작 기준으로 기록
+- `DEFAULT_USER_ID` 제거 또는 유지 범위 결정
+- Supabase Auth 사용 여부, `user_id` 타입(`text` vs `uuid`), RLS policy 전략 결정
+- Vercel 환경변수 target 감사와 Supabase `pgmq` queue migration 적용 여부 결정
+
+상세: [00-live-infra-auth-and-deployment-preflight.md](./00-live-infra-auth-and-deployment-preflight.md)
 
 ## Milestone A: Phase 4 데이터 모델
 
@@ -11,6 +22,7 @@
 - `learning_sessions`, `learning_events`
 - `user_concept_mastery`(Phase 2 `user_concept_progress`와의 이행 전략)
 - 이벤트 타입(`tree_opened`, `node_opened`, …) 정리
+- 00번에서 확정한 `user_id` 타입과 RLS policy 전략을 DDL에 반영
 
 상세: [01-learning-sessions-events-and-mastery-schema.md](./01-learning-sessions-events-and-mastery-schema.md)
 
@@ -19,6 +31,7 @@
 - `quiz_attempts`, `misconception_events`
 - `recommendation_logs`, `learning_reports`
 - 기능 구현 우선순위는 명세 §20에 맞춰 퀴즈는 2순위, 추천 로그·리포트는 3순위로 분리
+- LLM payload 보존 범위와 Vercel/Supabase 로그 최소화 정책을 DDL 메타데이터 설계에 반영
 
 상세: [02-quiz-misconception-recommendation-report-schema.md](./02-quiz-misconception-recommendation-report-schema.md)
 
@@ -29,6 +42,7 @@
 - `POST /api/sessions/start`, `POST /api/sessions/:sessionId/end`
 - `POST /api/events`
 - 세션 요약 필드·지속 시간 저장 정책
+- 인증된 user identity 기준으로 `tree_id`/`document_id` 접근 권한 검증
 
 상세: [03-session-and-learning-events-api.md](./03-session-and-learning-events-api.md)
 
@@ -86,11 +100,13 @@
 
 - §21 사용자별 데이터 격리, 민감 로그 최소화
 - `recommendation_logs`·클릭 추적, §19·§17 테스트·완료 조건
+- Supabase advisor의 RLS policy 경고와 Vercel production smoke를 완료 기준에 포함
 
 상세: [10-phase4-security-quality-and-tests.md](./10-phase4-security-quality-and-tests.md)
 
 ## 권장 구현 순서
 
+0. Live 인프라·인증 선행 게이트
 1. A1 세션·이벤트·숙련도 스키마
 2. A2 퀴즈·오개념·로그·리포트 스키마
 3. B1 세션·학습 이벤트 API
@@ -125,5 +141,5 @@
 | 15 | 상태 업데이트 정책 | **04**, **06** |
 | 16 | 리포트 정책과 약점 개념 분석 | **08** |
 | 17·18·19 | 품질·MVP·테스트 | **10** |
-| 21 | 보안·개인정보 | **03**~**08**, **10** |
+| 21 | 보안·개인정보 | **00**, **03**~**08**, **10** |
 | 22 | 완료 조건 | **10** 및 전 태스크 DoD |
