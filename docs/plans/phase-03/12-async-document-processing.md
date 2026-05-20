@@ -31,7 +31,7 @@
 - [x] `apps/web/src/lib/document/processor.ts`를 청크별 LLM checkpoint와 재개 가능한 처리 결과로 바꾼다.
 - [x] `apps/web/src/app/api/documents/[documentId]/process/route.ts`에서 `after()` 직접 실행을 제거하고 queue enqueue만 수행한다.
 - [x] `apps/web/src/app/api/workers/document-processing/route.ts`를 추가해 queue 메시지를 소비하고 `processDocument`를 실행한다.
-- [x] `apps/web/vercel.json`에 worker route Cron 호출을 추가한다.
+- [x] `apps/web/vercel.json`에 worker route Cron 호출을 추가한다. Vercel Hobby 배포 제한 때문에 기본 schedule은 하루 1회로 두며, 1분 단위 worker 실행은 Pro 플랜 또는 외부/Supabase scheduler 전환 후 활성화한다.
 - [x] `apps/web/scripts/smoke-document-processing-jobs.ts`를 queue enqueue/worker 재시도 모델에 맞게 갱신한다.
 - [x] 검증 명령: `npm run document:processing-jobs-smoke && npm run build && npm run lint`
 
@@ -39,5 +39,6 @@
 
 - Vercel Cron route는 public URL이다. 별도 secret 기반 보호는 auth/env 설계가 필요하므로 이번 범위에서는 추가하지 않는다.
 - worker route도 Vercel 함수 `maxDuration` 제한을 받는다. 그래서 한 번의 worker 호출에서 모든 청크를 끝내려고 하지 않고, 청크 checkpoint와 requeue로 진행을 누적한다.
+- Vercel Hobby 계정은 cron이 하루 1회보다 자주 실행되면 deployment가 실패한다. 운영에서 문서 처리를 즉시 진행하려면 Vercel Pro의 1분 cron, Supabase Cron/Edge Function, 또는 별도 worker scheduler가 필요하다.
 - Supabase Queue migration은 실제 Supabase 프로젝트에서 `pgmq` 확장 권한이 있어야 적용된다. 배포 전 migration 적용 결과를 확인해야 한다.
 - 청크 metadata에 저장되는 LLM 후보 JSON이 커질 수 있다. 문서당 120,000자 제한과 청크 단위 후보 수 제한을 유지한다.
