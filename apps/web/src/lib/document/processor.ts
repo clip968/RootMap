@@ -11,14 +11,22 @@ import path from "node:path";
 import {
   getDocumentForUser,
   updateDocumentStatus,
+  updateDocumentMetadata,
   updateDocumentExtractedInfo,
   bulkInsertDocumentPages,
   bulkInsertDocumentChunks,
   getDocumentChunks,
+  updateDocumentChunkMetadata,
   bulkInsertDocumentConcepts,
+  getDocumentConceptRows,
   createDocumentLearningTreeLink,
 } from "@/lib/repository/document-repository";
-import type { DocumentConceptInput, DocumentConceptRow, DocumentChunkRow } from "@/lib/repository/document-repository";
+import type {
+  DocumentConceptInput,
+  DocumentConceptRow,
+  DocumentChunkRow,
+  DocumentProcessingStatus,
+} from "@/lib/repository/document-repository";
 import { extractPdfPages } from "./extract-pdf";
 import { splitTextIntoUnits } from "./extract-text";
 import { chunkFromPdfPages, chunkUnits } from "./chunker";
@@ -72,6 +80,45 @@ const MIN_EXTRACTED_TEXT_LENGTH = 50;
 const MIN_QUALITY_CONCEPT_COUNT = 3;
 const DEFAULT_CHUNK_CONCURRENCY = 3;
 const DOCUMENT_EVIDENCE_SNIPPET_MAX = 360;
+const CHUNK_CONCEPT_EXTRACTION_METADATA_KEY = "document_concept_extraction";
+const DOCUMENT_CONSOLIDATION_METADATA_KEY = "document_concept_consolidation";
+
+type ChunkConceptCandidate = {
+  canonical_title: string;
+  type: string;
+  short_description: string;
+  importance: number;
+  difficulty: number;
+  evidence_snippet: string;
+};
+
+type ChunkCandidateBatch = {
+  chunk_id: string;
+  section_title: string;
+  candidates: ChunkConceptCandidate[];
+};
+
+type ChunkConceptExtractionMetadata = ChunkCandidateBatch & {
+  status: "completed" | "skipped";
+  updated_at: string;
+  error?: string;
+};
+
+type ExtractConceptsFromChunksResult = {
+  candidatesJson: string;
+  complete: boolean;
+  processedChunkCount: number;
+  totalChunkCount: number;
+  pendingChunkCount: number;
+  totalCandidates: number;
+};
+
+type DocumentConsolidationMetadata = {
+  summary: string;
+  main_topic: string;
+  consolidated_concepts_json: string;
+  updated_at: string;
+};
 
 // ──────────────────────────────────────────────
 // 유틸리티
@@ -99,6 +146,94 @@ function getDocumentChunkConcurrency(): number {
   if (!raw) return DEFAULT_CHUNK_CONCURRENCY;
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CHUNK_CONCURRENCY;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
+function isChunkCandidateBatch(value: unknown): value is ChunkCandidateBatch {
+  const record = asRecord(value);
+  return (
+    typeof record.chunk_id === "string" &&
+    typeof record.section_title === "string" &&
+    Array.isArray(record.candidates)
+  );
+}
+
+function getChunkConceptExtraction(
+  chunk: DocumentChunkRow,
+): ChunkConceptExtractionMetadata | null {
+  const metadata = asRecord(chunk.metadata);
+  const extraction = metadata[CHUNK_CONCEPT_EXTRACTION_METADATA_KEY];
+  if (!isChunkCandidateBatch(extraction)) return null;
+  const status = asRecord(extraction).status;
+  if (status !== "completed" && status !== "skipped") return null;
+  return extraction as ChunkConceptExtractionMetadata;
+}
+
+function getDocumentConsolidationMetadata(
+  metadata: unknown,
+): DocumentConsolidationMetadata | null {
+  const record = asRecord(metadata)[DOCUMENT_CONSOLIDATION_METADATA_KEY];
+  const consolidation = asRecord(record);
+  if (
+    typeof consolidation.summary !== "string" ||
+    typeof consolidation.main_topic !== "string" ||
+    typeof consolidation.consolidated_concepts_json !== "string"
+  ) {
+    return null;
+  }
+  return consolidation as DocumentConsolidationMetadata;
+}
+
+async function saveChunkConceptExtraction(
+  documentId: string,
+  chunk: DocumentChunkRow,
+  extraction: ChunkConceptExtractionMetadata,
+): Promise<void> {
+  // 청크 metadata는 worker 재시작 후 어느 청크까지 LLM 호출이 끝났는지 확인하는 checkpoint다.
+  await updateDocumentChunkMetadata(documentId, chunk.id, {
+    ...asRecord(chunk.metadata),
+    [CHUNK_CONCEPT_EXTRACTION_METADATA_KEY]: extraction,
+  });
+}
+
+async function saveDocumentConsolidationMetadata(
+  documentId: string,
+  documentMetadata: unknown,
+  consolidation: DocumentConsolidationMetadata,
+): Promise<Record<string, unknown>> {
+  // 통합 결과를 document metadata에 남겨 concepts_extracted 이후 트리 생성만 별도 worker에서 이어간다.
+  const nextMetadata = {
+    ...asRecord(documentMetadata),
+    [DOCUMENT_CONSOLIDATION_METADATA_KEY]: consolidation,
+  };
+  await updateDocumentMetadata(documentId, nextMetadata);
+  return nextMetadata;
+}
+
+function consolidatedJsonFromDocumentConceptRows(rows: DocumentConceptRow[]): string {
+  const concepts: ConsolidatedConcept[] = rows.map((row) => ({
+    canonical_title: row.conceptTitle,
+    aliases: [],
+    type: row.conceptType as ConsolidatedConcept["type"],
+    importance: row.importance ?? 3,
+    difficulty: row.difficulty ?? 3,
+    source_type: row.sourceType === "explicit" ? "explicit" : "inferred",
+    evidence: Array.isArray(row.evidence)
+      ? row.evidence.map((item) => ({
+          chunk_id: item.chunkId ?? "",
+          page_start: item.pageStart,
+          page_end: item.pageEnd,
+          section_title: item.sectionTitle ?? "",
+        }))
+      : [],
+  }));
+  return JSON.stringify(concepts);
 }
 
 export async function runWithConcurrency<T, R>(
@@ -171,82 +306,119 @@ async function extractConceptsFromChunks(
   documentId: string,
   documentTitle: string,
   chunks: DocumentChunkRow[],
-): Promise<string> {
+  options: { chunkBatchSize?: number } = {},
+): Promise<ExtractConceptsFromChunksResult> {
   console.info("[document-processor]", {
     stage: "chunk_concept_extraction_start",
     documentId,
     chunkCount: chunks.length,
   });
 
-  type ChunkCandidateBatch = {
-    chunk_id: string;
-    section_title: string;
-    candidates: Array<{
-      canonical_title: string;
-      type: string;
-      short_description: string;
-      importance: number;
-      difficulty: number;
-      evidence_snippet: string;
-    }>;
-  };
-
   const concurrency = getDocumentChunkConcurrency();
+  const savedCandidates = new Map<string, ChunkCandidateBatch>();
+  const missingChunks: DocumentChunkRow[] = [];
 
-  const allCandidates = await runWithConcurrency(chunks, concurrency, async (chunk): Promise<ChunkCandidateBatch> => {
-    const sectionTitle = chunk.sectionTitle ?? "";
-    try {
-      const { extraction } = await generateChunkConcepts({
-        documentTitle,
-        chunkId: chunk.id,
-        sectionTitle,
-        chunkText: chunk.text,
-        chunkMetadata: JSON.stringify(chunk.metadata ?? {}),
-        requestId: `doc-${documentId}-chunk-${chunk.chunkIndex}`,
+  for (const chunk of chunks) {
+    const extraction = getChunkConceptExtraction(chunk);
+    if (extraction) {
+      savedCandidates.set(chunk.id, {
+        chunk_id: extraction.chunk_id,
+        section_title: extraction.section_title,
+        candidates: extraction.candidates,
       });
-
-      return {
-        chunk_id: chunk.id,
-        section_title: sectionTitle,
-        candidates: extraction.concept_candidates.map((c) => ({
-          canonical_title: c.canonical_title,
-          type: c.type,
-          short_description: c.short_description,
-          importance: c.importance,
-          difficulty: c.difficulty,
-          evidence_snippet: c.evidence_snippet,
-        })),
-      };
-    } catch (err) {
-      // LLM 재시도 소진 시 해당 청크는 건너뛰고 로그만 남김
-      console.warn("[document-processor]", {
-        stage: "chunk_concept_extraction_skipped",
-        documentId,
-        chunkId: chunk.id,
-        chunkIndex: chunk.chunkIndex,
-        error: err instanceof Error ? err.message : "알 수 없는 오류",
-      });
-      // 빈 결과로 계속 진행
-      return {
-        chunk_id: chunk.id,
-        section_title: sectionTitle,
-        candidates: [],
-      };
+      continue;
     }
-  });
+    missingChunks.push(chunk);
+  }
 
+  const chunkBatchSize =
+    options.chunkBatchSize === undefined
+      ? missingChunks.length
+      : Math.max(1, Math.floor(options.chunkBatchSize));
+  const chunksToProcess = missingChunks.slice(0, chunkBatchSize);
+
+  const processedCandidates = await runWithConcurrency(
+    chunksToProcess,
+    concurrency,
+    async (chunk): Promise<ChunkCandidateBatch> => {
+      const sectionTitle = chunk.sectionTitle ?? "";
+      try {
+        const { extraction } = await generateChunkConcepts({
+          documentTitle,
+          chunkId: chunk.id,
+          sectionTitle,
+          chunkText: chunk.text,
+          chunkMetadata: JSON.stringify(chunk.metadata ?? {}),
+          requestId: `doc-${documentId}-chunk-${chunk.chunkIndex}`,
+        });
+
+        const batch: ChunkCandidateBatch = {
+          chunk_id: chunk.id,
+          section_title: sectionTitle,
+          candidates: extraction.concept_candidates.map((c) => ({
+            canonical_title: c.canonical_title,
+            type: c.type,
+            short_description: c.short_description,
+            importance: c.importance,
+            difficulty: c.difficulty,
+            evidence_snippet: c.evidence_snippet,
+          })),
+        };
+        await saveChunkConceptExtraction(documentId, chunk, {
+          ...batch,
+          status: "completed",
+          updated_at: nowIso(),
+        });
+        return batch;
+      } catch (err) {
+        // LLM 재시도 소진 시 해당 청크는 건너뛰고 로그만 남김
+        console.warn("[document-processor]", {
+          stage: "chunk_concept_extraction_skipped",
+          documentId,
+          chunkId: chunk.id,
+          chunkIndex: chunk.chunkIndex,
+          error: err instanceof Error ? err.message : "알 수 없는 오류",
+        });
+        // 빈 결과로 계속 진행
+        const batch: ChunkCandidateBatch = {
+          chunk_id: chunk.id,
+          section_title: sectionTitle,
+          candidates: [],
+        };
+        await saveChunkConceptExtraction(documentId, chunk, {
+          ...batch,
+          status: "skipped",
+          updated_at: nowIso(),
+          error: err instanceof Error ? err.message : "알 수 없는 오류",
+        });
+        return batch;
+      }
+    },
+  );
+
+  for (const batch of processedCandidates) {
+    savedCandidates.set(batch.chunk_id, batch);
+  }
+
+  const allCandidates = chunks
+    .map((chunk) => savedCandidates.get(chunk.id))
+    .filter((batch): batch is ChunkCandidateBatch => Boolean(batch));
   const totalCandidates = allCandidates.reduce((s, c) => s + c.candidates.length, 0);
+  const pendingChunkCount = chunks.length - allCandidates.length;
+  const complete = pendingChunkCount === 0;
 
   console.info("[document-processor]", {
     stage: "chunk_concept_extraction_complete",
     documentId,
     concurrency,
     totalChunks: chunks.length,
-    processedChunks: allCandidates.length,
+    processedChunks: processedCandidates.length,
+    checkpointedChunks: allCandidates.length,
+    pendingChunkCount,
     totalCandidates,
   });
 
-  if (totalCandidates === 0) {
+  if (complete && totalCandidates === 0) {
     throw new DocumentProcessorError(
       "CONCEPT_EXTRACTION_FAILED",
       "문서에서 학습 개념 후보를 추출하지 못했습니다. 잠시 후 다시 시도하거나 더 명확한 문서를 업로드해 주세요.",
@@ -254,7 +426,14 @@ async function extractConceptsFromChunks(
   }
 
   // JSON 직렬화 (LLM consolidation 입력용)
-  return JSON.stringify(allCandidates);
+  return {
+    candidatesJson: JSON.stringify(allCandidates),
+    complete,
+    processedChunkCount: processedCandidates.length,
+    totalChunkCount: chunks.length,
+    pendingChunkCount,
+    totalCandidates,
+  };
 }
 
 // ──────────────────────────────────────────────
@@ -565,58 +744,87 @@ async function persistDocumentTree(
 
 export interface ProcessDocumentResult {
   treeId: string | null;
+  shouldRequeue?: boolean;
+  reason?: "chunk_concepts_pending" | "tree_generation_deferred";
+  processedChunkCount?: number;
+  totalChunkCount?: number;
+  pendingChunkCount?: number;
+}
+
+export interface ProcessDocumentOptions {
+  chunkBatchSize?: number;
+  stopAfterConcepts?: boolean;
 }
 
 export async function processDocument(
   documentId: string,
   userId: string,
+  options: ProcessDocumentOptions = {},
 ): Promise<ProcessDocumentResult> {
   const doc = await getDocumentForUser(documentId, userId);
   if (!doc) {
     throw new DocumentProcessorError("NOT_FOUND", "문서를 찾을 수 없습니다.");
   }
 
+  let currentStatus = doc.processingStatus as DocumentProcessingStatus;
+  let documentMetadata = asRecord(doc.metadata);
+  const documentTitle = doc.title || doc.originalFilename;
+
   // ── 상태 검증 ──
   // "uploaded": 신규 처리, 그 외 상태는 재처리/오류 처리
-  const restartableStates = new Set(["uploaded", "text_extracted", "chunked", "concepts_extracted", "failed"]);
-  if (doc.processingStatus === "tree_generated") {
+  const restartableStates = new Set<DocumentProcessingStatus>([
+    "uploaded",
+    "text_extracted",
+    "chunked",
+    "concepts_extracted",
+    "failed",
+  ]);
+  if (currentStatus === "tree_generated") {
     throw new DocumentProcessorError(
       "ALREADY_PROCESSED",
       "이미 처리 완료된 문서입니다. 재처리가 필요하면 문서를 다시 업로드해 주세요.",
     );
   }
-  if (!restartableStates.has(doc.processingStatus)) {
+  if (!restartableStates.has(currentStatus)) {
     throw new DocumentProcessorError(
       "INVALID_STATUS",
       "처리할 수 없는 상태의 문서입니다.",
     );
   }
 
-  const storage = doc.metadata?.storage as DocumentStorageRef | undefined;
-  const fileKey = storage?.key;
-  if (!fileKey) {
-    throw new DocumentProcessorError(
-      "FILE_NOT_FOUND",
-      "문서 파일 경로를 찾을 수 없습니다.",
-    );
+  let fileBuffer: Buffer | null = null;
+  if (currentStatus !== "concepts_extracted") {
+    const storage = documentMetadata.storage as DocumentStorageRef | undefined;
+    const fileKey = storage?.key;
+    if (!fileKey) {
+      throw new DocumentProcessorError(
+        "FILE_NOT_FOUND",
+        "문서 파일 경로를 찾을 수 없습니다.",
+      );
+    }
+
+    try {
+      fileBuffer = await readStoredDocumentFile(storage);
+    } catch {
+      throw new DocumentProcessorError(
+        "FILE_NOT_FOUND",
+        "문서 파일을 읽을 수 없습니다.",
+      );
+    }
   }
 
-  let fileBuffer: Buffer;
-  try {
-    fileBuffer = await readStoredDocumentFile(storage);
-  } catch {
-    throw new DocumentProcessorError(
-      "FILE_NOT_FOUND",
-      "문서 파일을 읽을 수 없습니다.",
-    );
-  }
-
-  const documentTitle = doc.title || doc.originalFilename;
+  let extractedPagesForThisRun: Array<{ pageNumber: number; text: string }> | null = null;
 
   // ══════════════════════════════════════════
   // Step 1: 텍스트 추출 (이미 되어있으면 건너뛰기)
   // ══════════════════════════════════════════
-  if (doc.processingStatus === "uploaded") {
+  if (currentStatus === "uploaded") {
+    if (!fileBuffer) {
+      throw new DocumentProcessorError(
+        "FILE_NOT_FOUND",
+        "문서 파일을 읽을 수 없습니다.",
+      );
+    }
     let pages: Array<{ pageNumber: number; text: string }>;
     try {
       if (doc.fileType === "pdf") {
@@ -673,19 +881,27 @@ export async function processDocument(
     await bulkInsertDocumentPages(documentId, pageInputs);
 
     // 문서 메타데이터 갱신
+    extractedPagesForThisRun = pages;
     await updateDocumentExtractedInfo(documentId, pages.length, totalTextLen.length);
     await updateDocumentStatus(documentId, "text_extracted");
+    currentStatus = "text_extracted";
   }
 
   // ══════════════════════════════════════════
   // Step 2: 청크 분할 (이미 되어있으면 건너뛰기)
   // ══════════════════════════════════════════
-  if (doc.processingStatus === "uploaded" || doc.processingStatus === "text_extracted") {
+  if (currentStatus === "text_extracted") {
+    if (!fileBuffer) {
+      throw new DocumentProcessorError(
+        "FILE_NOT_FOUND",
+        "문서 파일을 읽을 수 없습니다.",
+      );
+    }
     let pagesForChunking: Array<{ pageNumber: number; text: string }>;
 
     if (doc.fileType === "pdf") {
-      // PDF는 다시 추출
-      pagesForChunking = await extractPdfPages(fileBuffer);
+      // 같은 worker 호출에서 텍스트 추출을 끝냈다면 PDF를 다시 파싱하지 않고 그 결과를 재사용한다.
+      pagesForChunking = extractedPagesForThisRun ?? await extractPdfPages(fileBuffer);
     } else {
       const text = fileBuffer.toString("utf-8");
       pagesForChunking = [{ pageNumber: 1, text }];
@@ -716,14 +932,7 @@ export async function processDocument(
     }
 
     await updateDocumentStatus(documentId, "chunked");
-  }
-
-  // ══════════════════════════════════════════
-  // Step 3: 청크별 개념 추출
-  // ══════════════════════════════════════════
-  if (doc.processingStatus === "chunked" || doc.processingStatus === "uploaded" || doc.processingStatus === "text_extracted") {
-    // 이미 "chunked" 상태로 저장된 상태임
-    // 그래도 청크 데이터가 확실히 있는지 확인
+    currentStatus = "chunked";
   }
 
   const chunks = await getDocumentChunks(documentId);
@@ -738,45 +947,104 @@ export async function processDocument(
   // ══════════════════════════════════════════
   // Step 4: 청크별 개념 추출 via LLM
   // ══════════════════════════════════════════
-  let allCandidatesJson: string;
-  let consolidated: {
-    consolidatedJson: string;
-    consolidatedConcepts: ConsolidatedConcept[];
-    summary: string;
-    mainTopic: string;
-  };
+  let treeSummary = `${documentTitle} 문서에서 추출한 학습 개념입니다.`;
+  let treeConsolidatedJson = "";
+  let documentConceptRows: DocumentConceptRow[] = [];
+  let extractionResult: ExtractConceptsFromChunksResult | null = null;
 
-  try {
-    allCandidatesJson = await extractConceptsFromChunks(documentId, documentTitle, chunks);
-  } catch (err) {
-    const msg = err instanceof DocumentProcessorError ? err.message : "청크 개념 추출 중 오류가 발생했습니다.";
-    await updateDocumentStatus(documentId, "failed", msg);
-    throw new DocumentProcessorError("CONCEPT_EXTRACTION_FAILED", msg);
-  }
-
-  // ══════════════════════════════════════════
-  // Step 5: 개념 통합 via LLM
-  // ══════════════════════════════════════════
-  try {
-    consolidated = await consolidateConcepts(documentId, documentTitle, allCandidatesJson);
-  } catch (err) {
-    if (err instanceof DocumentProcessorError) {
-      await updateDocumentStatus(documentId, "failed", err.message);
-      throw err;
+  if (currentStatus !== "concepts_extracted") {
+    try {
+      extractionResult = await extractConceptsFromChunks(
+        documentId,
+        documentTitle,
+        chunks,
+        { chunkBatchSize: options.chunkBatchSize },
+      );
+    } catch (err) {
+      const msg = err instanceof DocumentProcessorError ? err.message : "청크 개념 추출 중 오류가 발생했습니다.";
+      await updateDocumentStatus(documentId, "failed", msg);
+      throw new DocumentProcessorError("CONCEPT_EXTRACTION_FAILED", msg);
     }
-    const msg = err instanceof LlmExhaustedRetriesError
-      ? "개념 통합 중 오류가 발생했습니다."
-      : "개념 통합 중 오류가 발생했습니다.";
-    await updateDocumentStatus(documentId, "failed", msg);
-    throw new DocumentProcessorError("CONSOLIDATION_FAILED", msg);
+
+    if (!extractionResult.complete) {
+      return {
+        treeId: null,
+        shouldRequeue: true,
+        reason: "chunk_concepts_pending",
+        processedChunkCount: extractionResult.processedChunkCount,
+        totalChunkCount: extractionResult.totalChunkCount,
+        pendingChunkCount: extractionResult.pendingChunkCount,
+      };
+    }
+
+    // ══════════════════════════════════════════
+    // Step 5: 개념 통합 via LLM
+    // ══════════════════════════════════════════
+    let consolidated: {
+      consolidatedJson: string;
+      consolidatedConcepts: ConsolidatedConcept[];
+      summary: string;
+      mainTopic: string;
+    };
+    try {
+      consolidated = await consolidateConcepts(
+        documentId,
+        documentTitle,
+        extractionResult.candidatesJson,
+      );
+    } catch (err) {
+      if (err instanceof DocumentProcessorError) {
+        await updateDocumentStatus(documentId, "failed", err.message);
+        throw err;
+      }
+      const msg = err instanceof LlmExhaustedRetriesError
+        ? "개념 통합 중 오류가 발생했습니다."
+        : "개념 통합 중 오류가 발생했습니다.";
+      await updateDocumentStatus(documentId, "failed", msg);
+      throw new DocumentProcessorError("CONSOLIDATION_FAILED", msg);
+    }
+
+    treeSummary = consolidated.summary;
+    treeConsolidatedJson = consolidated.consolidatedJson;
+    documentMetadata = await saveDocumentConsolidationMetadata(documentId, documentMetadata, {
+      summary: consolidated.summary,
+      main_topic: consolidated.mainTopic,
+      consolidated_concepts_json: consolidated.consolidatedJson,
+      updated_at: nowIso(),
+    });
+
+    // ══════════════════════════════════════════
+    // Step 6: document_concepts 저장
+    // ══════════════════════════════════════════
+    documentConceptRows = await resolveAndSaveDocumentConcepts(documentId, consolidated.consolidatedConcepts);
+    await updateDocumentStatus(documentId, "concepts_extracted");
+    currentStatus = "concepts_extracted";
+
+    if (options.stopAfterConcepts) {
+      return {
+        treeId: null,
+        shouldRequeue: true,
+        reason: "tree_generation_deferred",
+        processedChunkCount: extractionResult.processedChunkCount,
+        totalChunkCount: extractionResult.totalChunkCount,
+        pendingChunkCount: 0,
+      };
+    }
+  } else {
+    const consolidationMetadata = getDocumentConsolidationMetadata(documentMetadata);
+    documentConceptRows = await getDocumentConceptRows(documentId);
+    if (documentConceptRows.length === 0) {
+      await updateDocumentStatus(documentId, "failed", "저장된 문서 개념이 없습니다.");
+      throw new DocumentProcessorError(
+        "CONCEPT_EXTRACTION_FAILED",
+        "문서 개념 저장 결과를 찾을 수 없습니다. 문서를 다시 처리해 주세요.",
+      );
+    }
+    treeSummary = consolidationMetadata?.summary ?? treeSummary;
+    treeConsolidatedJson =
+      consolidationMetadata?.consolidated_concepts_json ??
+      consolidatedJsonFromDocumentConceptRows(documentConceptRows);
   }
-
-  await updateDocumentStatus(documentId, "concepts_extracted");
-
-  // ══════════════════════════════════════════
-  // Step 6: document_concepts 저장
-  // ══════════════════════════════════════════
-  const documentConceptRows = await resolveAndSaveDocumentConcepts(documentId, consolidated.consolidatedConcepts);
 
   // ══════════════════════════════════════════
   // Step 7: 문서 기반 학습 트리 생성 via LLM
@@ -786,8 +1054,8 @@ export async function processDocument(
     docTree = await generateDocumentLearningTree(
       documentId,
       documentTitle,
-      consolidated.summary,
-      consolidated.consolidatedJson,
+      treeSummary,
+      treeConsolidatedJson,
       formatMatchedConceptsForPrompt(documentConceptRows),
     );
   } catch (err) {
@@ -819,7 +1087,7 @@ export async function processDocument(
     stage: "pipeline_complete",
     documentId,
     treeId,
-    conceptCount: consolidated.consolidatedConcepts.length,
+    conceptCount: documentConceptRows.length,
     nodeCount: docTree.nodes.length,
   });
 

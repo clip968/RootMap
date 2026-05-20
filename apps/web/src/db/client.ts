@@ -10,6 +10,7 @@ export type RootMapTx = Parameters<
 >[0];
 
 export type RootMapDbClient = RootMapDb | RootMapTx;
+export type RootMapSqlClient = postgres.Sql;
 
 const globalForDb = globalThis as unknown as {
   rootmapPostgres?: postgres.Sql;
@@ -29,15 +30,22 @@ function resolvePostgresConnectionString(): string {
 
 export function getDb(): RootMapDb {
   if (!globalForDb.rootmapDb) {
-    const client = postgres(resolvePostgresConnectionString(), {
+    const client = getSqlClient();
+    globalForDb.rootmapDb = drizzle(client, { schema });
+  }
+  return globalForDb.rootmapDb;
+}
+
+/** Drizzle가 지원하지 않는 Postgres 확장 함수 호출은 같은 연결 풀의 raw SQL client로 실행한다. */
+export function getSqlClient(): RootMapSqlClient {
+  if (!globalForDb.rootmapPostgres) {
+    globalForDb.rootmapPostgres = postgres(resolvePostgresConnectionString(), {
       max: 5,
       // Supabase Shared Pooler의 transaction 모드에서는 prepared statement를 끈 연결이 안전합니다.
       prepare: false,
     });
-    globalForDb.rootmapPostgres = client;
-    globalForDb.rootmapDb = drizzle(client, { schema });
   }
-  return globalForDb.rootmapDb;
+  return globalForDb.rootmapPostgres;
 }
 
 /** 테스트·스모크 스크립트에서 DATABASE_URL을 바꾸기 전에 Postgres 연결을 닫는다. */

@@ -1,99 +1,215 @@
 import {
   processDocument,
+  type ProcessDocumentOptions,
   type ProcessDocumentResult,
 } from "@/lib/document/processor";
+import {
+  createDocumentProcessingJobId,
+  deleteDocumentProcessingMessage,
+  enqueueDocumentProcessingMessage,
+  readDocumentProcessingMessages,
+  type DocumentProcessingQueueMessage,
+  type DocumentProcessingQueuePayload,
+} from "@/lib/document/processing-queue";
+import { getDocumentForUser } from "@/lib/repository/document-repository";
 
-export type DocumentProcessingJobStatus = "queued" | "already_running";
+export const DOCUMENT_PROCESSING_WORKER_CHUNK_BATCH_SIZE = 3;
+
+export type DocumentProcessingJobStatus = "queued";
 
 export interface DocumentProcessingJob {
   jobId: string;
   documentId: string;
   userId: string;
   startedAt: string;
+  messageId: string;
 }
 
 export interface StartDocumentProcessingJobResult {
   status: DocumentProcessingJobStatus;
   jobId: string;
+  messageId: string;
+}
+
+export type DocumentProcessingWorkerStatus =
+  | "idle"
+  | "invalid_message"
+  | "missing_document"
+  | "already_processed"
+  | "processed"
+  | "requeued"
+  | "failed";
+
+export interface DocumentProcessingWorkerResult {
+  status: DocumentProcessingWorkerStatus;
+  messageId?: string;
+  jobId?: string;
+  documentId?: string;
+  requeuedMessageId?: string;
+  deleted?: boolean;
+  reason?: string;
+  error?: string;
 }
 
 type DocumentProcessor = (
   documentId: string,
   userId: string,
+  options?: ProcessDocumentOptions,
 ) => Promise<ProcessDocumentResult>;
 
-type JobScheduler = (task: () => Promise<void>) => void;
+type QueueEnqueuer = (
+  payload: DocumentProcessingQueuePayload,
+) => Promise<{ jobId: string; messageId: string }>;
 
-interface ActiveDocumentProcessingJob extends DocumentProcessingJob {
-  promise: Promise<void>;
-}
-
-const activeJobs = new Map<string, ActiveDocumentProcessingJob>();
-
-function createJobId(documentId: string): string {
-  return `doc-process-${documentId}-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
-}
-
-export function getDocumentProcessingJob(
+type QueueReader = () => Promise<DocumentProcessingQueueMessage[]>;
+type QueueDeleter = (messageId: string) => Promise<boolean>;
+type DocumentLookup = (
   documentId: string,
-): DocumentProcessingJob | null {
-  const job = activeJobs.get(documentId);
-  if (!job) return null;
+  userId: string,
+) => Promise<{ processingStatus: string } | null>;
+
+function createQueuePayload(options: {
+  documentId: string;
+  userId: string;
+  now?: () => Date;
+}): DocumentProcessingQueuePayload {
+  const now = options.now ?? (() => new Date());
   return {
-    jobId: job.jobId,
-    documentId: job.documentId,
-    userId: job.userId,
-    startedAt: job.startedAt,
+    jobId: createDocumentProcessingJobId(options.documentId),
+    documentId: options.documentId,
+    userId: options.userId,
+    requestedAt: now().toISOString(),
   };
 }
 
-export function startDocumentProcessingJob(options: {
+export function getDocumentProcessingJob(
+  _documentId: string,
+): DocumentProcessingJob | null {
+  // Supabase Queue가 실행 상태의 source of truth이므로 프로세스 메모리에서 job을 추적하지 않는다.
+  void _documentId;
+  return null;
+}
+
+export async function startDocumentProcessingJob(options: {
   documentId: string;
   userId: string;
+  enqueue?: QueueEnqueuer;
+  now?: () => Date;
+}): Promise<StartDocumentProcessingJobResult> {
+  const enqueue = options.enqueue ?? enqueueDocumentProcessingMessage;
+  const queued = await enqueue(createQueuePayload(options));
+  return {
+    status: "queued",
+    jobId: queued.jobId,
+    messageId: queued.messageId,
+  };
+}
+
+export async function processNextDocumentProcessingMessage(options: {
+  readMessages?: QueueReader;
+  deleteMessage?: QueueDeleter;
+  enqueue?: QueueEnqueuer;
   run?: DocumentProcessor;
-  schedule?: JobScheduler;
-}): StartDocumentProcessingJobResult {
-  const existing = activeJobs.get(options.documentId);
-  if (existing) {
-    return { status: "already_running", jobId: existing.jobId };
+  getDocument?: DocumentLookup;
+} = {}): Promise<DocumentProcessingWorkerResult> {
+  const readMessages =
+    options.readMessages ??
+    (() => readDocumentProcessingMessages({ limit: 1 }));
+  const deleteMessage = options.deleteMessage ?? deleteDocumentProcessingMessage;
+  const enqueue = options.enqueue ?? enqueueDocumentProcessingMessage;
+  const run = options.run ?? processDocument;
+  const getDocument = options.getDocument ?? getDocumentForUser;
+
+  const messages = await readMessages();
+  const message = messages[0];
+  if (!message) return { status: "idle" };
+
+  if (!message.payload) {
+    const deleted = await deleteMessage(message.msgId);
+    return {
+      status: "invalid_message",
+      messageId: message.msgId,
+      deleted,
+      reason: "queue payload shape is invalid",
+    };
   }
 
-  const jobId = createJobId(options.documentId);
-  const run = options.run ?? processDocument;
-  const schedule = options.schedule ?? ((task) => void queueMicrotask(task));
-  let resolveJob: () => void = () => undefined;
+  const payload = message.payload;
+  const document = await getDocument(payload.documentId, payload.userId);
+  if (!document) {
+    const deleted = await deleteMessage(message.msgId);
+    return {
+      status: "missing_document",
+      messageId: message.msgId,
+      jobId: payload.jobId,
+      documentId: payload.documentId,
+      deleted,
+    };
+  }
 
-  const promise = new Promise<void>((resolve) => {
-    resolveJob = resolve;
-  });
+  if (document.processingStatus === "tree_generated") {
+    const deleted = await deleteMessage(message.msgId);
+    return {
+      status: "already_processed",
+      messageId: message.msgId,
+      jobId: payload.jobId,
+      documentId: payload.documentId,
+      deleted,
+    };
+  }
 
-  activeJobs.set(options.documentId, {
-    jobId,
-    documentId: options.documentId,
-    userId: options.userId,
-    startedAt: new Date().toISOString(),
-    promise,
-  });
+  try {
+    const result = await run(payload.documentId, payload.userId, {
+      chunkBatchSize: DOCUMENT_PROCESSING_WORKER_CHUNK_BATCH_SIZE,
+      stopAfterConcepts: true,
+    });
 
-  schedule(async () => {
-    try {
-      await run(options.documentId, options.userId);
-    } catch (err) {
-      console.error("[document-processing-job]", {
-        event: "failed",
-        jobId,
-        documentId: options.documentId,
-        error: err instanceof Error ? err.message : "Unknown error",
-      });
-    } finally {
-      activeJobs.delete(options.documentId);
-      resolveJob();
+    if (result.shouldRequeue) {
+      const requeued = await enqueue(createQueuePayload({
+        documentId: payload.documentId,
+        userId: payload.userId,
+      }));
+      const deleted = await deleteMessage(message.msgId);
+      return {
+        status: "requeued",
+        messageId: message.msgId,
+        jobId: payload.jobId,
+        documentId: payload.documentId,
+        requeuedMessageId: requeued.messageId,
+        deleted,
+        reason: result.reason,
+      };
     }
-  });
 
-  return { status: "queued", jobId };
+    const deleted = await deleteMessage(message.msgId);
+    return {
+      status: "processed",
+      messageId: message.msgId,
+      jobId: payload.jobId,
+      documentId: payload.documentId,
+      deleted,
+    };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : "Unknown error";
+    console.error("[document-processing-worker]", {
+      event: "failed",
+      messageId: message.msgId,
+      jobId: payload.jobId,
+      documentId: payload.documentId,
+      readCount: message.readCount,
+      error,
+    });
+    // 실패한 메시지는 삭제하지 않는다. visibility timeout 이후 Supabase Queue가 다시 전달한다.
+    return {
+      status: "failed",
+      messageId: message.msgId,
+      jobId: payload.jobId,
+      documentId: payload.documentId,
+      error,
+    };
+  }
 }
 
 export function clearDocumentProcessingJobsForTests(): void {
-  activeJobs.clear();
+  // 이전 in-memory 구현과 호환하기 위한 테스트 helper다. Queue 기반 구현에서는 지울 메모리 상태가 없다.
 }

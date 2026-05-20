@@ -1,3 +1,9 @@
 export { DEFAULT_USER_ID } from "./constants";
-export { getDb, resetDbSingleton, type RootMapDb } from "./client";
+export {
+  getDb,
+  getSqlClient,
+  resetDbSingleton,
+  type RootMapDb,
+  type RootMapSqlClient,
+} from "./client";
 export * from "./schema";

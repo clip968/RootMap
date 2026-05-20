@@ -204,6 +204,22 @@ export async function updateDocumentExtractedInfo(
   return rows.length > 0;
 }
 
+export async function updateDocumentMetadata(
+  documentId: string,
+  metadata: Record<string, unknown>,
+): Promise<boolean> {
+  const db = getDb();
+  const rows = await db
+    .update(documents)
+    .set({
+      metadata,
+      updatedAt: nowIso(),
+    })
+    .where(eq(documents.id, documentId))
+    .returning({ id: documents.id });
+  return rows.length > 0;
+}
+
 export async function getDocumentById(documentId: string): Promise<DocumentRow | null> {
   const db = getDb();
   const rows = await db
@@ -326,6 +342,31 @@ export async function getDocumentChunks(
     .from(documentChunks)
     .where(eq(documentChunks.documentId, documentId))
     .orderBy(documentChunks.chunkIndex);
+}
+
+export async function updateDocumentChunkMetadata(
+  documentId: string,
+  chunkId: string,
+  metadata: Record<string, unknown>,
+): Promise<boolean> {
+  const db = getDb();
+  const rows = await db
+    .update(documentChunks)
+    .set({ metadata })
+    .where(and(eq(documentChunks.documentId, documentId), eq(documentChunks.id, chunkId)))
+    .returning({ id: documentChunks.id });
+  return rows.length > 0;
+}
+
+export async function getDocumentConceptRows(
+  documentId: string,
+): Promise<DocumentConceptRow[]> {
+  const db = getDb();
+  return await db
+    .select()
+    .from(documentConcepts)
+    .where(eq(documentConcepts.documentId, documentId))
+    .orderBy(documentConcepts.conceptTitle);
 }
 
 export async function createDocumentLearningTreeLink(

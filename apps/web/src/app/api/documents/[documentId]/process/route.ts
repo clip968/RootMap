@@ -5,7 +5,7 @@ import {
   getDocumentForUser,
   getDocumentLearningTreeForUser,
 } from "@/lib/repository/document-repository";
-import { after, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -30,12 +30,9 @@ export async function POST(
     });
   }
 
-  const job = startDocumentProcessingJob({
+  const job = await startDocumentProcessingJob({
     documentId,
     userId: DEFAULT_USER_ID,
-    schedule: (task) => {
-      after(() => task());
-    },
   });
 
   return NextResponse.json(
@@ -44,6 +41,7 @@ export async function POST(
       processing_status: document.processingStatus,
       job_status: job.status,
       job_id: job.jobId,
+      message_id: job.messageId,
     },
     { status: 202 },
   );
