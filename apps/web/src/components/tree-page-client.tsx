@@ -16,7 +16,14 @@ import { buildDeepDiveGenerationTopic } from "@/lib/tree/deep-dive";
 import type { ApiNodeDetailResponse } from "@/lib/services/node-detail";
 import type {
   ApiLearningNode,
+  ApiPersonalizedNode,
+  ApiPersonalizedRecommendationItem,
+  ApiPersonalizedRecommendationsResponse,
+  ApiPersonalizedTreeResponse,
   ApiRecommendationItem,
+  ApiReviewDueResponse,
+  ApiReviewItem,
+  ApiSessionReportResponse,
   DocumentSourceType,
   NodeType,
   ProgressStatus,
@@ -37,9 +44,12 @@ import {
   BookOpen,
   CheckCircle2,
   CircleHelp,
+  FileText,
   GitBranch,
+  Play,
   Route,
   Search,
+  Square,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -116,6 +126,8 @@ const FLOW_PATH_LEVEL_GAP = 260;
 const FLOW_COMMUNITY_COLUMN_GAP = 390;
 const FLOW_COMMUNITY_NODE_GAP = 210;
 const FLOW_COMMUNITY_DEPTH_OFFSET = 28;
+const PHASE4_AUTH_TOKEN_STORAGE_KEY = "rootmap_supabase_access_token";
+const PHASE4_AUTH_TOKEN_EVENT = "rootmap-phase4-auth-token-changed";
 
 type FocusMode = (typeof FOCUS_OPTIONS)[number]["id"];
 type ViewMode = (typeof VIEW_OPTIONS)[number]["id"];
@@ -126,6 +138,7 @@ type DocumentEvidenceItem = NonNullable<
 interface RootMapNodeData {
   [key: string]: unknown;
   node: ApiLearningNode;
+  personalization: ApiPersonalizedNode | null;
   selected: boolean;
   related: boolean;
   recommended: boolean;
@@ -136,6 +149,45 @@ interface RootMapNodeData {
 interface NodeRelation {
   node: ApiLearningNode;
   direction: "parent" | "child";
+}
+
+interface UiRecommendationItem {
+  node_id: string;
+  title: string;
+  reason: string;
+  score?: number;
+  reasons?: string[];
+}
+
+function readPhase4AuthToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(PHASE4_AUTH_TOKEN_STORAGE_KEY)?.trim() || null;
+}
+
+function phase4AuthHeaders(token: string): HeadersInit {
+  return {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+}
+
+function recommendationReason(item: ApiPersonalizedRecommendationItem): string {
+  return item.reasons[0] ?? "현재 이해 상태를 기준으로 우선순위가 높습니다.";
+}
+
+function confidencePercent(score: number | null | undefined): number {
+  if (typeof score !== "number" || Number.isNaN(score)) return 0;
+  return Math.round(Math.max(0, Math.min(1, score)) * 100);
+}
+
+function isKnownPrerequisite(
+  node: ApiLearningNode,
+  personalizationByNodeId: Map<string, ApiPersonalizedNode>,
+): boolean {
+  const personalized = personalizationByNodeId.get(node.id);
+  const status = personalized?.status ?? node.progress;
+  const confidence = personalized?.confidence_score ?? (node.progress === "known" ? 0.8 : 0);
+  return node.type === "prerequisite" && status === "known" && confidence >= 0.75;
 }
 
 export function documentSourceTypeLabel(sourceType: DocumentSourceType): string {
@@ -244,9 +296,23 @@ function visibleNodeIds(
   focusMode: FocusMode,
   enabledTypes: NodeType[],
   recommendedSet: Set<string>,
+  personalizationByNodeId: Map<string, ApiPersonalizedNode>,
+  hideKnownPrerequisites: boolean,
 ): Set<string> {
   const typeSet = new Set(enabledTypes);
-  const allowedByType = tree.nodes.filter((node) => typeSet.has(node.type));
+  const allowedByType = tree.nodes.filter((node) => {
+    if (!typeSet.has(node.type)) return false;
+    /** 이미 아는 선수지식은 추천·선택 상태가 아닐 때만 접어 핵심 경로를 짧게 만든다. */
+    if (
+      hideKnownPrerequisites &&
+      node.id !== selectedId &&
+      !recommendedSet.has(node.id) &&
+      isKnownPrerequisite(node, personalizationByNodeId)
+    ) {
+      return false;
+    }
+    return true;
+  });
   if (focusMode === "all" || !selectedId) {
     return new Set(allowedByType.map((node) => node.id));
   }
@@ -307,15 +373,25 @@ function nodeDepths(tree: ApiTreeResponse): Map<string, number> {
 function buildFlowElements(
   tree: ApiTreeResponse,
   selectedId: string | null,
-  recommendations: ApiRecommendationItem[],
+  recommendations: UiRecommendationItem[],
   viewMode: ViewMode,
   focusMode: FocusMode,
   enabledTypes: NodeType[],
+  personalizationByNodeId: Map<string, ApiPersonalizedNode>,
+  hideKnownPrerequisites: boolean,
   progressBusy: string | null,
   onProgressChange: (nodeId: string, status: ProgressStatus) => void,
 ): { nodes: Node<RootMapNodeData>[]; edges: Edge[]; visibleCount: number } {
   const recommendedSet = new Set(recommendations.map((item) => item.node_id));
-  const visibleIds = visibleNodeIds(tree, selectedId, focusMode, enabledTypes, recommendedSet);
+  const visibleIds = visibleNodeIds(
+    tree,
+    selectedId,
+    focusMode,
+    enabledTypes,
+    recommendedSet,
+    personalizationByNodeId,
+    hideKnownPrerequisites,
+  );
   const relatedIds = relatedNodeIds(tree, selectedId);
   const depthByKey = nodeDepths(tree);
   const nodeByKey = new Map(tree.nodes.map((node) => [node.node_key, node]));
@@ -366,6 +442,7 @@ function buildFlowElements(
             },
             data: {
               node,
+              personalization: personalizationByNodeId.get(node.id) ?? null,
               selected: selectedId === node.id,
               related: relatedIds.has(node.id),
               recommended: recommendedSet.has(node.id),
@@ -400,6 +477,7 @@ function buildFlowElements(
           },
           data: {
             node,
+            personalization: personalizationByNodeId.get(node.id) ?? null,
             selected: selectedId === node.id,
             related: relatedIds.has(node.id),
             recommended: recommendedSet.has(node.id),
@@ -474,6 +552,9 @@ function edgeColorForNodeType(type: NodeType): string {
 function RootMapFlowNode({ data }: NodeProps<Node<RootMapNodeData>>) {
   const config = NODE_KIND_CONFIG[data.node.type];
   const Icon = config.icon;
+  const personalized = data.personalization;
+  const confidence = personalized?.confidence_score;
+  const confidencePct = confidencePercent(confidence);
 
   return (
     <div
@@ -491,7 +572,11 @@ function RootMapFlowNode({ data }: NodeProps<Node<RootMapNodeData>>) {
           <Icon size={14} />
           {SECTION_LABEL[data.node.type]}
         </span>
-        {data.recommended ? <span className="node-status">추천</span> : null}
+        {personalized?.is_recommended || data.recommended ? (
+          <span className="node-status">
+            {personalized?.is_recommended ? "개인화 추천" : "추천"}
+          </span>
+        ) : null}
       </div>
       {data.node.community ? (
         <span className="node-status">{data.node.community}</span>
@@ -501,10 +586,20 @@ function RootMapFlowNode({ data }: NodeProps<Node<RootMapNodeData>>) {
         {data.node.description ||
           (data.node.document_context ? "상세 설명을 생성할 수 있습니다." : "설명 없음")}
       </p>
+      {personalized ? (
+        <div className="node-mastery">
+          <span>confidence_score</span>
+          <strong>{confidencePct}%</strong>
+          <i aria-hidden="true">
+            <b style={{ width: `${confidencePct}%` }} />
+          </i>
+          <em>recommendation_score {Math.round(personalized.recommendation_score * 100)}%</em>
+        </div>
+      ) : null}
       <label className="node-progress" onClick={(event) => event.stopPropagation()}>
         <span>이해 정도</span>
         <select
-          value={data.node.progress}
+          value={personalized?.status ?? data.node.progress}
           disabled={data.progressBusy}
           onChange={(event) =>
             data.onProgressChange(data.node.id, event.target.value as ProgressStatus)
@@ -544,6 +639,29 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   const [focusMode, setFocusMode] = useState<FocusMode>("all");
   const [enabledTypes, setEnabledTypes] = useState<NodeType[]>(SECTION_ORDER);
   const [progressBusy, setProgressBusy] = useState<string | null>(null);
+  const [phase4AuthToken, setPhase4AuthToken] = useState<string | null>(null);
+  const [personalizedNodes, setPersonalizedNodes] = useState<ApiPersonalizedNode[]>([]);
+  const [personalizedRecommendations, setPersonalizedRecommendations] = useState<
+    ApiPersonalizedRecommendationItem[]
+  >([]);
+  const [reviewItems, setReviewItems] = useState<ApiReviewItem[]>([]);
+  const [phase4Error, setPhase4Error] = useState<string | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [sessionBusy, setSessionBusy] = useState(false);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [latestReport, setLatestReport] = useState<ApiSessionReportResponse | null>(null);
+  const [hideKnownPrerequisites, setHideKnownPrerequisites] = useState(true);
+
+  useEffect(() => {
+    setPhase4AuthToken(readPhase4AuthToken());
+    const syncToken = () => setPhase4AuthToken(readPhase4AuthToken());
+    window.addEventListener("storage", syncToken);
+    window.addEventListener(PHASE4_AUTH_TOKEN_EVENT, syncToken);
+    return () => {
+      window.removeEventListener("storage", syncToken);
+      window.removeEventListener(PHASE4_AUTH_TOKEN_EVENT, syncToken);
+    };
+  }, []);
 
   const loadTree = useCallback(async (): Promise<boolean> => {
     setLoadError(null);
@@ -578,17 +696,64 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     );
   }, [treeId]);
 
+  const loadPhase4Data = useCallback(async () => {
+    if (!phase4AuthToken) {
+      setPersonalizedNodes([]);
+      setPersonalizedRecommendations([]);
+      setReviewItems([]);
+      setPhase4Error(null);
+      return;
+    }
+
+    const headers = phase4AuthHeaders(phase4AuthToken);
+    setPhase4Error(null);
+    const [personalizedRes, recommendationsRes, reviewRes] = await Promise.all([
+      fetch(`/api/trees/${treeId}/personalized`, { headers }),
+      fetch(`/api/trees/${treeId}/recommendations/personalized`, { headers }),
+      fetch("/api/reviews/due?limit=5", { headers }),
+    ]);
+    const [personalizedData, recommendationsData, reviewData] = await Promise.all([
+      personalizedRes.json().catch(() => ({})),
+      recommendationsRes.json().catch(() => ({})),
+      reviewRes.json().catch(() => ({})),
+    ]);
+
+    if (personalizedRes.ok) {
+      setPersonalizedNodes(
+        (personalizedData as ApiPersonalizedTreeResponse).personalized_nodes ?? [],
+      );
+    } else {
+      setPersonalizedNodes([]);
+      setPhase4Error(personalizedData?.error?.message ?? "개인화 트리를 불러오지 못했습니다.");
+    }
+
+    if (recommendationsRes.ok) {
+      setPersonalizedRecommendations(
+        (recommendationsData as ApiPersonalizedRecommendationsResponse).recommended_nodes ?? [],
+      );
+    } else {
+      setPersonalizedRecommendations([]);
+    }
+
+    if (reviewRes.ok) {
+      setReviewItems((reviewData as ApiReviewDueResponse).review_items ?? []);
+    } else {
+      setReviewItems([]);
+    }
+  }, [phase4AuthToken, treeId]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const ok = await loadTree();
       if (cancelled || !ok) return;
       await loadRecommendations();
+      await loadPhase4Data();
     })();
     return () => {
       cancelled = true;
     };
-  }, [treeId, loadTree, loadRecommendations]);
+  }, [treeId, loadTree, loadRecommendations, loadPhase4Data]);
 
   const isDocumentTree = Boolean(tree?.document_id);
 
@@ -599,21 +764,62 @@ export function TreePageClient({ treeId }: { treeId: string }) {
 
   const orderedNodes = useMemo(() => (tree ? orderedTreeNodes(tree) : []), [tree]);
 
+  const personalizationByNodeId = useMemo(
+    () => new Map(personalizedNodes.map((node) => [node.node_id, node])),
+    [personalizedNodes],
+  );
+
+  const effectiveRecommendations: UiRecommendationItem[] = useMemo(() => {
+    if (personalizedRecommendations.length > 0) {
+      return personalizedRecommendations.map((item) => ({
+        node_id: item.node_id,
+        title: item.title,
+        reason: recommendationReason(item),
+        score: item.score,
+        reasons: item.reasons,
+      }));
+    }
+    return recommendations.map((item) => ({
+      node_id: item.node_id,
+      title: item.title,
+      reason: item.reason,
+    }));
+  }, [personalizedRecommendations, recommendations]);
+
   const recommendedSet = useMemo(
-    () => new Set(recommendations.map((item) => item.node_id)),
-    [recommendations],
+    () => new Set(effectiveRecommendations.map((item) => item.node_id)),
+    [effectiveRecommendations],
   );
 
   const filteredNodes = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return orderedNodes;
-    return orderedNodes.filter((node) =>
-      [node.title, node.description, SECTION_LABEL[node.type], PROGRESS_LABEL[node.progress]]
+    const visibleOrdered = orderedNodes.filter(
+      (node) =>
+        !hideKnownPrerequisites ||
+        node.id === selectedId ||
+        recommendedSet.has(node.id) ||
+        !isKnownPrerequisite(node, personalizationByNodeId),
+    );
+    if (!needle) return visibleOrdered;
+    return visibleOrdered.filter((node) =>
+      [
+        node.title,
+        node.description,
+        SECTION_LABEL[node.type],
+        PROGRESS_LABEL[personalizationByNodeId.get(node.id)?.status ?? node.progress],
+      ]
         .join(" ")
         .toLowerCase()
         .includes(needle),
     );
-  }, [orderedNodes, query]);
+  }, [
+    hideKnownPrerequisites,
+    orderedNodes,
+    personalizationByNodeId,
+    query,
+    recommendedSet,
+    selectedId,
+  ]);
 
   const relations = useMemo(
     () => (tree ? nodeRelations(tree, selectedNode) : []),
@@ -641,12 +847,30 @@ export function TreePageClient({ treeId }: { treeId: string }) {
               }
             : prev,
         );
+        const changedNode = tree?.nodes.find((node) => node.id === nodeId) ?? null;
+        if (phase4AuthToken && changedNode?.concept_id) {
+          /** Phase 4 mastery API는 Supabase Auth 사용자 기준이므로 토큰이 있을 때만 자기 평가를 함께 기록한다. */
+          const masteryRes = await fetch(`/api/concepts/${changedNode.concept_id}/mastery`, {
+            method: "PATCH",
+            headers: phase4AuthHeaders(phase4AuthToken),
+            body: JSON.stringify({
+              status,
+              source: "self_assessment",
+              session_id: activeSessionId,
+            }),
+          });
+          const masteryData = await masteryRes.json().catch(() => ({}));
+          if (!masteryRes.ok) {
+            setPhase4Error(masteryData?.error?.message ?? "개인화 이해 상태를 저장하지 못했습니다.");
+          }
+        }
         await loadRecommendations();
+        await loadPhase4Data();
       } finally {
         setProgressBusy(null);
       }
     },
-    [loadRecommendations],
+    [activeSessionId, loadPhase4Data, loadRecommendations, phase4AuthToken, tree],
   );
 
   const flow = useMemo(() => {
@@ -654,19 +878,23 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     return buildFlowElements(
       tree,
       selectedId,
-      recommendations,
+      effectiveRecommendations,
       viewMode,
       focusMode,
       enabledTypes,
+      personalizationByNodeId,
+      hideKnownPrerequisites,
       progressBusy,
       (nodeId, status) => void onProgressChange(nodeId, status),
     );
   }, [
     enabledTypes,
+    effectiveRecommendations,
     focusMode,
+    hideKnownPrerequisites,
     onProgressChange,
+    personalizationByNodeId,
     progressBusy,
-    recommendations,
     selectedId,
     tree,
     viewMode,
@@ -706,10 +934,40 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     }
   }, [treeId]);
 
+  const recordPhase4NodeEvent = useCallback(
+    async (node: ApiLearningNode, eventType: "node_opened" | "node_completed") => {
+      if (!phase4AuthToken || !activeSessionId) return;
+      const res = await fetch("/api/events", {
+        method: "POST",
+        headers: phase4AuthHeaders(phase4AuthToken),
+        body: JSON.stringify({
+          session_id: activeSessionId,
+          tree_id: treeId,
+          node_id: node.id,
+          concept_id: node.concept_id,
+          event_type: eventType,
+          event_payload: {
+            title: node.title,
+            progress: personalizationByNodeId.get(node.id)?.status ?? node.progress,
+          },
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setPhase4Error(data?.error?.message ?? "학습 이벤트를 저장하지 못했습니다.");
+      }
+    },
+    [activeSessionId, personalizationByNodeId, phase4AuthToken, treeId],
+  );
+
   const openNode = useCallback(
     async (nodeId: string) => {
       setSelectedId(nodeId);
       setModalOpen(true);
+      const openedNode = tree?.nodes.find((node) => node.id === nodeId) ?? null;
+      if (openedNode) {
+        void recordPhase4NodeEvent(openedNode, "node_opened");
+      }
 
       if (isDocumentTree && tree) {
         const apiNode = tree.nodes.find((node) => node.id === nodeId);
@@ -748,7 +1006,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
 
       void loadDetail(nodeId);
     },
-    [isDocumentTree, loadDetail, tree, treeId],
+    [isDocumentTree, loadDetail, recordPhase4NodeEvent, tree, treeId],
   );
 
   const closeDetailModal = useCallback(() => {
@@ -826,6 +1084,78 @@ export function TreePageClient({ treeId }: { treeId: string }) {
       if (nextId) router.push(`/tree/${nextId}`);
     } finally {
       setRegenLoading(false);
+    }
+  };
+
+  const startPhase4Session = async () => {
+    if (!tree || !phase4AuthToken) return;
+    setSessionBusy(true);
+    setPhase4Error(null);
+    setLatestReport(null);
+    try {
+      const res = await fetch("/api/sessions/start", {
+        method: "POST",
+        headers: phase4AuthHeaders(phase4AuthToken),
+        body: JSON.stringify({
+          tree_id: tree.tree_id,
+          document_id: tree.document_id ?? null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPhase4Error(data?.error?.message ?? "학습 세션을 시작하지 못했습니다.");
+        return;
+      }
+      setActiveSessionId((data as { session_id?: string }).session_id ?? null);
+      await loadPhase4Data();
+    } finally {
+      setSessionBusy(false);
+    }
+  };
+
+  const generatePhase4Report = async () => {
+    if (!phase4AuthToken || !activeSessionId) return;
+    setReportBusy(true);
+    setPhase4Error(null);
+    try {
+      const res = await fetch("/api/reports/generate", {
+        method: "POST",
+        headers: phase4AuthHeaders(phase4AuthToken),
+        body: JSON.stringify({
+          report_type: "session",
+          session_id: activeSessionId,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPhase4Error(data?.error?.message ?? "학습 리포트를 생성하지 못했습니다.");
+        return;
+      }
+      setLatestReport(data as ApiSessionReportResponse);
+    } finally {
+      setReportBusy(false);
+    }
+  };
+
+  const endPhase4Session = async () => {
+    if (!phase4AuthToken || !activeSessionId) return;
+    setSessionBusy(true);
+    setPhase4Error(null);
+    try {
+      const res = await fetch(`/api/sessions/${activeSessionId}/end`, {
+        method: "POST",
+        headers: phase4AuthHeaders(phase4AuthToken),
+        body: JSON.stringify({ generate_report: false }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPhase4Error(data?.error?.message ?? "학습 세션을 종료하지 못했습니다.");
+        return;
+      }
+      setActiveSessionId(null);
+      await loadPhase4Data();
+    } finally {
+      setSessionBusy(false);
     }
   };
 
@@ -949,16 +1279,70 @@ export function TreePageClient({ treeId }: { treeId: string }) {
 
           <section className="rounded-lg border border-zinc-800 bg-black p-3">
             <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-white">개인화 코치</h2>
+              <span className="rounded-full bg-zinc-900 px-2 py-0.5 text-xs font-medium text-zinc-300">
+                {activeSessionId ? "세션 중" : phase4AuthToken ? "대기" : "비활성"}
+              </span>
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => void startPhase4Session()}
+                disabled={!phase4AuthToken || Boolean(activeSessionId) || sessionBusy}
+                className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs font-semibold text-white hover:border-emerald-700 disabled:opacity-45"
+              >
+                <Play size={13} />
+                시작
+              </button>
+              <button
+                type="button"
+                onClick={() => void generatePhase4Report()}
+                disabled={!phase4AuthToken || !activeSessionId || reportBusy}
+                className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs font-semibold text-white hover:border-emerald-700 disabled:opacity-45"
+              >
+                <FileText size={13} />
+                리포트
+              </button>
+              <button
+                type="button"
+                onClick={() => void endPhase4Session()}
+                disabled={!phase4AuthToken || !activeSessionId || sessionBusy}
+                className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs font-semibold text-white hover:border-emerald-700 disabled:opacity-45"
+              >
+                <Square size={12} />
+                종료
+              </button>
+            </div>
+            {phase4Error ? (
+              <p className="mt-2 rounded-md border border-amber-700/40 bg-amber-950/40 px-2 py-1.5 text-xs text-amber-100">
+                {phase4Error}
+              </p>
+            ) : null}
+            {latestReport ? (
+              <div className="mt-3 rounded-md border border-zinc-800 bg-zinc-950 p-2 text-xs">
+                <strong className="block text-white">{latestReport.title}</strong>
+                <p className="mt-1 line-clamp-3 text-zinc-400">{latestReport.summary}</p>
+                <div className="mt-2 grid gap-1 text-zinc-300">
+                  {latestReport.recommendations.slice(0, 2).map((item) => (
+                    <span key={item}>· {item}</span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </section>
+
+          <section className="rounded-lg border border-zinc-800 bg-black p-3">
+            <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-white">다음에 볼 만한 노드</h2>
               <span className="rounded-full bg-emerald-700 px-2 py-0.5 text-xs font-medium text-white">
-                {recommendations.length}
+                {effectiveRecommendations.length}
               </span>
             </div>
             {recoError ? (
               <p className="mt-2 text-sm text-zinc-400">{recoError}</p>
-            ) : recommendations.length > 0 ? (
+            ) : effectiveRecommendations.length > 0 ? (
               <div className="mt-2 grid gap-2">
-                {recommendations.map((item) => (
+                {effectiveRecommendations.map((item) => (
                   <button
                     key={item.node_id}
                     type="button"
@@ -969,11 +1353,44 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                     <span className="mt-0.5 line-clamp-2 block text-xs text-zinc-400">
                       {item.reason}
                     </span>
+                    {typeof item.score === "number" ? (
+                      <span className="mt-1 block text-xs font-semibold text-emerald-400">
+                        recommendation_score {Math.round(item.score * 100)}%
+                      </span>
+                    ) : null}
                   </button>
                 ))}
               </div>
             ) : (
               <p className="mt-2 text-sm text-zinc-400">이해 상태를 바꾸면 추천이 갱신됩니다.</p>
+            )}
+          </section>
+
+          <section className="rounded-lg border border-zinc-800 bg-black p-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-white">복습 큐</h2>
+              <span className="rounded-full bg-zinc-900 px-2 py-0.5 text-xs font-medium text-zinc-300">
+                {reviewItems.length}
+              </span>
+            </div>
+            {reviewItems.length > 0 ? (
+              <div className="mt-2 grid gap-2">
+                {reviewItems.map((item) => (
+                  <div key={item.concept_id} className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <strong className="min-w-0 text-white">{item.title}</strong>
+                      <span className="shrink-0 text-xs font-semibold text-emerald-400">
+                        {Math.round(item.review_priority_score * 100)}%
+                      </span>
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-xs text-zinc-400">
+                      {item.reasons[0] ?? "복습 우선순위가 있습니다."}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-zinc-400">복습 대상이 없습니다.</p>
             )}
           </section>
 
@@ -989,6 +1406,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                 const active = selectedId === node.id;
                 const config = NODE_KIND_CONFIG[node.type];
                 const Icon = config.icon;
+                const personalized = personalizationByNodeId.get(node.id);
                 return (
                   <button
                     key={node.id}
@@ -1018,8 +1436,9 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                         {node.title}
                       </span>
                       <span className={`mt-1 block text-xs ${active ? "text-emerald-50" : "text-zinc-400"}`}>
-                        {PROGRESS_LABEL[node.progress]}
+                        {PROGRESS_LABEL[personalized?.status ?? node.progress]}
                         {recommendedSet.has(node.id) ? " · 추천" : ""}
+                        {personalized ? ` · ${confidencePercent(personalized.confidence_score)}%` : ""}
                       </span>
                     </span>
                   </button>
@@ -1047,8 +1466,8 @@ export function TreePageClient({ treeId }: { treeId: string }) {
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               {selectedNode ? (
                 <div className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-zinc-800 bg-black px-3 text-sm font-semibold text-zinc-200">
-                  {statusIcon(selectedNode.progress)}
-                  {PROGRESS_LABEL[selectedNode.progress]}
+                  {statusIcon(personalizationByNodeId.get(selectedNode.id)?.status ?? selectedNode.progress)}
+                  {PROGRESS_LABEL[personalizationByNodeId.get(selectedNode.id)?.status ?? selectedNode.progress]}
                 </div>
               ) : null}
               <button
@@ -1117,6 +1536,15 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                   {SECTION_LABEL[type]}
                 </button>
               ))}
+              <label className="inline-flex min-h-7 cursor-pointer items-center gap-2 rounded-full border border-zinc-800 bg-zinc-950 px-3 text-xs font-bold text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={hideKnownPrerequisites}
+                  onChange={(event) => setHideKnownPrerequisites(event.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-zinc-600 accent-emerald-700"
+                />
+                안다 선수지식 접기
+              </label>
             </div>
             <div className="text-xs font-bold text-zinc-400">
               {flow.visibleCount} cards · {flow.edges.length} links
@@ -1317,11 +1745,58 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                     </div>
 
                     <div className="detail-section">
-                      <h3>이해 정도</h3>
+                      <h3>Concept 상태</h3>
+                      {(() => {
+                        const personalized = personalizationByNodeId.get(selectedNode.id);
+                        const confidence = confidencePercent(personalized?.confidence_score);
+                        const reasons = personalized?.reasons ?? [];
+                        return (
+                          <div className="grid gap-3">
+                            <div className="grid gap-1">
+                              <div className="flex items-center justify-between gap-2 text-xs text-zinc-400">
+                                <span>confidence_score</span>
+                                <strong className="text-white">{confidence}%</strong>
+                              </div>
+                              <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
+                                <div
+                                  className="h-full rounded-full bg-emerald-600"
+                                  style={{ width: `${confidence}%` }}
+                                />
+                              </div>
+                            </div>
+                            {personalized ? (
+                              <div className="grid gap-1 text-xs text-zinc-400">
+                                <span>
+                                  recommendation_score{" "}
+                                  {Math.round(personalized.recommendation_score * 100)}%
+                                </span>
+                                {personalized.is_recommended ? (
+                                  <span className="font-semibold text-emerald-400">추천 대상</span>
+                                ) : null}
+                              </div>
+                            ) : null}
+                            {reasons.length > 0 ? (
+                              <ul>
+                                {reasons.slice(0, 3).map((reason) => (
+                                  <li key={reason}>{reason}</li>
+                                ))}
+                              </ul>
+                            ) : null}
+                          </div>
+                        );
+                      })()}
                       <label className="modal-progress">
-                        <span>{PROGRESS_LABEL[selectedNode.progress]}</span>
+                        <span>
+                          {PROGRESS_LABEL[
+                            personalizationByNodeId.get(selectedNode.id)?.status ??
+                              selectedNode.progress
+                          ]}
+                        </span>
                         <select
-                          value={selectedNode.progress}
+                          value={
+                            personalizationByNodeId.get(selectedNode.id)?.status ??
+                            selectedNode.progress
+                          }
                           disabled={progressBusy === selectedNode.id}
                           onChange={(event) =>
                             void onProgressChange(
@@ -1337,6 +1812,14 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                           ))}
                         </select>
                       </label>
+                      <button
+                        type="button"
+                        className="detail-inline-button mt-3"
+                        disabled={!phase4AuthToken || !activeSessionId}
+                        onClick={() => void recordPhase4NodeEvent(selectedNode, "node_completed")}
+                      >
+                        완료 이벤트 기록
+                      </button>
                       <button
                         type="button"
                         className="detail-inline-button mt-3"

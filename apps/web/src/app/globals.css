@@ -403,6 +403,42 @@ body {
   line-height: 1.45;
 }
 
+.rootmap-flow-node .node-mastery {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 8px;
+  margin-top: 10px;
+  color: #a1a1aa;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.rootmap-flow-node .node-mastery strong {
+  color: #ffffff;
+  font-size: 11px;
+}
+
+.rootmap-flow-node .node-mastery i {
+  grid-column: 1 / -1;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #27272a;
+}
+
+.rootmap-flow-node .node-mastery b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #047857;
+}
+
+.rootmap-flow-node .node-mastery em {
+  grid-column: 1 / -1;
+  color: #34d399;
+  font-style: normal;
+}
+
 .rootmap-flow-node .node-progress {
   display: flex;
   align-items: center;

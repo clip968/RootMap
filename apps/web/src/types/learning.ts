@@ -158,6 +158,58 @@ export interface ApiRecommendationItem {
   reason: string;
 }
 
+/** Phase 4 개인화 트리 API가 노드별 숙련도·추천 점수를 내려줄 때 쓰는 프론트 계약 */
+export interface ApiPersonalizedNode {
+  node_id: string;
+  concept_id: string | null;
+  title: string;
+  status: ProgressStatus;
+  confidence_score: number;
+  recommendation_score: number;
+  is_recommended: boolean;
+  reasons: string[];
+}
+
+export interface ApiPersonalizedTreeResponse {
+  tree_id: string;
+  topic: string;
+  personalized_nodes: ApiPersonalizedNode[];
+}
+
+export interface ApiPersonalizedRecommendationItem {
+  node_id: string;
+  concept_id: string | null;
+  title: string;
+  score: number;
+  reasons: string[];
+  recommendation_log_id?: string;
+}
+
+export interface ApiPersonalizedRecommendationsResponse {
+  tree_id: string;
+  recommended_nodes: ApiPersonalizedRecommendationItem[];
+}
+
+export interface ApiReviewItem {
+  concept_id: string;
+  title: string;
+  review_priority_score: number;
+  reasons: string[];
+}
+
+export interface ApiReviewDueResponse {
+  review_items: ApiReviewItem[];
+}
+
+export interface ApiSessionReportResponse {
+  report_id: string;
+  title: string;
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  recommendations: string[];
+}
+
 // ──────────────────────────────────────────────
 // Phase 3 문서 기반 LLM 응답 타입 (명세 §7·§11)
 // ──────────────────────────────────────────────
