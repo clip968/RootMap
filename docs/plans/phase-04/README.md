@@ -50,7 +50,7 @@
 - [x] 05. [05-personalized-recommendations-and-tree-api.md](./05-personalized-recommendations-and-tree-api.md) - 추천 점수·선수지식·추천 이유(템플릿), 개인화 트리·추천 API
 - [x] 06. [06-quiz-evaluation-and-attempts-api.md](./06-quiz-evaluation-and-attempts-api.md) - 퀴즈 평가(LLM), 시도 저장, mastery·오개념 반영
 - [x] 07. [07-review-due-and-priority.md](./07-review-due-and-priority.md) - `review_priority_score`, 복습 대상 조회 API
-- [ ] 08. [08-learning-reports-and-llm-prompts.md](./08-learning-reports-and-llm-prompts.md) - 세션 리포트 MVP, 약점 분석, 기간 리포트, 관련 LLM 프롬프트
+- [x] 08. [08-learning-reports-and-llm-prompts.md](./08-learning-reports-and-llm-prompts.md) - 세션 리포트 MVP, 약점 분석, 기간 리포트, 관련 LLM 프롬프트
 - [ ] 09. [09-phase4-personalized-ui.md](./09-phase4-personalized-ui.md) - 개인화 트리·추천 패널·Concept 패널·리포트·복습 UI
 - [ ] 10. [10-phase4-security-quality-and-tests.md](./10-phase4-security-quality-and-tests.md) - 사용자 데이터 격리, 추천 로그·품질, 명세 테스트·완료 조건
 

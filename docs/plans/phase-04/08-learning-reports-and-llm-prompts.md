@@ -45,3 +45,4 @@ Request: `report_type`, `session_id`(또는 기간 필드). Response: `report_id
 - 세션 리포트가 단순 로그 나열이 아니라 “다음 행동”을 포함한다(§17 품질 기준).
 - §18 MVP “세션 리포트 생성 가능” 충족.
 - §22 완료 조건 “약점 개념을 분석할 수 있다”를 테스트 가능한 산출물로 충족한다.
+- 검증 명령: `npm run phase4:report-smoke` (`apps/web`에서 실행)

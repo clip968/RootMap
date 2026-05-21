@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   concepts,
@@ -157,6 +157,21 @@ export interface GetLearningTreeConceptAccessInput {
 export interface ListUserConceptMasteryInput {
   userId: string;
   conceptIds: string[];
+}
+
+export interface ListLearningEventsForSessionInput {
+  userId: string;
+  sessionId: string;
+}
+
+export interface ListQuizAttemptsForSessionInput {
+  userId: string;
+  sessionId: string;
+}
+
+export interface ListMisconceptionEventsForQuizAttemptsInput {
+  userId: string;
+  quizAttemptIds: string[];
 }
 
 export interface ReviewMasteryRow {
@@ -338,6 +353,22 @@ export async function appendLearningEvent(
   return row;
 }
 
+/** 리포트 생성은 세션 안에서 발생한 이벤트만 보아야 하므로 user_id와 session_id를 함께 고정한다. */
+export async function listLearningEventsForSession(
+  input: ListLearningEventsForSessionInput,
+): Promise<LearningEventRow[]> {
+  return getDb()
+    .select()
+    .from(learningEvents)
+    .where(
+      and(
+        eq(learningEvents.userId, input.userId),
+        eq(learningEvents.sessionId, input.sessionId),
+      ),
+    )
+    .orderBy(asc(learningEvents.createdAt));
+}
+
 export async function getUserConceptMastery(
   userId: string,
   conceptId: string,
@@ -451,6 +482,22 @@ export async function createQuizAttempt(
   return row;
 }
 
+/** 세션 리포트는 퀴즈 시도를 시간순으로 읽어 약점 분석과 요약 문맥을 만든다. */
+export async function listQuizAttemptsForSession(
+  input: ListQuizAttemptsForSessionInput,
+): Promise<QuizAttemptRow[]> {
+  return getDb()
+    .select()
+    .from(quizAttempts)
+    .where(
+      and(
+        eq(quizAttempts.userId, input.userId),
+        eq(quizAttempts.sessionId, input.sessionId),
+      ),
+    )
+    .orderBy(asc(quizAttempts.createdAt));
+}
+
 /** 감지된 오개념은 퀴즈 시도와 분리해 해결 여부를 독립적으로 추적한다. */
 export async function createMisconceptionEvent(
   input: CreateMisconceptionEventInput,
@@ -471,6 +518,24 @@ export async function createMisconceptionEvent(
   const row = rows[0];
   if (!row) throw new Error("misconception_events insert failed");
   return row;
+}
+
+/** 퀴즈와 연결된 오개념만 가져와 다른 세션의 오래된 기록이 리포트에 섞이지 않게 한다. */
+export async function listMisconceptionEventsForQuizAttempts(
+  input: ListMisconceptionEventsForQuizAttemptsInput,
+): Promise<MisconceptionEventRow[]> {
+  const quizAttemptIds = [...new Set(input.quizAttemptIds)].filter(Boolean);
+  if (quizAttemptIds.length === 0) return [];
+  return getDb()
+    .select()
+    .from(misconceptionEvents)
+    .where(
+      and(
+        eq(misconceptionEvents.userId, input.userId),
+        inArray(misconceptionEvents.quizAttemptId, quizAttemptIds),
+      ),
+    )
+    .orderBy(asc(misconceptionEvents.createdAt));
 }
 
 /** 추천 노출 시점의 점수와 이유를 append-only로 남겨 후속 클릭 이벤트와 연결한다. */

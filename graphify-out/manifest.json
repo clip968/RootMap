@@ -59,6 +59,10 @@
     "mtime": 1779372556.7130759,
     "hash": "7a5e5967a0f6865ba999ebe312f1d643"
   },
+  "/home/clip968/RootMap/apps/web/src/lib/learning/report.ts": {
+    "mtime": 1779375468.061386,
+    "hash": "246596421961bc2353dec45dbea05bab"
+  },
   "/home/clip968/RootMap/apps/web/src/lib/learning/session-events.ts": {
     "mtime": 1779372591.5584311,
     "hash": "3705f34b1583d6ad3120bfd1e1502bd9"
@@ -116,8 +120,8 @@
     "hash": "06715f741599cc6e6437e104991bda7b"
   },
   "/home/clip968/RootMap/apps/web/src/lib/repository/learning-session-repository.ts": {
-    "mtime": 1779374069.8600116,
-    "hash": "8846fbdccdeaf9ec6bf96fafcd31c104"
+    "mtime": 1779375352.0316353,
+    "hash": "5b8b2c88cf180459485f1fd3e203fc80"
   },
   "/home/clip968/RootMap/apps/web/src/lib/repository/learning-repository.ts": {
     "mtime": 1779182212.755374,
@@ -287,6 +291,10 @@
     "mtime": 1779372666.0751464,
     "hash": "fba5742dec5b3343d4a0ecc8d0542995"
   },
+  "/home/clip968/RootMap/apps/web/src/app/api/reports/generate/route.ts": {
+    "mtime": 1779375486.5478199,
+    "hash": "d9559bc2a443d257e328b851f4ea41f7"
+  },
   "/home/clip968/RootMap/apps/web/src/app/api/documents/upload-url/route.ts": {
     "mtime": 1779206988.850494,
     "hash": "02b2d516eb49dadc50d85241a64574c2"
@@ -340,8 +348,8 @@
     "hash": "1a289e136c3438c789f4cb90df414110"
   },
   "/home/clip968/RootMap/apps/web/src/app/api/sessions/[sessionId]/end/route.ts": {
-    "mtime": 1779372665.763172,
-    "hash": "52ec227b5e99e10e021e32d789da36a0"
+    "mtime": 1779375496.8151567,
+    "hash": "d20db0cfd76ac96a3c0ddf6eb29ec8b2"
   },
   "/home/clip968/RootMap/apps/web/src/app/api/reviews/due/route.ts": {
     "mtime": 1779374070.28105,

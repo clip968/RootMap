@@ -1,5 +1,6 @@
 import { jsonError } from "@/lib/api-errors";
 import { requireSupabaseAuthUserId } from "@/lib/auth/supabase-auth";
+import { createSessionLearningReport } from "@/lib/learning/report";
 import { toIsoString } from "@/lib/learning/session-events";
 import {
   appendLearningEvent,
@@ -99,7 +100,12 @@ export async function POST(req: Request, ctx: Ctx) {
     duration_seconds: ended.durationSeconds,
   };
   if (parsedBody.data.generate_report) {
-    response.report_id = null;
+    /** generate_report는 같은 세션 사용자 범위에서만 저장되는 세션 리포트를 즉시 생성해 응답에 연결한다. */
+    const report = await createSessionLearningReport({
+      userId: auth.userId,
+      sessionId: ended.id,
+    });
+    response.report_id = report.reportId;
   }
 
   return NextResponse.json(response);
