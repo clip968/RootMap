@@ -37,3 +37,4 @@ Response: `attempt_id`, 평가 결과, `updated_mastery`.
 
 - §19 테스트 케이스 2(오답·오개념·confidence 감소)를 만족한다.
 - 외부 LLM으로 전송하는 필드가 최소한으로 제한된다(태스크 10과 합치).
+- 검증 명령: `npm run phase4:quiz-smoke` (`apps/web`에서 실행)
