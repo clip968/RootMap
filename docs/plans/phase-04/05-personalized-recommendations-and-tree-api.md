@@ -35,3 +35,4 @@
 - 명세 §19 테스트 1·4 유형(사용자별 순서 차이, known 제외)을 단위·통합 중 한 가지 이상으로 검증한다.
 - 추천 이유가 추상 문장만 반복하지 않도록 템플릿 조건을 점검한다.
 - 추천 노출과 클릭 추적 흐름이 `recommendation_logs`와 `learning_events` 양쪽에서 재현 가능하다.
+- 검증 명령: `npm run phase4:personalized-smoke` (`apps/web`에서 실행)

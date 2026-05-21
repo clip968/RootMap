@@ -33,7 +33,8 @@
     "phase2:smoke": "tsx scripts/smoke-phase2-concepts.ts",
     "phase4:schema-smoke": "tsx scripts/smoke-phase4-schema.ts",
     "phase4:session-events-smoke": "tsx scripts/smoke-phase4-session-events-api.ts",
-    "phase4:mastery-smoke": "tsx scripts/smoke-phase4-mastery-api.ts"
+    "phase4:mastery-smoke": "tsx scripts/smoke-phase4-mastery-api.ts",
+    "phase4:personalized-smoke": "tsx scripts/smoke-phase4-personalized-recommendations.ts"
   },
   "dependencies": {
     "@esbuild/linux-x64": "^0.28.0",

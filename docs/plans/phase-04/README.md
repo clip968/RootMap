@@ -47,7 +47,7 @@
 - [x] 02. [02-quiz-misconception-recommendation-report-schema.md](./02-quiz-misconception-recommendation-report-schema.md) - `quiz_attempts`, `misconception_events`, `recommendation_logs`, `learning_reports` DDL 선행 정의
 - [x] 03. [03-session-and-learning-events-api.md](./03-session-and-learning-events-api.md) - 세션 시작·종료, 학습 이벤트 기록 API
 - [x] 04. [04-concept-mastery-and-self-assessment.md](./04-concept-mastery-and-self-assessment.md) - 이해도 조회·수정, 자기 평가 반영, 상태·confidence 정책
-- [ ] 05. [05-personalized-recommendations-and-tree-api.md](./05-personalized-recommendations-and-tree-api.md) - 추천 점수·선수지식·추천 이유(템플릿), 개인화 트리·추천 API
+- [x] 05. [05-personalized-recommendations-and-tree-api.md](./05-personalized-recommendations-and-tree-api.md) - 추천 점수·선수지식·추천 이유(템플릿), 개인화 트리·추천 API
 - [ ] 06. [06-quiz-evaluation-and-attempts-api.md](./06-quiz-evaluation-and-attempts-api.md) - 퀴즈 평가(LLM), 시도 저장, mastery·오개념 반영
 - [ ] 07. [07-review-due-and-priority.md](./07-review-due-and-priority.md) - `review_priority_score`, 복습 대상 조회 API
 - [ ] 08. [08-learning-reports-and-llm-prompts.md](./08-learning-reports-and-llm-prompts.md) - 세션 리포트 MVP, 약점 분석, 기간 리포트, 관련 LLM 프롬프트
