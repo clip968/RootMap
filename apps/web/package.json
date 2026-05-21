@@ -30,7 +30,8 @@
     "llm:smoke-document": "tsx scripts/smoke-document-llm.ts",
     "llm:smoke-provider-settings": "tsx scripts/smoke-llm-provider-settings.ts",
     "phase1:smoke": "tsx scripts/smoke-phase1-mvp.ts",
-    "phase2:smoke": "tsx scripts/smoke-phase2-concepts.ts"
+    "phase2:smoke": "tsx scripts/smoke-phase2-concepts.ts",
+    "phase4:schema-smoke": "tsx scripts/smoke-phase4-schema.ts"
   },
   "dependencies": {
     "@esbuild/linux-x64": "^0.28.0",

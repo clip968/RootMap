@@ -6,7 +6,9 @@ import {
   pgTable,
   real,
   text,
+  timestamp,
   uniqueIndex,
+  uuid,
 } from "drizzle-orm/pg-core";
 import type { LearningTreeResponse, NodeDetailResponse } from "@/types/learning";
 
@@ -501,6 +503,116 @@ export const userConceptProgress = pgTable(
   (t) => [
     index("user_concept_progress_concept_id_idx").on(t.conceptId),
     uniqueIndex("user_concept_progress_user_concept_uidx").on(
+      t.userId,
+      t.conceptId,
+    ),
+  ],
+);
+
+/** Phase 4 Learning Session Store */
+export const learningSessions = pgTable(
+  "learning_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Supabase Auth 사용자 ID. Phase 4 신규 데이터는 DEFAULT_USER_ID가 아니라 실제 사용자 UUID에 귀속한다. */
+    userId: uuid("user_id").notNull(),
+    treeId: text("tree_id").references(() => learningTrees.id, {
+      onDelete: "set null",
+    }),
+    documentId: text("document_id").references(() => documents.id, {
+      onDelete: "set null",
+    }),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    durationSeconds: integer("duration_seconds"),
+    summary: jsonb("summary")
+      .notNull()
+      .$type<Record<string, unknown>>()
+      .$defaultFn(() => ({})),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("learning_sessions_user_id_idx").on(t.userId),
+    index("learning_sessions_tree_id_idx").on(t.treeId),
+    index("learning_sessions_document_id_idx").on(t.documentId),
+  ],
+);
+
+export const learningEvents = pgTable(
+  "learning_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** 이벤트도 세션과 별도로 user_id를 들고 있어 API/RLS 양쪽에서 사용자 혼입을 막는다. */
+    userId: uuid("user_id").notNull(),
+    sessionId: uuid("session_id").references(() => learningSessions.id, {
+      onDelete: "cascade",
+    }),
+    treeId: text("tree_id").references(() => learningTrees.id, {
+      onDelete: "set null",
+    }),
+    nodeId: text("node_id").references(() => learningNodes.id, {
+      onDelete: "set null",
+    }),
+    conceptId: text("concept_id").references(() => concepts.id, {
+      onDelete: "set null",
+    }),
+    eventType: text("event_type").notNull(),
+    eventPayload: jsonb("event_payload")
+      .notNull()
+      .$type<Record<string, unknown>>()
+      .$defaultFn(() => ({})),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("learning_events_user_session_created_idx").on(
+      t.userId,
+      t.sessionId,
+      t.createdAt,
+    ),
+    index("learning_events_tree_id_idx").on(t.treeId),
+    index("learning_events_node_id_idx").on(t.nodeId),
+    index("learning_events_concept_id_idx").on(t.conceptId),
+  ],
+);
+
+export const userConceptMastery = pgTable(
+  "user_concept_mastery",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Concept 숙련도는 Phase 4 개인화 추천의 단일 소스다. */
+    userId: uuid("user_id").notNull(),
+    conceptId: text("concept_id")
+      .notNull()
+      .references(() => concepts.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("unknown"),
+    confidenceScore: real("confidence_score").notNull().default(0.1),
+    lastStudiedAt: timestamp("last_studied_at", { withTimezone: true }),
+    lastQuizScore: real("last_quiz_score"),
+    reviewCount: integer("review_count").notNull().default(0),
+    wrongCount: integer("wrong_count").notNull().default(0),
+    correctCount: integer("correct_count").notNull().default(0),
+    needsReview: boolean("needs_review").notNull().default(true),
+    masteryMetadata: jsonb("mastery_metadata")
+      .notNull()
+      .$type<Record<string, unknown>>()
+      .$defaultFn(() => ({})),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("user_concept_mastery_concept_id_idx").on(t.conceptId),
+    index("user_concept_mastery_needs_review_idx").on(t.userId, t.needsReview),
+    uniqueIndex("user_concept_mastery_user_concept_uidx").on(
       t.userId,
       t.conceptId,
     ),
