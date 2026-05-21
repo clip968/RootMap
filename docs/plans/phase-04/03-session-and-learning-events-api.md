@@ -37,3 +37,4 @@ Request: `session_id`, `tree_id`, `node_id`, `concept_id`, `event_type`, `event_
 
 - 명세 요청·응답 형태가 맞고, 다른 사용자 세션·이벤트 조작이 불가능하다.
 - 프론트 또는 통합 테스트로 시작→이벤트→종료 흐름이 검증된다.
+- 검증 명령: `npm run phase4:session-events-smoke` (`apps/web`에서 실행)

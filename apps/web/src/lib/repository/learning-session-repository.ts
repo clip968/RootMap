@@ -1,9 +1,13 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
+  documents,
   learningEvents,
+  learningNodes,
   learningReports,
   learningSessions,
+  learningTreeConcepts,
+  learningTrees,
   misconceptionEvents,
   quizAttempts,
   recommendationLogs,
@@ -103,6 +107,137 @@ export interface CreateLearningReportInput {
   recommendations?: Array<Record<string, unknown>>;
   reportJson?: Record<string, unknown>;
   createdAt?: Date;
+}
+
+export interface LearningTreeAccessRow {
+  id: string;
+}
+
+export interface DocumentAccessRow {
+  id: string;
+}
+
+export interface LearningNodeScopeRow {
+  id: string;
+  treeId: string;
+  conceptId: string | null;
+}
+
+export interface LearningTreeConceptAccessRow {
+  id: string;
+}
+
+export interface GetLearningTreeAccessInput {
+  userId: string;
+  treeId: string;
+}
+
+export interface GetDocumentAccessInput {
+  userId: string;
+  documentId: string;
+}
+
+export interface GetLearningSessionInput {
+  userId: string;
+  sessionId: string;
+}
+
+export interface GetLearningNodeScopeInput {
+  userId: string;
+  nodeId: string;
+}
+
+export interface GetLearningTreeConceptAccessInput {
+  userId: string;
+  treeId: string;
+  conceptId: string;
+}
+
+/** tree_id는 기존 Phase 1~3 테이블에 있으므로 user_id를 함께 확인해 Phase 4 세션 생성 권한을 판단한다. */
+export async function getLearningTreeAccessForUser(
+  input: GetLearningTreeAccessInput,
+): Promise<LearningTreeAccessRow | null> {
+  const rows = await getDb()
+    .select({ id: learningTrees.id })
+    .from(learningTrees)
+    .where(
+      and(
+        eq(learningTrees.id, input.treeId),
+        eq(learningTrees.userId, input.userId),
+      ),
+    );
+  return rows[0] ?? null;
+}
+
+/** document_id가 같이 넘어온 경우에도 문서 소유권을 별도로 확인해 tree_id만으로 우회하지 못하게 한다. */
+export async function getDocumentAccessForUser(
+  input: GetDocumentAccessInput,
+): Promise<DocumentAccessRow | null> {
+  const rows = await getDb()
+    .select({ id: documents.id })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.id, input.documentId),
+        eq(documents.userId, input.userId),
+      ),
+    );
+  return rows[0] ?? null;
+}
+
+/** 세션 조회는 항상 user_id 조건을 포함해 다른 사용자의 session_id 추측을 무력화한다. */
+export async function getLearningSessionForUser(
+  input: GetLearningSessionInput,
+): Promise<LearningSessionRow | null> {
+  const rows = await getDb()
+    .select()
+    .from(learningSessions)
+    .where(
+      and(
+        eq(learningSessions.id, input.sessionId),
+        eq(learningSessions.userId, input.userId),
+      ),
+    );
+  return rows[0] ?? null;
+}
+
+/** node_id는 전역 UUID라서 연결된 tree의 user_id까지 확인한 뒤 이벤트에 쓸 scope만 반환한다. */
+export async function getLearningNodeScopeForUser(
+  input: GetLearningNodeScopeInput,
+): Promise<LearningNodeScopeRow | null> {
+  const rows = await getDb()
+    .select({
+      id: learningNodes.id,
+      treeId: learningNodes.treeId,
+      conceptId: learningNodes.conceptId,
+    })
+    .from(learningNodes)
+    .innerJoin(learningTrees, eq(learningTrees.id, learningNodes.treeId))
+    .where(
+      and(
+        eq(learningNodes.id, input.nodeId),
+        eq(learningTrees.userId, input.userId),
+      ),
+    );
+  return rows[0] ?? null;
+}
+
+/** node_id 없이 concept_id만 기록하는 이벤트도 tree 안에 등장한 Concept인지 확인할 수 있게 한다. */
+export async function getLearningTreeConceptAccessForUser(
+  input: GetLearningTreeConceptAccessInput,
+): Promise<LearningTreeConceptAccessRow | null> {
+  const rows = await getDb()
+    .select({ id: learningTreeConcepts.id })
+    .from(learningTreeConcepts)
+    .innerJoin(learningTrees, eq(learningTrees.id, learningTreeConcepts.treeId))
+    .where(
+      and(
+        eq(learningTreeConcepts.treeId, input.treeId),
+        eq(learningTreeConcepts.conceptId, input.conceptId),
+        eq(learningTrees.userId, input.userId),
+      ),
+    );
+  return rows[0] ?? null;
 }
 
 /** 새 학습 세션을 시작하고 이후 이벤트·리포트가 참조할 세션 ID를 만든다. */

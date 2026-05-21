@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
  */
 /** 공통 API 에러 코드 (Phase 1 명세·계획 문서) */
 export type ApiErrorCode =
+  | "UNAUTHORIZED"
   | "INVALID_TOPIC"
   | "LLM_GENERATION_FAILED"
   | "INVALID_LLM_RESPONSE"
