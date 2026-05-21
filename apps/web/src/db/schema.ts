@@ -618,3 +618,148 @@ export const userConceptMastery = pgTable(
     ),
   ],
 );
+
+/** Phase 4 Quiz/Recommendation/Report Store */
+export const quizAttempts = pgTable(
+  "quiz_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** 퀴즈 결과는 사용자별 학습 상태에 직접 반영되므로 Supabase Auth UUID를 필수로 보관한다. */
+    userId: uuid("user_id").notNull(),
+    sessionId: uuid("session_id").references(() => learningSessions.id, {
+      onDelete: "set null",
+    }),
+    treeId: text("tree_id").references(() => learningTrees.id, {
+      onDelete: "set null",
+    }),
+    nodeId: text("node_id").references(() => learningNodes.id, {
+      onDelete: "set null",
+    }),
+    conceptId: text("concept_id").references(() => concepts.id, {
+      onDelete: "set null",
+    }),
+    quizType: text("quiz_type").notNull(),
+    question: text("question").notNull(),
+    expectedAnswer: text("expected_answer"),
+    userAnswer: text("user_answer"),
+    isCorrect: boolean("is_correct"),
+    score: real("score"),
+    feedback: text("feedback"),
+    /** LLM이 감지한 오개념 원문은 배열로 제한해 후속 misconception_events 생성 입력으로 재사용한다. */
+    detectedMisconceptions: jsonb("detected_misconceptions")
+      .notNull()
+      .$type<string[]>()
+      .$defaultFn(() => []),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("quiz_attempts_user_created_idx").on(t.userId, t.createdAt),
+    index("quiz_attempts_session_id_idx").on(t.sessionId),
+    index("quiz_attempts_tree_id_idx").on(t.treeId),
+    index("quiz_attempts_node_id_idx").on(t.nodeId),
+    index("quiz_attempts_concept_id_idx").on(t.conceptId),
+  ],
+);
+
+export const misconceptionEvents = pgTable(
+  "misconception_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** 오개념 기록도 사용자 소유 데이터라 RLS 정책에서 직접 비교할 user_id를 둔다. */
+    userId: uuid("user_id").notNull(),
+    conceptId: text("concept_id").references(() => concepts.id, {
+      onDelete: "cascade",
+    }),
+    quizAttemptId: uuid("quiz_attempt_id").references(() => quizAttempts.id, {
+      onDelete: "set null",
+    }),
+    misconceptionText: text("misconception_text").notNull(),
+    evidence: text("evidence"),
+    resolved: boolean("resolved").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("misconception_events_user_resolved_idx").on(t.userId, t.resolved),
+    index("misconception_events_concept_id_idx").on(t.conceptId),
+    index("misconception_events_quiz_attempt_id_idx").on(t.quizAttemptId),
+  ],
+);
+
+export const recommendationLogs = pgTable(
+  "recommendation_logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** 추천 노출과 클릭은 개인화 품질 평가용 사용자 데이터라 사용자 UUID에 귀속한다. */
+    userId: uuid("user_id").notNull(),
+    treeId: text("tree_id").references(() => learningTrees.id, {
+      onDelete: "set null",
+    }),
+    nodeId: text("node_id").references(() => learningNodes.id, {
+      onDelete: "set null",
+    }),
+    conceptId: text("concept_id").references(() => concepts.id, {
+      onDelete: "set null",
+    }),
+    score: real("score").notNull(),
+    reasons: jsonb("reasons")
+      .notNull()
+      .$type<Array<Record<string, unknown>>>()
+      .$defaultFn(() => []),
+    clicked: boolean("clicked").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("recommendation_logs_user_created_idx").on(t.userId, t.createdAt),
+    index("recommendation_logs_tree_id_idx").on(t.treeId),
+    index("recommendation_logs_node_id_idx").on(t.nodeId),
+    index("recommendation_logs_concept_id_idx").on(t.conceptId),
+  ],
+);
+
+export const learningReports = pgTable(
+  "learning_reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** 리포트는 세션·기간 단위로 다시 조회되므로 사용자 UUID와 report_type을 함께 인덱싱한다. */
+    userId: uuid("user_id").notNull(),
+    reportType: text("report_type").notNull(),
+    periodStart: timestamp("period_start", { withTimezone: true }),
+    periodEnd: timestamp("period_end", { withTimezone: true }),
+    title: text("title"),
+    summary: text("summary"),
+    strengths: jsonb("strengths")
+      .notNull()
+      .$type<Array<Record<string, unknown>>>()
+      .$defaultFn(() => []),
+    weaknesses: jsonb("weaknesses")
+      .notNull()
+      .$type<Array<Record<string, unknown>>>()
+      .$defaultFn(() => []),
+    recommendations: jsonb("recommendations")
+      .notNull()
+      .$type<Array<Record<string, unknown>>>()
+      .$defaultFn(() => []),
+    reportJson: jsonb("report_json")
+      .notNull()
+      .$type<Record<string, unknown>>()
+      .$defaultFn(() => ({})),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("learning_reports_user_type_created_idx").on(
+      t.userId,
+      t.reportType,
+      t.createdAt,
+    ),
+    index("learning_reports_period_idx").on(t.periodStart, t.periodEnd),
+  ],
+);

@@ -44,7 +44,7 @@
 
 - [x] 00. [00-live-infra-auth-and-deployment-preflight.md](./00-live-infra-auth-and-deployment-preflight.md) - Vercel/Supabase live 상태, 인증·`user_id`·RLS·env·queue 선행 결정
 - [x] 01. [01-learning-sessions-events-and-mastery-schema.md](./01-learning-sessions-events-and-mastery-schema.md) - `learning_sessions`, `learning_events`, `user_concept_mastery` DDL·Phase 2 연계
-- [ ] 02. [02-quiz-misconception-recommendation-report-schema.md](./02-quiz-misconception-recommendation-report-schema.md) - `quiz_attempts`, `misconception_events`, `recommendation_logs`, `learning_reports` DDL 선행 정의
+- [x] 02. [02-quiz-misconception-recommendation-report-schema.md](./02-quiz-misconception-recommendation-report-schema.md) - `quiz_attempts`, `misconception_events`, `recommendation_logs`, `learning_reports` DDL 선행 정의
 - [ ] 03. [03-session-and-learning-events-api.md](./03-session-and-learning-events-api.md) - 세션 시작·종료, 학습 이벤트 기록 API
 - [ ] 04. [04-concept-mastery-and-self-assessment.md](./04-concept-mastery-and-self-assessment.md) - 이해도 조회·수정, 자기 평가 반영, 상태·confidence 정책
 - [ ] 05. [05-personalized-recommendations-and-tree-api.md](./05-personalized-recommendations-and-tree-api.md) - 추천 점수·선수지식·추천 이유(템플릿), 개인화 트리·추천 API

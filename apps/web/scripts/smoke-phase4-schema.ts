@@ -9,13 +9,22 @@ import path from "node:path";
 import { getTableColumns, getTableName } from "drizzle-orm";
 import {
   learningEvents,
+  learningReports,
   learningSessions,
+  misconceptionEvents,
+  quizAttempts,
+  recommendationLogs,
   userConceptMastery,
 } from "../src/db/schema";
 import {
   appendLearningEvent,
+  createLearningReport,
+  createMisconceptionEvent,
+  createQuizAttempt,
+  createRecommendationLog,
   endLearningSession,
   getUserConceptMastery,
+  markRecommendationLogClicked,
   startLearningSession,
   upsertUserConceptMastery,
 } from "../src/lib/repository/learning-session-repository";
@@ -44,6 +53,11 @@ const migrationPath = path.join(
   process.cwd(),
   "drizzle",
   "0004_phase4_learning_sessions_events_mastery.sql",
+);
+const task02MigrationPath = path.join(
+  process.cwd(),
+  "drizzle",
+  "0005_phase4_quiz_misconception_recommendation_report.sql",
 );
 
 assertColumns(learningSessions, "learning_sessions", [
@@ -84,6 +98,59 @@ assertColumns(userConceptMastery, "user_concept_mastery", [
   "createdAt",
   "updatedAt",
 ]);
+assertColumns(quizAttempts, "quiz_attempts", [
+  "id",
+  "userId",
+  "sessionId",
+  "treeId",
+  "nodeId",
+  "conceptId",
+  "quizType",
+  "question",
+  "expectedAnswer",
+  "userAnswer",
+  "isCorrect",
+  "score",
+  "feedback",
+  "detectedMisconceptions",
+  "createdAt",
+]);
+assertColumns(misconceptionEvents, "misconception_events", [
+  "id",
+  "userId",
+  "conceptId",
+  "quizAttemptId",
+  "misconceptionText",
+  "evidence",
+  "resolved",
+  "createdAt",
+  "resolvedAt",
+]);
+assertColumns(recommendationLogs, "recommendation_logs", [
+  "id",
+  "userId",
+  "treeId",
+  "nodeId",
+  "conceptId",
+  "score",
+  "reasons",
+  "clicked",
+  "createdAt",
+]);
+assertColumns(learningReports, "learning_reports", [
+  "id",
+  "userId",
+  "reportType",
+  "periodStart",
+  "periodEnd",
+  "title",
+  "summary",
+  "strengths",
+  "weaknesses",
+  "recommendations",
+  "reportJson",
+  "createdAt",
+]);
 
 assert(fs.existsSync(migrationPath), "Phase 4 task 01 migration missing");
 const sql = fs.readFileSync(migrationPath, "utf8");
@@ -101,8 +168,24 @@ for (const fn of [
   appendLearningEvent,
   getUserConceptMastery,
   upsertUserConceptMastery,
+  createQuizAttempt,
+  createMisconceptionEvent,
+  createRecommendationLog,
+  markRecommendationLogClicked,
+  createLearningReport,
 ]) {
-  assert(typeof fn === "function", "learning session repository export missing");
+  assert(typeof fn === "function", "Phase 4 repository export missing");
 }
 
-console.log("Phase 4 task 01 schema/repository smoke passed.");
+assert(fs.existsSync(task02MigrationPath), "Phase 4 task 02 migration missing");
+const task02Sql = fs.readFileSync(task02MigrationPath, "utf8");
+assertMigrationContains(task02Sql, /create table if not exists "quiz_attempts"/i, "quiz_attempts DDL missing");
+assertMigrationContains(task02Sql, /"user_id" uuid not null references auth\.users\(id\)/i, "task 02 tables must target Supabase Auth UUID users");
+assertMigrationContains(task02Sql, /create table if not exists "misconception_events"/i, "misconception_events DDL missing");
+assertMigrationContains(task02Sql, /create table if not exists "recommendation_logs"/i, "recommendation_logs DDL missing");
+assertMigrationContains(task02Sql, /create table if not exists "learning_reports"/i, "learning_reports DDL missing");
+assertMigrationContains(task02Sql, /"report_type" text not null/i, "learning_reports.report_type missing");
+assertMigrationContains(task02Sql, /enable row level security/i, "Phase 4 task 02 tables must enable RLS");
+assertMigrationContains(task02Sql, /create policy/i, "Phase 4 task 02 Auth/RLS policy missing");
+
+console.log("Phase 4 task 01-02 schema/repository smoke passed.");
