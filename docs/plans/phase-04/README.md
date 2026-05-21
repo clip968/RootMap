@@ -20,7 +20,7 @@
 - Phase 4 테이블 7개(`learning_sessions`, `learning_events`, `user_concept_mastery`, `quiz_attempts`, `misconception_events`, `recommendation_logs`, `learning_reports`)는 live DB에 아직 없다.
 - Supabase Storage bucket `rootmap-documents`는 private으로 존재하고 signed upload URL 생성이 동작한다.
 - Vercel Cron route는 배포되어 있지만 live Supabase에는 아직 `pgmq` extension과 `document_processing` queue가 없다.
-- 현재 앱은 인증 없이 `DEFAULT_USER_ID`를 쓰므로, Phase 4의 사용자별 추천 검증 전에 인증·`user_id` 타입·RLS policy 전략을 확정해야 한다.
+- 현재 앱은 인증 없이 `DEFAULT_USER_ID`를 쓰지만, Phase 4 신규 기능은 Supabase Auth + UUID `user_id` + RLS 가능 구조를 공식 방향으로 확정했다. 로그인 UI는 최소 MVP로 두고, 세션·퀴즈·리포트 데이터 격리를 우선한다.
 
 ## 작업 순서 요약
 
@@ -42,7 +42,7 @@
 
 > 작업을 완료할 때마다 해당 항목을 `[x]`로 바꿔 진행 상황을 추적한다.
 
-- [ ] 00. [00-live-infra-auth-and-deployment-preflight.md](./00-live-infra-auth-and-deployment-preflight.md) - Vercel/Supabase live 상태, 인증·`user_id`·RLS·env·queue 선행 결정
+- [x] 00. [00-live-infra-auth-and-deployment-preflight.md](./00-live-infra-auth-and-deployment-preflight.md) - Vercel/Supabase live 상태, 인증·`user_id`·RLS·env·queue 선행 결정
 - [ ] 01. [01-learning-sessions-events-and-mastery-schema.md](./01-learning-sessions-events-and-mastery-schema.md) - `learning_sessions`, `learning_events`, `user_concept_mastery` DDL·Phase 2 연계
 - [ ] 02. [02-quiz-misconception-recommendation-report-schema.md](./02-quiz-misconception-recommendation-report-schema.md) - `quiz_attempts`, `misconception_events`, `recommendation_logs`, `learning_reports` DDL 선행 정의
 - [ ] 03. [03-session-and-learning-events-api.md](./03-session-and-learning-events-api.md) - 세션 시작·종료, 학습 이벤트 기록 API

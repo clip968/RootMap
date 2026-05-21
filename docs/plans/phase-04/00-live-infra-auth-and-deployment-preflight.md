@@ -107,6 +107,35 @@ Queue/Cron 상태:
    - 현재 일부 npm smoke script는 `DATABASE_URL=file:`을 사용한다.
    - Phase 4 완료 검증은 production-like Postgres 또는 격리된 Supabase branch/test DB를 기준으로 한다.
 
+## 2026-05-21 확정 결정
+
+Phase 4는 처음부터 다중 사용자 데이터를 안전하게 분리할 수 있는 서버·DB 구조로 작성한다. 다만 로그인과 계정 관리 UI는 Phase 4 개인화 기능을 검증하는 데 필요한 최소 범위로 제한한다.
+
+1. 사용자 식별 source
+   - 공식 방향은 Supabase Auth다.
+   - Phase 4 신규 테이블의 `user_id`는 Supabase Auth의 `auth.users.id`와 맞는 UUID 기준으로 설계한다.
+   - 기존 `DEFAULT_USER_ID` 기반 API는 Phase 4 신규 API의 기준으로 삼지 않는다.
+
+2. 로그인 UI 범위
+   - Phase 4에서 필요한 것은 "사용자를 식별해 학습 데이터를 분리할 수 있음"이다.
+   - 회원가입 온보딩, 프로필 관리, 소셜 로그인 다듬기, 계정 설정, 조직/팀 기능은 Phase 4 범위에서 제외한다.
+   - 로그인 화면은 최소 MVP로 두고, 개인화 학습 데이터 모델과 API 격리를 우선한다.
+
+3. RLS와 접근 제어
+   - 신규 Phase 4 테이블은 Supabase Auth 기반 RLS policy를 적용할 수 있는 형태로 작성한다.
+   - 서버 API route에서도 `user_id` 소유권 검증을 수행한다.
+   - Supabase browser/Data API를 직접 열더라도 다른 사용자의 학습 세션, 이벤트, 퀴즈, 리포트가 섞이지 않도록 policy를 설계한다.
+
+4. 기존 데이터와 `DEFAULT_USER_ID`
+   - 기존 Phase 1~3 데이터는 별도 이행 작업 전까지 유지한다.
+   - 기존 단일 사용자 데이터는 마이그레이션 시점에 실제 Auth 사용자로 귀속하거나, 개발용 seed 데이터로 분리한다.
+   - Phase 4 신규 기능은 `DEFAULT_USER_ID` 의존을 새로 늘리지 않는다.
+
+5. 배포 전 남은 게이트
+   - Vercel 환경변수 target 감사는 현재 세션 권한으로 직접 확인하지 못했으므로 Phase 4 production 배포 전 게이트로 남긴다.
+   - Supabase advisor의 기존 `RLS Enabled No Policy` 경고는 Phase 4 신규 테이블 policy와 별도로 정리한다.
+   - `pgmq` queue는 세션 리포트나 장기 작업을 production 비동기로 연결하기 전 적용한다.
+
 ## 완료 기준(DoD)
 
 - 실제 사용자 식별 source와 `user_id` 타입이 문서화되어 있다.
