@@ -52,8 +52,8 @@
     "hash": "e57a3de618c8f21d1605524960fc9dce"
   },
   "/home/clip968/RootMap/apps/web/src/components/tree-page-client.tsx": {
-    "mtime": 1779375963.212352,
-    "hash": "87f1892dd02a81c6f361fcae05ec018b"
+    "mtime": 1779376228.3616784,
+    "hash": "3415a6ee7bcbe557b54141e493a6995e"
   },
   "/home/clip968/RootMap/apps/web/src/lib/api-errors.ts": {
     "mtime": 1779372556.7130759,
@@ -382,6 +382,10 @@
   "/home/clip968/RootMap/apps/web/src/app/api/trees/generate/route.ts": {
     "mtime": 1779182212.7473738,
     "hash": "b8f516fe7ae535207320994d7623c1d5"
+  },
+  "/home/clip968/RootMap/apps/web/src/app/api/recommendations/click/route.ts": {
+    "mtime": 1779376215.202935,
+    "hash": "39f83a443635f92d769eb364dde450f2"
   },
   "/home/clip968/RootMap/apps/web/src/app/tree/[treeId]/page.tsx": {
     "mtime": 1779182212.7473738,

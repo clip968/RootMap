@@ -157,6 +157,7 @@ interface UiRecommendationItem {
   reason: string;
   score?: number;
   reasons?: string[];
+  recommendation_log_id?: string;
 }
 
 function readPhase4AuthToken(): string | null {
@@ -777,6 +778,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
         reason: recommendationReason(item),
         score: item.score,
         reasons: item.reasons,
+        recommendation_log_id: item.recommendation_log_id,
       }));
     }
     return recommendations.map((item) => ({
@@ -1007,6 +1009,26 @@ export function TreePageClient({ treeId }: { treeId: string }) {
       void loadDetail(nodeId);
     },
     [isDocumentTree, loadDetail, recordPhase4NodeEvent, tree, treeId],
+  );
+
+  const openRecommendedNode = useCallback(
+    async (item: UiRecommendationItem) => {
+      if (phase4AuthToken && item.recommendation_log_id) {
+        const res = await fetch("/api/recommendations/click", {
+          method: "POST",
+          headers: phase4AuthHeaders(phase4AuthToken),
+          body: JSON.stringify({
+            recommendation_log_id: item.recommendation_log_id,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setPhase4Error(data?.error?.message ?? "추천 클릭 로그를 저장하지 못했습니다.");
+        }
+      }
+      await openNode(item.node_id);
+    },
+    [openNode, phase4AuthToken],
   );
 
   const closeDetailModal = useCallback(() => {
@@ -1346,7 +1368,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                   <button
                     key={item.node_id}
                     type="button"
-                    onClick={() => void openNode(item.node_id)}
+                    onClick={() => void openRecommendedNode(item)}
                     className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-left text-sm transition hover:border-emerald-700"
                   >
                     <strong className="block text-white">{item.title}</strong>

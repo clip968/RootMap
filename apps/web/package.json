@@ -38,7 +38,8 @@
     "phase4:quiz-smoke": "tsx scripts/smoke-phase4-quiz-attempts.ts",
     "phase4:review-smoke": "tsx scripts/smoke-phase4-review-due.ts",
     "phase4:report-smoke": "tsx scripts/smoke-phase4-learning-reports.ts",
-    "phase4:ui-smoke": "tsx scripts/smoke-phase4-personalized-ui.ts"
+    "phase4:ui-smoke": "tsx scripts/smoke-phase4-personalized-ui.ts",
+    "phase4:quality-smoke": "tsx scripts/smoke-phase4-security-quality.ts"
   },
   "dependencies": {
     "@esbuild/linux-x64": "^0.28.0",

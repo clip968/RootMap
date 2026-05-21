@@ -57,3 +57,5 @@
 - 타 사용자 데이터 혼입 불가능성이 코드 리뷰·테스트로 뒷받침된다.
 - Phase 4 완료 조건(§22)을 프로덕트/QA가 재현 가능한 시나리오로 확인할 수 있다.
 - Vercel 환경변수 target 감사, Supabase RLS policy 결정, `pgmq` queue 적용 여부가 문서화되어 있다.
+- 완료 체크리스트: [phase4-completion-checklist.md](./phase4-completion-checklist.md)
+- 검증 명령: `npm run phase4:quality-smoke` (`apps/web`에서 실행)
