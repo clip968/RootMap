@@ -37,7 +37,7 @@ export async function POST(req: Request) {
   }
   if (parsed.data.report_type !== "session") {
     return jsonError(
-      "UNSUPPORTED_REPORT_TYPE",
+      "INVALID_REQUEST",
       "현재 MVP에서는 session 리포트만 생성할 수 있습니다.",
       400,
     );
@@ -64,6 +64,6 @@ export async function POST(req: Request) {
     if (err instanceof SessionReportNotFoundError) {
       return jsonError("NOT_FOUND", err.message, 404);
     }
-    return jsonError("REPORT_GENERATION_FAILED", "학습 리포트 생성에 실패했습니다.", 500);
+    return jsonError("PROCESSING_FAILED", "학습 리포트 생성에 실패했습니다.", 500);
   }
 }
