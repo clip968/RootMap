@@ -14,6 +14,12 @@ function firstSentence(text: string): string {
   return sentence || trimmed;
 }
 
+function shortLabel(text: string, fallback: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return fallback;
+  return trimmed.length > 32 ? `${trimmed.slice(0, 31)}…` : trimmed;
+}
+
 export function DetailLearningBlocks({
   node,
   detail,
@@ -24,8 +30,10 @@ export function DetailLearningBlocks({
   );
   const whyItMatters = detail?.why_it_matters_for_document ?? detail?.why_it_matters ?? "";
   const misconception = detail?.common_misconceptions?.[0] ?? "";
-  const example = detail?.example?.trim() ?? "";
   const nodeRole = sectionLabel[node.type];
+  const prerequisiteLabel = detail?.prerequisite_concepts?.[0]?.title ?? "선수 개념";
+  const nextLabel = detail?.next_nodes?.[0] ?? "다음 개념";
+  const riskLabel = misconception ? shortLabel(misconception, "주의점") : "헷갈릴 지점";
   const tableRows = [
     { label: "핵심 역할", value: nodeRole },
     { label: "쉽게 말하면", value: detail?.easy_explanation || node.description },
@@ -43,44 +51,35 @@ export function DetailLearningBlocks({
         </section>
       ) : null}
 
-      {explanation || detail?.example || misconception ? (
+      {explanation || detail?.prerequisite_concepts?.length || detail?.next_nodes?.length || misconception ? (
         <section className="detail-learning-card">
           <h3>개념 스케치</h3>
           <div className="concept-sketch">
-            <div className="sketch-node sketch-main">
-              <span>입력/상황</span>
-              <strong>배우려는 문제</strong>
-              <em>{node.community ?? nodeRole}</em>
+            <div className="sketch-lane">
+              <div className="sketch-node sketch-prerequisite">
+                <span>선수 조건</span>
+                <strong>{prerequisiteLabel}</strong>
+                <em>{node.community ?? "기반 지식"}</em>
+              </div>
+              <div className="sketch-arrow" aria-hidden="true" />
+              <div className="sketch-node sketch-main">
+                <span>현재 초점</span>
+                <strong>{node.title}</strong>
+                <em>{nodeRole}</em>
+              </div>
+              <div className="sketch-arrow" aria-hidden="true" />
+              <div className="sketch-node sketch-next">
+                <span>연결 방향</span>
+                <strong>{nextLabel}</strong>
+                <em>이후 학습으로 확장</em>
+              </div>
             </div>
-            <div className="sketch-arrow" aria-hidden="true" />
-            <div className="sketch-node">
-              <span>핵심 개념</span>
-              <strong>{node.title}</strong>
-              <em>{nodeRole}</em>
-            </div>
-            <div className="sketch-arrow" aria-hidden="true" />
-            <div className="sketch-node">
-              <span>결과/주의</span>
-              <strong>{misconception ? "헷갈릴 지점 확인" : "쓰임까지 연결"}</strong>
-              <em>아래 예시와 표로 점검</em>
+            <div className="sketch-branch" aria-hidden="true" />
+            <div className="sketch-risk-node">
+              <span>주의 분기</span>
+              <strong>{riskLabel}</strong>
             </div>
           </div>
-          {example || whyItMatters ? (
-            <div className="sketch-note-grid">
-              {example ? (
-                <div>
-                  <span>예시</span>
-                  <p>{example}</p>
-                </div>
-              ) : null}
-              {whyItMatters ? (
-                <div>
-                  <span>왜 중요한가</span>
-                  <p>{whyItMatters}</p>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
         </section>
       ) : null}
 

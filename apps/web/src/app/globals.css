@@ -629,8 +629,21 @@ body {
 
 .concept-sketch {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr) 36px minmax(0, 1fr);
-  align-items: start;
+  gap: 8px;
+  border: 1px solid #164e3f;
+  border-radius: 8px;
+  padding: 12px;
+  background:
+    linear-gradient(rgba(52, 211, 153, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(52, 211, 153, 0.07) 1px, transparent 1px),
+    #000000;
+  background-size: 22px 22px;
+}
+
+.sketch-lane {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1.18fr) 36px minmax(0, 1fr);
+  align-items: center;
   gap: 10px;
 }
 
@@ -638,7 +651,7 @@ body {
   display: grid;
   align-content: start;
   gap: 6px;
-  min-height: 104px;
+  min-height: 96px;
   border: 1px solid #27272a;
   border-radius: 8px;
   padding: 12px;
@@ -650,14 +663,24 @@ body {
   background: #022c22;
 }
 
+.sketch-prerequisite {
+  border-color: #365314;
+}
+
+.sketch-next {
+  border-color: #1d4ed8;
+}
+
 .sketch-node span,
+.sketch-risk-node span,
 .misconception-card-list span {
   color: #34d399;
   font-size: 11px;
   font-weight: 900;
 }
 
-.sketch-node strong {
+.sketch-node strong,
+.sketch-risk-node strong {
   color: #ffffff;
   font-size: 14px;
   line-height: 1.35;
@@ -692,32 +715,28 @@ body {
   transform: translateY(-50%) rotate(45deg);
 }
 
-.sketch-note-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px;
+.sketch-branch {
+  width: 2px;
+  height: 20px;
+  justify-self: center;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #34d399, #f59e0b);
 }
 
-.sketch-note-grid div {
+.sketch-risk-node {
   display: grid;
   gap: 5px;
-  border: 1px solid #27272a;
+  justify-self: center;
+  width: min(100%, 420px);
+  border: 1px dashed #f59e0b;
   border-radius: 8px;
-  padding: 12px;
-  background: #000000;
+  padding: 10px 12px;
+  background: rgba(120, 53, 15, 0.22);
+  text-align: center;
 }
 
-.sketch-note-grid span {
-  color: #34d399;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.sketch-note-grid p {
-  margin: 0;
-  color: #d4d4d8;
-  font-size: 13px;
-  line-height: 1.6;
+.sketch-risk-node span {
+  color: #fbbf24;
 }
 
 .detail-learning-table {
@@ -886,6 +905,10 @@ body {
   }
 
   .concept-sketch {
+    padding: 10px;
+  }
+
+  .sketch-lane {
     grid-template-columns: 1fr;
   }
 
