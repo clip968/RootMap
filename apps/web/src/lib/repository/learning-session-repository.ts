@@ -1,6 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
+  concepts,
   documents,
   learningEvents,
   learningNodes,
@@ -156,6 +157,16 @@ export interface GetLearningTreeConceptAccessInput {
 export interface ListUserConceptMasteryInput {
   userId: string;
   conceptIds: string[];
+}
+
+export interface ReviewMasteryRow {
+  conceptId: string;
+  title: string;
+  confidenceScore: number;
+  lastStudiedAt: Date | null;
+  wrongCount: number;
+  correctCount: number;
+  needsReview: boolean;
 }
 
 /** tree_id는 기존 Phase 1~3 테이블에 있으므로 user_id를 함께 확인해 Phase 4 세션 생성 권한을 판단한다. */
@@ -358,6 +369,26 @@ export async function listUserConceptMasteryForConcepts(
         inArray(userConceptMastery.conceptId, uniqueConceptIds),
       ),
     );
+}
+
+/** 복습 목록은 mastery와 Concept 제목을 함께 내려야 하므로 서버 route 전용 DTO로 조인한다. */
+export async function listUserConceptMasteryForReview(
+  userId: string,
+): Promise<ReviewMasteryRow[]> {
+  const rows = await getDb()
+    .select({
+      conceptId: userConceptMastery.conceptId,
+      title: concepts.title,
+      confidenceScore: userConceptMastery.confidenceScore,
+      lastStudiedAt: userConceptMastery.lastStudiedAt,
+      wrongCount: userConceptMastery.wrongCount,
+      correctCount: userConceptMastery.correctCount,
+      needsReview: userConceptMastery.needsReview,
+    })
+    .from(userConceptMastery)
+    .innerJoin(concepts, eq(concepts.id, userConceptMastery.conceptId))
+    .where(eq(userConceptMastery.userId, userId));
+  return rows;
 }
 
 /** 사용자+Concept 유니크 키로 숙련도를 갱신해 Phase 4 추천의 단일 소스를 유지한다. */

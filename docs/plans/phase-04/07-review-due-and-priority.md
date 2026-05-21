@@ -33,3 +33,4 @@
 
 - 낮은 confidence·오래된 `last_studied_at`·오답 이력이 있으면 상위에 오는지 시나리오로 검증한다.
 - §18 MVP의 “복습 대상 개념 조회 가능”을 충족한다.
+- 검증 명령: `npm run phase4:review-smoke` (`apps/web`에서 실행)
