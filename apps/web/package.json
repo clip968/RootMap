@@ -32,7 +32,8 @@
     "phase1:smoke": "tsx scripts/smoke-phase1-mvp.ts",
     "phase2:smoke": "tsx scripts/smoke-phase2-concepts.ts",
     "phase4:schema-smoke": "tsx scripts/smoke-phase4-schema.ts",
-    "phase4:session-events-smoke": "tsx scripts/smoke-phase4-session-events-api.ts"
+    "phase4:session-events-smoke": "tsx scripts/smoke-phase4-session-events-api.ts",
+    "phase4:mastery-smoke": "tsx scripts/smoke-phase4-mastery-api.ts"
   },
   "dependencies": {
     "@esbuild/linux-x64": "^0.28.0",

@@ -32,3 +32,4 @@ Request: `status` 또는 `confidence_score`, `source`(예: `self_assessment`).
 
 - 자기 평가 후 mastery가 기대대로 변하고, GET으로 일관되게 읽힌다.
 - 초기 confidence 권장값(§6.2)과 충돌 없이 문서화된다.
+- 검증 명령: `npm run phase4:mastery-smoke` (`apps/web`에서 실행)
