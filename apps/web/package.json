@@ -39,7 +39,15 @@
     "phase4:review-smoke": "tsx scripts/smoke-phase4-review-due.ts",
     "phase4:report-smoke": "tsx scripts/smoke-phase4-learning-reports.ts",
     "phase4:ui-smoke": "tsx scripts/smoke-phase4-personalized-ui.ts",
-    "phase4:quality-smoke": "tsx scripts/smoke-phase4-security-quality.ts"
+    "phase4:quality-smoke": "tsx scripts/smoke-phase4-security-quality.ts",
+    "phase6:security-preflight": "tsx scripts/phase6-security-preflight.ts",
+    "phase6:rls-negative-smoke": "tsx scripts/phase6-rls-negative-smoke.ts",
+    "phase6:user-id-audit": "tsx scripts/phase6-user-id-audit.ts",
+    "test:unit": "tsx scripts/phase6-test-harness.ts unit",
+    "test:integration": "tsx scripts/phase6-test-harness.ts integration",
+    "test:e2e": "tsx scripts/phase6-test-harness.ts e2e",
+    "test:llm-eval": "tsx scripts/phase6-test-harness.ts llm-eval",
+    "phase6:quality": "tsx scripts/phase6-test-harness.ts quality"
   },
   "dependencies": {
     "@esbuild/linux-x64": "^0.28.0",

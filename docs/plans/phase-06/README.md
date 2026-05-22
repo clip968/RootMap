@@ -34,10 +34,10 @@ Phase 06은 새 기능을 무작정 늘리는 단계가 아니다. Phase 4에서
 
 > 작업을 완료할 때마다 해당 항목을 `[x]`로 바꿔 진행 상황을 추적한다.
 
-- [ ] 00. [00-local-staging-security-preflight.md](./00-local-staging-security-preflight.md) - local/staging 기준과 env target 고정
+- [x] 00. [00-local-staging-security-preflight.md](./00-local-staging-security-preflight.md) - local/staging 기준과 env target 고정
 - [ ] 01. [01-supabase-auth-rls-negative-test.md](./01-supabase-auth-rls-negative-test.md) - user A/B cross-user 접근 차단 검증
-- [ ] 02. [02-legacy-user-id-auth-mapping.md](./02-legacy-user-id-auth-mapping.md) - text user id와 UUID auth user id 연결 전략 확정
-- [ ] 03. [03-product-grade-test-harness.md](./03-product-grade-test-harness.md) - 정식 테스트 계층과 CI guard 도입
+- [x] 02. [02-legacy-user-id-auth-mapping.md](./02-legacy-user-id-auth-mapping.md) - text user id와 UUID auth user id 연결 전략 확정
+- [x] 03. [03-product-grade-test-harness.md](./03-product-grade-test-harness.md) - 정식 테스트 계층과 CI guard 도입
 - [ ] 04. [04-recommendation-mastery-unit-tests.md](./04-recommendation-mastery-unit-tests.md) - 추천·mastery·review priority unit test 추가
 - [ ] 05. [05-evidence-grounding-eval.md](./05-evidence-grounding-eval.md) - claim-evidence mapping과 groundedness 평가
 - [ ] 06. [06-prompt-injection-defense.md](./06-prompt-injection-defense.md) - prompt injection fixture, scanner, 위험 flag 추가
