@@ -7,6 +7,8 @@ export interface ReviewPriorityInput {
   correctCount: number;
   prerequisiteImportanceScore?: number;
   documentImportanceScore?: number;
+  reviewDueAt?: Date | string | null;
+  retrievability?: number | null;
   now?: Date;
 }
 
@@ -18,6 +20,8 @@ export interface ReviewCandidate {
   wrongCount: number;
   correctCount: number;
   needsReview: boolean;
+  reviewDueAt?: Date | string | null;
+  retrievability?: number | null;
 }
 
 export interface ReviewItem {
@@ -54,6 +58,20 @@ function quizErrorScore(wrongCount: number, correctCount: number): number {
   return clampScore(wrongCount / total);
 }
 
+/**
+ * FSRS-lite 이전 단계의 due-date 신호다.
+ * due date가 미래면 기존 confidence/recency 신호만 쓰고, 지난 경우에만 추가 가중치를 준다.
+ */
+function overdueScore(reviewDueAt: Date | string | null | undefined, now: Date): number {
+  if (!reviewDueAt) return 0;
+  const dueAt = reviewDueAt instanceof Date ? reviewDueAt : new Date(reviewDueAt);
+  const daysOverdue = (now.getTime() - dueAt.getTime()) / (1000 * 60 * 60 * 24);
+  if (daysOverdue >= 7) return 1;
+  if (daysOverdue >= 1) return 0.7;
+  if (daysOverdue >= 0) return 0.4;
+  return 0;
+}
+
 export function calculateReviewPriorityScore(
   input: ReviewPriorityInput,
 ): number {
@@ -63,7 +81,9 @@ export function calculateReviewPriorityScore(
       recencyDecayScore(input.lastStudiedAt, now) * 0.2 +
       quizErrorScore(input.wrongCount, input.correctCount) * 0.2 +
       clampScore(input.prerequisiteImportanceScore ?? 0) * 0.15 +
-      clampScore(input.documentImportanceScore ?? 0) * 0.05,
+      clampScore(input.documentImportanceScore ?? 0) * 0.05 +
+      overdueScore(input.reviewDueAt, now) * 0.15 +
+      (input.retrievability == null ? 0 : (1 - clampScore(input.retrievability)) * 0.1),
   );
 }
 
@@ -85,6 +105,12 @@ function reviewReasons(input: ReviewCandidate, score: number, now: Date): string
   if (input.wrongCount > 0) {
     reasons.push("관련 퀴즈 오답 기록이 있어 같은 실수를 줄일 수 있습니다.");
   }
+  if (overdueScore(input.reviewDueAt, now) >= 0.4) {
+    reasons.push("예정된 복습 시점이 지나 다시 확인할 때입니다.");
+  }
+  if (input.retrievability != null && input.retrievability < 0.5) {
+    reasons.push("예상 기억 유지율이 낮아 다시 떠올려 볼 필요가 있습니다.");
+  }
   if (score >= 0.8) {
     reasons.push("강한 복습 추천 대상입니다.");
   } else if (score >= 0.6) {
@@ -105,6 +131,8 @@ export function buildReviewItems(
         lastStudiedAt: candidate.lastStudiedAt,
         wrongCount: candidate.wrongCount,
         correctCount: candidate.correctCount,
+        reviewDueAt: candidate.reviewDueAt,
+        retrievability: candidate.retrievability,
         now,
       });
       return {

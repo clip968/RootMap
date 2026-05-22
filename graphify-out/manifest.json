@@ -84,8 +84,8 @@
     "hash": "13703be62ca49fd73213ed88b19c1fcd"
   },
   "/home/clip968/RootMap/apps/web/src/lib/recommendation/review-priority.ts": {
-    "mtime": 1779374070.0183837,
-    "hash": "8d7399ffb5d0c09682127a029aa5ffec"
+    "mtime": 1779463410.0935488,
+    "hash": "fd20e775217992d085fcb89c51554ca8"
   },
   "/home/clip968/RootMap/apps/web/src/lib/recommendation/recommend-next.ts": {
     "mtime": 1779182212.755374,
@@ -94,6 +94,10 @@
   "/home/clip968/RootMap/apps/web/src/lib/concepts/normalize.ts": {
     "mtime": 1779182212.751374,
     "hash": "d737b5584b412019cb51a6817bd329ed"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/evaluation/evidence-grounding.ts": {
+    "mtime": 1779463410.4095488,
+    "hash": "6670b1cc9a7c9e14d3740ed4d18abc36"
   },
   "/home/clip968/RootMap/apps/web/src/lib/storage/supabase-document-storage.ts": {
     "mtime": 1779207259.0544996,
@@ -148,8 +152,8 @@
     "hash": "1cf9582f33735fe3a6cc0d503e560c54"
   },
   "/home/clip968/RootMap/apps/web/src/lib/llm/prompts.ts": {
-    "mtime": 1779189705.5231125,
-    "hash": "1f799a5abb9d41e68de8ef4adb5db256"
+    "mtime": 1779463423.3655467,
+    "hash": "3c1a48669ee95554b675cb201181ff94"
   },
   "/home/clip968/RootMap/apps/web/src/lib/llm/generate-node-detail.ts": {
     "mtime": 1779182212.755374,
@@ -242,6 +246,10 @@
   "/home/clip968/RootMap/apps/web/src/lib/tree/concept-graph.ts": {
     "mtime": 1779190288.6110976,
     "hash": "2fbb4102c01d32010fd32c3469a96046"
+  },
+  "/home/clip968/RootMap/apps/web/src/lib/security/prompt-injection-scanner.ts": {
+    "mtime": 1779463410.7335489,
+    "hash": "c54438797019f2b391030ac0c122df00"
   },
   "/home/clip968/RootMap/apps/web/src/app/page.tsx": {
     "mtime": 1779182212.7473738,
@@ -438,6 +446,10 @@
   "/home/clip968/RootMap/docs/specs/rootmap_phase_2_spec.md": {
     "mtime": 1779182212.7633739,
     "hash": "4f192b89bad80d3d879b673756c0a3a6"
+  },
+  "/home/clip968/RootMap/docs/specs/rootmap_phase_5_spec.md": {
+    "mtime": 1779459067.0776916,
+    "hash": "10d371d0cf7f687c5db5d5c73f64b1b7"
   },
   "/home/clip968/RootMap/docs/specs/rootmap_phase_1_spec.md": {
     "mtime": 1779182212.7633739,

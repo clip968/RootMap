@@ -81,23 +81,32 @@ async function insertRow(
   return { table, id: res.data[0].id, patch: table === "concepts" ? {} : PATCH_BY_TABLE[table] };
 }
 
-async function seedRowsForUserB(config: SecurityConfig, userB: CreatedUser, runId: string): Promise<InsertedRow[]> {
+async function seedRowsForUserB(
+  config: SecurityConfig,
+  userB: CreatedUser,
+  runId: string,
+  rows: InsertedRow[],
+): Promise<void> {
+  const now = new Date().toISOString();
   const concept = await insertRow(config, "concepts", {
     id: `phase6-${runId}-concept`,
     slug: `phase6-${runId}-concept`,
     title: `Phase6 ${runId} Concept`,
     normalized_title: `phase6 ${runId} concept`,
     aliases: [],
+    examples: [],
+    common_misconceptions: [],
     metadata: { phase6_run_id: runId },
+    created_at: now,
+    updated_at: now,
   });
-  const rows: InsertedRow[] = [concept];
+  rows.push(concept);
   rows.push(await insertRow(config, "learning_sessions", { user_id: userB.id, summary: { phase6_run_id: runId } }));
   rows.push(await insertRow(config, "learning_events", { user_id: userB.id, event_type: "phase6_rls_seed", event_payload: { phase6_run_id: runId } }));
   rows.push(await insertRow(config, "user_concept_mastery", { user_id: userB.id, concept_id: concept.id, status: "unknown", confidence_score: 0.1, mastery_metadata: { phase6_run_id: runId } }));
   rows.push(await insertRow(config, "quiz_attempts", { user_id: userB.id, quiz_type: "phase6", question: "RLS seed?", user_answer: "yes" }));
   rows.push(await insertRow(config, "recommendation_logs", { user_id: userB.id, score: 1, reasons: [{ phase6_run_id: runId }] }));
   rows.push(await insertRow(config, "learning_reports", { user_id: userB.id, report_type: "session", title: `phase6 ${runId}`, report_json: { phase6_run_id: runId } }));
-  return rows;
 }
 
 async function selectWithUserToken(config: SecurityConfig, table: Phase4OwnerTable, id: string, token: string): Promise<unknown[]> {
@@ -161,7 +170,7 @@ async function main(): Promise<void> {
 
     const userAToken = await signIn(config, userA);
     const userBToken = await signIn(config, userB);
-    rows.push(...await seedRowsForUserB(config, userB, runId));
+    await seedRowsForUserB(config, userB, runId, rows);
 
     for (const row of rows) {
       if (row.table === "concepts") continue;
