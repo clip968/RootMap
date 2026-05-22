@@ -110,9 +110,11 @@ async function seedRowsForUserB(
 }
 
 async function selectWithUserToken(config: SecurityConfig, table: Phase4OwnerTable, id: string, token: string): Promise<unknown[]> {
+  assert(config.anonKey, "anon key missing");
   const res = await supabaseFetchJson<unknown[]>(config, `/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`, {
     method: "GET",
-    token,
+    token: config.anonKey,
+    bearerToken: token,
   });
   assert(res.ok, `select ${table} failed with authenticated token: ${res.status} ${res.text}`);
   assert(Array.isArray(res.data), `select ${table} did not return an array`);
@@ -121,9 +123,11 @@ async function selectWithUserToken(config: SecurityConfig, table: Phase4OwnerTab
 
 async function updateWithUserToken(config: SecurityConfig, row: InsertedRow, token: string): Promise<unknown[]> {
   assert(row.table !== "concepts", "concept rows are not part of owner RLS negative checks");
+  assert(config.anonKey, "anon key missing");
   const res = await supabaseFetchJson<unknown[]>(config, `/rest/v1/${row.table}?id=eq.${encodeURIComponent(row.id)}`, {
     method: "PATCH",
-    token,
+    token: config.anonKey,
+    bearerToken: token,
     headers: { Prefer: "return=representation" },
     body: JSON.stringify(row.patch),
   });

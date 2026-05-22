@@ -243,12 +243,12 @@ export async function auditPostgresRole(
 export async function supabaseFetchJson<T>(
   config: SecurityConfig,
   pathAndQuery: string,
-  init: RequestInit & { token: string },
+  init: RequestInit & { token: string; bearerToken?: string },
 ): Promise<{ status: number; ok: boolean; data: T | null; text: string }> {
   assert(config.supabaseUrl, "SUPABASE_URL is required");
   const headers = new Headers(init.headers);
   headers.set("apikey", init.token);
-  headers.set("Authorization", `Bearer ${init.token}`);
+  headers.set("Authorization", `Bearer ${init.bearerToken ?? init.token}`);
   headers.set("Content-Type", "application/json");
   const res = await fetch(`${config.supabaseUrl}${pathAndQuery}`, {
     ...init,
