@@ -41,10 +41,10 @@ Phase 06은 새 기능을 무작정 늘리는 단계가 아니다. Phase 4에서
 - [x] 04. [04-recommendation-mastery-unit-tests.md](./04-recommendation-mastery-unit-tests.md) - 추천·mastery·review priority unit test 추가
 - [x] 05. [05-evidence-grounding-eval.md](./05-evidence-grounding-eval.md) - claim-evidence mapping과 groundedness 평가
 - [x] 06. [06-prompt-injection-defense.md](./06-prompt-injection-defense.md) - prompt injection fixture, scanner, 위험 flag 추가
-- [ ] 07. [07-fsrs-lite-review-scheduler.md](./07-fsrs-lite-review-scheduler.md) - FSRS-lite 복습 scheduler 도입
-- [ ] 08. [08-explainable-personalization-ui.md](./08-explainable-personalization-ui.md) - 설명 가능한 개인화 추천 UI/API 개선
-- [ ] 09. [09-concept-graph-quality-community-map.md](./09-concept-graph-quality-community-map.md) - concept graph 품질과 community map 강화
-- [ ] 10. [10-phase6-docs-runbook-quality-gate.md](./10-phase6-docs-runbook-quality-gate.md) - 문서·runbook·최종 완료 조건 정리
+- [x] 07. [07-fsrs-lite-review-scheduler.md](./07-fsrs-lite-review-scheduler.md) - FSRS-lite 복습 scheduler 도입
+- [x] 08. [08-explainable-personalization-ui.md](./08-explainable-personalization-ui.md) - 설명 가능한 개인화 추천 UI/API 개선
+- [x] 09. [09-concept-graph-quality-community-map.md](./09-concept-graph-quality-community-map.md) - concept graph 품질과 community map 강화
+- [x] 10. [10-phase6-docs-runbook-quality-gate.md](./10-phase6-docs-runbook-quality-gate.md) - 문서·runbook·최종 완료 조건 정리
 
 ## 범위 요약
 

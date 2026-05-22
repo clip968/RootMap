@@ -8,6 +8,7 @@ import {
   shouldNeedReview,
   type MasteryStatus,
 } from "@/lib/learning/mastery";
+import { gradeForSelfAssessment, scheduleFsrsLiteReview } from "@/lib/learning/fsrs-lite";
 import { toIsoString } from "@/lib/learning/session-events";
 import { getConceptById } from "@/lib/repository/concept-repository";
 import {
@@ -51,6 +52,13 @@ function masteryResponse(input: {
     wrong_count: input.mastery.wrongCount,
     correct_count: input.mastery.correctCount,
     needs_review: input.mastery.needsReview,
+    review_due_at: toIsoString(input.mastery.reviewDueAt),
+    memory_stability: input.mastery.memoryStability,
+    memory_difficulty: input.mastery.memoryDifficulty,
+    retrievability: input.mastery.retrievability,
+    last_review_grade: input.mastery.lastReviewGrade,
+    review_interval_days: input.mastery.reviewIntervalDays,
+    scheduler_version: input.mastery.schedulerVersion ?? "rule_v1",
   };
 }
 
@@ -186,6 +194,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 
   const now = new Date();
+  const schedule = scheduleFsrsLiteReview({
+    grade: gradeForSelfAssessment(nextStatus, nextConfidence),
+    previousStability: previous?.memoryStability,
+    previousDifficulty: previous?.memoryDifficulty,
+    reviewedAt: now,
+  });
   const mastery = await upsertUserConceptMastery({
     userId: auth.userId,
     conceptId,
@@ -197,6 +211,13 @@ export async function PATCH(req: Request, ctx: Ctx) {
     wrongCount: previous?.wrongCount ?? 0,
     correctCount: previous?.correctCount ?? 0,
     needsReview: shouldNeedReview(nextStatus, nextConfidence),
+    reviewDueAt: schedule.review_due_at,
+    memoryStability: schedule.memory_stability,
+    memoryDifficulty: schedule.memory_difficulty,
+    retrievability: schedule.retrievability,
+    lastReviewGrade: schedule.last_review_grade,
+    reviewIntervalDays: schedule.review_interval_days,
+    schedulerVersion: schedule.scheduler_version,
     masteryMetadata: {
       ...(previous?.masteryMetadata ?? {}),
       last_source: source,

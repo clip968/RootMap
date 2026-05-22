@@ -598,6 +598,13 @@ export const userConceptMastery = pgTable(
     wrongCount: integer("wrong_count").notNull().default(0),
     correctCount: integer("correct_count").notNull().default(0),
     needsReview: boolean("needs_review").notNull().default(true),
+    reviewDueAt: timestamp("review_due_at", { withTimezone: true }),
+    memoryStability: real("memory_stability"),
+    memoryDifficulty: real("memory_difficulty"),
+    retrievability: real("retrievability"),
+    lastReviewGrade: text("last_review_grade"),
+    reviewIntervalDays: integer("review_interval_days"),
+    schedulerVersion: text("scheduler_version").default("rule_v1"),
     masteryMetadata: jsonb("mastery_metadata")
       .notNull()
       .$type<Record<string, unknown>>()
@@ -612,6 +619,7 @@ export const userConceptMastery = pgTable(
   (t) => [
     index("user_concept_mastery_concept_id_idx").on(t.conceptId),
     index("user_concept_mastery_needs_review_idx").on(t.userId, t.needsReview),
+    index("user_concept_mastery_review_due_idx").on(t.userId, t.reviewDueAt),
     uniqueIndex("user_concept_mastery_user_concept_uidx").on(
       t.userId,
       t.conceptId,

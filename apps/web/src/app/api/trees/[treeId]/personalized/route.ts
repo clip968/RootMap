@@ -30,6 +30,7 @@ function toPersonalizedNodeInputs(
       difficulty: node.difficulty ?? 0,
       prerequisites: node.prerequisites,
       conceptId: node.conceptId,
+      recommendationSource: snapshot?.community ? "community_path" : "learning_path",
       /** priority가 있으면 문서/그래프 중요도의 보수적 proxy로 사용한다. */
       importance:
         typeof snapshot?.priority === "number" ?
@@ -55,6 +56,8 @@ async function loadMasteryMap(input: {
         wrongCount: row.wrongCount,
         correctCount: row.correctCount,
         needsReview: row.needsReview,
+        reviewDueAt: row.reviewDueAt,
+        retrievability: row.retrievability,
       },
     ]),
   );

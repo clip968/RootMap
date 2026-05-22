@@ -5,6 +5,8 @@ import {
   applyQuizResultToMastery,
   evaluateQuizAnswerWithLlm,
 } from "@/lib/learning/quiz";
+import { gradeForQuizResult, scheduleFsrsLiteReview } from "@/lib/learning/fsrs-lite";
+import { toIsoString } from "@/lib/learning/session-events";
 import { LlmParseError, LlmTransportError, LlmValidationError } from "@/lib/llm";
 import { getConceptById } from "@/lib/repository/concept-repository";
 import {
@@ -133,6 +135,13 @@ export async function POST(req: Request) {
     : null,
     evaluation,
   );
+  const reviewedAt = new Date();
+  const schedule = scheduleFsrsLiteReview({
+    grade: gradeForQuizResult({ isCorrect: evaluation.isCorrect, score: evaluation.score }),
+    previousStability: previous?.memoryStability,
+    previousDifficulty: previous?.memoryDifficulty,
+    reviewedAt,
+  });
 
   const attempt = await createQuizAttempt({
     userId: auth.userId,
@@ -165,12 +174,19 @@ export async function POST(req: Request) {
     conceptId: parsed.data.concept_id,
     status: updatedMastery.status,
     confidenceScore: updatedMastery.confidenceScore,
-    lastStudiedAt: previous?.lastStudiedAt ?? null,
+    lastStudiedAt: reviewedAt,
     lastQuizScore: updatedMastery.lastQuizScore,
     reviewCount: previous?.reviewCount ?? 0,
     wrongCount: updatedMastery.wrongCount,
     correctCount: updatedMastery.correctCount,
     needsReview: updatedMastery.needsReview,
+    reviewDueAt: schedule.review_due_at,
+    memoryStability: schedule.memory_stability,
+    memoryDifficulty: schedule.memory_difficulty,
+    retrievability: schedule.retrievability,
+    lastReviewGrade: schedule.last_review_grade,
+    reviewIntervalDays: schedule.review_interval_days,
+    schedulerVersion: schedule.scheduler_version,
     masteryMetadata: {
       ...(previous?.masteryMetadata ?? {}),
       last_source: "quiz",
@@ -205,6 +221,9 @@ export async function POST(req: Request) {
       concept_id: parsed.data.concept_id,
       status: mastery.status,
       confidence_score: mastery.confidenceScore,
+      review_due_at: toIsoString(mastery.reviewDueAt),
+      retrievability: mastery.retrievability,
+      scheduler_version: mastery.schedulerVersion ?? "rule_v1",
     },
   });
 }

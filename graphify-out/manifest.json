@@ -24,8 +24,8 @@
     "hash": "cb6d886ca5916b97c7443ec1f70f3d24"
   },
   "/home/clip968/RootMap/apps/web/src/db/schema.ts": {
-    "mtime": 1779372179.1134892,
-    "hash": "2d2445c27c656bccaf10245c23b8b50c"
+    "mtime": 1779464525.2455056,
+    "hash": "70ba1a92437e116b2879297949032fe0"
   },
   "/home/clip968/RootMap/apps/web/src/db/constants.ts": {
     "mtime": 1779182212.751374,
@@ -75,13 +75,17 @@
     "mtime": 1779373209.8279347,
     "hash": "41526923f7a9bf3e95a906fb3a1db9fb"
   },
+  "/home/clip968/RootMap/apps/web/src/lib/learning/fsrs-lite.ts": {
+    "mtime": 1779464524.8775055,
+    "hash": "759958559586fcb37fdb9d0262c7bdb5"
+  },
   "/home/clip968/RootMap/apps/web/src/lib/constants/limits.ts": {
     "mtime": 1779182212.751374,
     "hash": "4d6e72ea64599143321019584730917c"
   },
   "/home/clip968/RootMap/apps/web/src/lib/recommendation/personalized.ts": {
-    "mtime": 1779373498.8860867,
-    "hash": "13703be62ca49fd73213ed88b19c1fcd"
+    "mtime": 1779464606.5411515,
+    "hash": "a314fd11aed401d1643f024cd75553b3"
   },
   "/home/clip968/RootMap/apps/web/src/lib/recommendation/review-priority.ts": {
     "mtime": 1779463568.0855334,
@@ -124,8 +128,8 @@
     "hash": "06715f741599cc6e6437e104991bda7b"
   },
   "/home/clip968/RootMap/apps/web/src/lib/repository/learning-session-repository.ts": {
-    "mtime": 1779375352.0316353,
-    "hash": "5b8b2c88cf180459485f1fd3e203fc80"
+    "mtime": 1779464557.1255064,
+    "hash": "3af26ab136eec51660c1c2500e4af50d"
   },
   "/home/clip968/RootMap/apps/web/src/lib/repository/learning-repository.ts": {
     "mtime": 1779182212.755374,
@@ -243,6 +247,10 @@
     "mtime": 1779190388.6350951,
     "hash": "b7f35484bf3baedd083e98b7884ab2dd"
   },
+  "/home/clip968/RootMap/apps/web/src/lib/tree/graph-quality.ts": {
+    "mtime": 1779464666.7055101,
+    "hash": "a0deac14ac4fc41fc93624adbd944549"
+  },
   "/home/clip968/RootMap/apps/web/src/lib/tree/concept-graph.ts": {
     "mtime": 1779190288.6110976,
     "hash": "2fbb4102c01d32010fd32c3469a96046"
@@ -288,8 +296,8 @@
     "hash": "bc4421054730043e31dd4a1719a7e16f"
   },
   "/home/clip968/RootMap/apps/web/src/app/api/concepts/[conceptId]/mastery/route.ts": {
-    "mtime": 1779373210.118136,
-    "hash": "1c4360cbcf297b3cee8206343118f3e3"
+    "mtime": 1779464564.6895056,
+    "hash": "cb2801f96cd0b408ff477aab9fbe8aa5"
   },
   "/home/clip968/RootMap/apps/web/src/app/api/concepts/[conceptId]/trees/route.ts": {
     "mtime": 1779182212.735374,
@@ -336,8 +344,8 @@
     "hash": "c8fb1a81c1c01934dd90a7b5e4e6dcf0"
   },
   "/home/clip968/RootMap/apps/web/src/app/api/quizzes/attempts/route.ts": {
-    "mtime": 1779373851.1670744,
-    "hash": "a8bb721d3e942c76c5d15f51d75878e3"
+    "mtime": 1779464573.1855032,
+    "hash": "2a0ee73a6b9aea51508838796d967518"
   },
   "/home/clip968/RootMap/apps/web/src/app/api/nodes/[nodeId]/detail/route.ts": {
     "mtime": 1779182212.739374,
@@ -372,8 +380,8 @@
     "hash": "6583e35e3d7aa059bb1a38759aa7d438"
   },
   "/home/clip968/RootMap/apps/web/src/app/api/trees/[treeId]/personalized/route.ts": {
-    "mtime": 1779373544.0464547,
-    "hash": "5c4a9501fb477490a2ead641180ae24d"
+    "mtime": 1779464615.0129194,
+    "hash": "6dc8f58589b87dbcfea8f174714821a2"
   },
   "/home/clip968/RootMap/apps/web/src/app/api/trees/[treeId]/nodes/[nodeId]/generate-detail/route.ts": {
     "mtime": 1779182212.7433739,
@@ -384,8 +392,8 @@
     "hash": "0cb6fb4518a2787e13ff20944dfd6865"
   },
   "/home/clip968/RootMap/apps/web/src/app/api/trees/[treeId]/recommendations/personalized/route.ts": {
-    "mtime": 1779373544.3439925,
-    "hash": "1682e5d8a4de10a8b418da818aa3c030"
+    "mtime": 1779464614.8209245,
+    "hash": "cd532f1ac1618e8fd468bb4279c5c4c9"
   },
   "/home/clip968/RootMap/apps/web/src/app/api/trees/generate/route.ts": {
     "mtime": 1779182212.7473738,
@@ -431,13 +439,37 @@
     "mtime": 1779372179.1134892,
     "hash": "b00ee7673d669c1ad6a6399dcb094403"
   },
+  "/home/clip968/RootMap/apps/web/drizzle/0006_phase6_fsrs_lite_scheduler.sql": {
+    "mtime": 1779464525.0655055,
+    "hash": "9af467c50ec0de1a954ff23286d9ff6f"
+  },
   "/home/clip968/RootMap/AGENTS.md": {
     "mtime": 1779301692.1620615,
     "hash": "e564d648ec5d665e103b13005f0baeec"
   },
+  "/home/clip968/RootMap/docs/security-threat-model.md": {
+    "mtime": 1779464705.3615158,
+    "hash": "63e96f380b1f839fdd89dcaded3f3c4e"
+  },
+  "/home/clip968/RootMap/docs/rls-test-plan.md": {
+    "mtime": 1779464705.549516,
+    "hash": "39d457b55ac601f7cf4fb8b9d05da0d3"
+  },
   "/home/clip968/RootMap/docs/project-structure.md": {
     "mtime": 1779182212.7633739,
     "hash": "e4ac040683cc2a73b6dd02d96590d5bc"
+  },
+  "/home/clip968/RootMap/docs/deployment-runbook.md": {
+    "mtime": 1779464706.113516,
+    "hash": "700adb0cddf1715b5a532134ae7e05df"
+  },
+  "/home/clip968/RootMap/docs/llm-evaluation.md": {
+    "mtime": 1779464705.733516,
+    "hash": "c552dece61fd24f0969cfc05ff2b807b"
+  },
+  "/home/clip968/RootMap/docs/learning-science-rationale.md": {
+    "mtime": 1779464705.925516,
+    "hash": "4fee215811ac1618696cf83fc5d5538d"
   },
   "/home/clip968/RootMap/docs/specs/rootmap_phase_3_spec.md": {
     "mtime": 1779182212.7633739,

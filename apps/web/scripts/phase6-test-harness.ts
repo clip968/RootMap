@@ -176,6 +176,86 @@ async function runUnitTests(filter: Set<string>): Promise<void> {
     assertEqual(ordered[0]?.title, "Alpha", "same review score should sort deterministically by title");
     console.info("[phase6:unit] review-priority tests passed");
   }
+
+  if (wants(filter, ["fsrs-lite"])) {
+    const {
+      calculateRetrievability,
+      scheduleFsrsLiteReview,
+    } = await import("../src/lib/learning/fsrs-lite");
+    const now = new Date("2026-05-21T00:00:00.000Z");
+    const good = scheduleFsrsLiteReview({
+      grade: "good",
+      previousStability: 2,
+      previousDifficulty: 0.5,
+      reviewedAt: now,
+    });
+    const again = scheduleFsrsLiteReview({
+      grade: "again",
+      previousStability: 2,
+      previousDifficulty: 0.5,
+      reviewedAt: now,
+    });
+    assert(good.memory_stability > again.memory_stability, "positive review should increase stability more than again");
+    assert(good.memory_difficulty < again.memory_difficulty, "positive review should lower difficulty more than again");
+    assert(good.review_due_at > again.review_due_at, "positive review should schedule a later due date");
+    assertEqual(good.scheduler_version, "rule_v1", "scheduler version should be stored");
+    assert(
+      calculateRetrievability({
+        lastReviewedAt: "2026-05-14T00:00:00.000Z",
+        stability: 1,
+        now,
+      }) < calculateRetrievability({
+        lastReviewedAt: "2026-05-20T00:00:00.000Z",
+        stability: 1,
+        now,
+      }),
+      "retrievability should decrease as elapsed time grows",
+    );
+    console.info("[phase6:unit] fsrs-lite tests passed");
+  }
+
+  if (wants(filter, ["explainable-recommendations"])) {
+    const { recommendPersonalizedNodes } = await import("../src/lib/recommendation/personalized");
+    const now = new Date("2026-05-21T00:00:00.000Z");
+    const recommendations = recommendPersonalizedNodes(
+      [
+        {
+          nodeId: "matrix-node",
+          nodeKey: "matrix",
+          title: "Matrix Multiplication",
+          type: "prerequisite",
+          difficulty: 2,
+          prerequisites: [],
+          conceptId: "matrix-concept",
+          recommendationSource: "community_path",
+        },
+      ],
+      new Map([
+        [
+          "matrix-concept",
+          {
+            status: "partial",
+            confidenceScore: 0.32,
+            wrongCount: 2,
+            correctCount: 1,
+            lastStudiedAt: "2026-05-12T00:00:00.000Z",
+            reviewDueAt: "2026-05-18T00:00:00.000Z",
+            retrievability: 0.35,
+          },
+        ],
+      ]),
+      { now },
+    );
+    const first = recommendations[0];
+    assert(first, "expected one recommendation");
+    assert(first.reason_details.some((reason) => reason.code === "low_confidence" && reason.value === 0.32), "low confidence reason should include actual value");
+    assert(first.reason_details.some((reason) => reason.code === "quiz_error" && reason.value === 2 / 3), "quiz error reason should include actual ratio");
+    assert(first.reason_details.some((reason) => reason.code === "review_overdue"), "overdue reason should be included");
+    assert(first.next_actions[0]?.type === "review", "overdue review should suggest review first");
+    assert(first.next_actions.some((action) => action.type === "misconception_check"), "wrong answers should suggest misconception check");
+    assertEqual(first.recommendation_source, "community_path", "recommendation source should be preserved");
+    console.info("[phase6:unit] explainable-recommendations tests passed");
+  }
 }
 
 async function runLlmEvalTests(filter: Set<string>): Promise<void> {
@@ -250,11 +330,20 @@ async function main(): Promise<void> {
   const filter = new Set(process.argv.slice(3));
   assert(["unit", "integration", "e2e", "llm-eval", "quality"].includes(layer), `unknown test layer: ${layer}`);
 
-  for (const scriptName of ["test:unit", "test:integration", "test:e2e", "test:llm-eval", "phase6:quality"]) {
+  for (const scriptName of ["test:unit", "test:integration", "test:e2e", "test:llm-eval", "phase6:quality", "phase6:graph-quality-smoke"]) {
     assertPackageScript(scriptName);
   }
 
   if (layer === "quality") {
+    for (const doc of [
+      "../../docs/security-threat-model.md",
+      "../../docs/rls-test-plan.md",
+      "../../docs/llm-evaluation.md",
+      "../../docs/learning-science-rationale.md",
+      "../../docs/deployment-runbook.md",
+    ]) {
+      assert(readText(doc).trim().length > 0, `required Phase 06 doc is empty: ${doc}`);
+    }
     runLayer("unit");
     runLayer("integration");
     runLayer("e2e");

@@ -54,6 +54,13 @@ export interface UpsertUserConceptMasteryInput {
   wrongCount?: number;
   correctCount?: number;
   needsReview?: boolean;
+  reviewDueAt?: Date | null;
+  memoryStability?: number | null;
+  memoryDifficulty?: number | null;
+  retrievability?: number | null;
+  lastReviewGrade?: string | null;
+  reviewIntervalDays?: number | null;
+  schedulerVersion?: string | null;
   masteryMetadata?: Record<string, unknown>;
 }
 
@@ -182,6 +189,10 @@ export interface ReviewMasteryRow {
   wrongCount: number;
   correctCount: number;
   needsReview: boolean;
+  reviewDueAt: Date | null;
+  memoryStability: number | null;
+  memoryDifficulty: number | null;
+  retrievability: number | null;
 }
 
 /** tree_id는 기존 Phase 1~3 테이블에 있으므로 user_id를 함께 확인해 Phase 4 세션 생성 권한을 판단한다. */
@@ -415,6 +426,10 @@ export async function listUserConceptMasteryForReview(
       wrongCount: userConceptMastery.wrongCount,
       correctCount: userConceptMastery.correctCount,
       needsReview: userConceptMastery.needsReview,
+      reviewDueAt: userConceptMastery.reviewDueAt,
+      memoryStability: userConceptMastery.memoryStability,
+      memoryDifficulty: userConceptMastery.memoryDifficulty,
+      retrievability: userConceptMastery.retrievability,
     })
     .from(userConceptMastery)
     .innerJoin(concepts, eq(concepts.id, userConceptMastery.conceptId))
@@ -438,6 +453,13 @@ export async function upsertUserConceptMastery(
     wrongCount: input.wrongCount ?? 0,
     correctCount: input.correctCount ?? 0,
     needsReview: input.needsReview ?? true,
+    reviewDueAt: input.reviewDueAt ?? null,
+    memoryStability: input.memoryStability ?? null,
+    memoryDifficulty: input.memoryDifficulty ?? null,
+    retrievability: input.retrievability ?? null,
+    lastReviewGrade: input.lastReviewGrade ?? null,
+    reviewIntervalDays: input.reviewIntervalDays ?? null,
+    schedulerVersion: input.schedulerVersion ?? "rule_v1",
     masteryMetadata: input.masteryMetadata ?? {},
     updatedAt: now,
   };
