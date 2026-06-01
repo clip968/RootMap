@@ -16,3 +16,6 @@ templates
 .forge
 .mcp.json
 .playwright-cli
+.codegraph/
+.vercel
+.env*

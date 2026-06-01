@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["better-sqlite3", "@google-cloud/tasks"],
+  serverExternalPackages: ["better-sqlite3"],
 };
 
 export default nextConfig;

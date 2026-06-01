@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { CloudTasksClient, protos } from "@google-cloud/tasks";
+import crypto from "node:crypto";
 
 export type DocumentProcessingWakeTaskResult =
   | {
@@ -31,6 +31,15 @@ interface CloudTasksWakeConfig {
   };
 }
 
+interface GoogleAccessTokenCache {
+  accessToken: string;
+  expiresAtMs: number;
+}
+
+const GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
+const GOOGLE_CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
+let accessTokenCache: GoogleAccessTokenCache | null = null;
+
 function readEnv(name: string): string | null {
   return process.env[name]?.trim() || null;
 }
@@ -61,6 +70,85 @@ function parseCredentials(): CloudTasksWakeConfig["credentials"] | null {
 function defaultAudienceFor(targetUrl: string): string {
   const parsed = new URL(targetUrl);
   return `${parsed.protocol}//${parsed.host}`;
+}
+
+function base64Url(input: string | Buffer): string {
+  return Buffer.from(input)
+    .toString("base64")
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+}
+
+function createServiceAccountJwt(
+  credentials: CloudTasksWakeConfig["credentials"],
+): string {
+  const now = Math.floor(Date.now() / 1000);
+  const header = {
+    alg: "RS256",
+    typ: "JWT",
+  };
+  const claimSet = {
+    iss: credentials.client_email,
+    scope: GOOGLE_CLOUD_PLATFORM_SCOPE,
+    aud: GOOGLE_OAUTH_TOKEN_URL,
+    exp: now + 3600,
+    iat: now,
+  };
+  const unsigned = [
+    base64Url(JSON.stringify(header)),
+    base64Url(JSON.stringify(claimSet)),
+  ].join(".");
+  const signature = crypto
+    .createSign("RSA-SHA256")
+    .update(unsigned)
+    .sign(credentials.private_key);
+  return `${unsigned}.${base64Url(signature)}`;
+}
+
+async function getGoogleAccessToken(
+  credentials: CloudTasksWakeConfig["credentials"],
+): Promise<string> {
+  if (accessTokenCache && accessTokenCache.expiresAtMs - Date.now() > 60_000) {
+    return accessTokenCache.accessToken;
+  }
+
+  // Vercel serverless bundle에서 @google-cloud/tasks의 protos asset이 누락되어 REST API를 직접 호출한다.
+  const assertion = createServiceAccountJwt(credentials);
+  const res = await fetch(GOOGLE_OAUTH_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion,
+    }),
+  });
+  const data = (await res.json().catch(() => null)) as
+    | {
+        access_token?: unknown;
+        expires_in?: unknown;
+        error_description?: unknown;
+        error?: unknown;
+      }
+    | null;
+
+  if (!res.ok || typeof data?.access_token !== "string") {
+    const detail =
+      typeof data?.error_description === "string" ? data.error_description
+      : typeof data?.error === "string" ? data.error
+      : `Google OAuth token request failed: ${res.status}`;
+    throw new Error(detail);
+  }
+
+  const expiresInSeconds =
+    typeof data.expires_in === "number" ? data.expires_in : 3600;
+  accessTokenCache = {
+    accessToken: data.access_token,
+    expiresAtMs: Date.now() + expiresInSeconds * 1000,
+  };
+  return data.access_token;
 }
 
 function getCloudTasksWakeConfig(): CloudTasksWakeConfig | null {
@@ -111,16 +199,7 @@ export async function enqueueDocumentProcessingWakeTask(
     };
   }
 
-  const client = new CloudTasksClient({
-    projectId: config.projectId,
-    credentials: config.credentials,
-  });
-
-  const parent = client.queuePath(
-    config.projectId,
-    config.location,
-    config.queue,
-  );
+  const parent = `projects/${config.projectId}/locations/${config.location}/queues/${config.queue}`;
   const payload = {
     documentId: input.documentId,
     userId: input.userId,
@@ -129,24 +208,47 @@ export async function enqueueDocumentProcessingWakeTask(
     requestedAt: new Date().toISOString(),
   };
   // Cloud Run 서비스는 공개하지 않고, Cloud Tasks가 OIDC 토큰으로만 호출하도록 둔다.
-  const task: protos.google.cloud.tasks.v2.ITask = {
-    httpRequest: {
-      httpMethod: protos.google.cloud.tasks.v2.HttpMethod.POST,
-      url: config.targetUrl,
+  const accessToken = await getGoogleAccessToken(config.credentials);
+  const res = await fetch(
+    `https://cloudtasks.googleapis.com/v2/${parent}/tasks`,
+    {
+      method: "POST",
       headers: {
+        Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
-      body: Buffer.from(JSON.stringify(payload), "utf8").toString("base64"),
-      oidcToken: {
-        serviceAccountEmail: config.invokerServiceAccount,
-        audience: config.audience,
-      },
+      body: JSON.stringify({
+        task: {
+          httpRequest: {
+            httpMethod: "POST",
+            url: config.targetUrl,
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: Buffer.from(JSON.stringify(payload), "utf8").toString("base64"),
+            oidcToken: {
+              serviceAccountEmail: config.invokerServiceAccount,
+              audience: config.audience,
+            },
+          },
+        },
+      }),
     },
-  };
+  );
+  const created = (await res.json().catch(() => null)) as
+    | { name?: unknown; error?: { message?: unknown } }
+    | null;
 
-  const [created] = await client.createTask({ parent, task });
+  if (!res.ok) {
+    const detail =
+      typeof created?.error?.message === "string" ?
+        created.error.message
+      : `Cloud Tasks createTask failed: ${res.status}`;
+    throw new Error(detail);
+  }
+
   return {
     status: "created",
-    taskName: created.name ?? "",
+    taskName: typeof created?.name === "string" ? created.name : "",
   };
 }

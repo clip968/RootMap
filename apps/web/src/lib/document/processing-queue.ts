@@ -71,10 +71,11 @@ export async function enqueueDocumentProcessingMessage(
     userId: payload.userId,
     requestedAt: payload.requestedAt,
   };
+  const queuePayloadJson = JSON.stringify(queuePayload);
   const rows = await sql<SendRow[]>`
     select pgmq.send(
       ${DOCUMENT_PROCESSING_QUEUE_NAME},
-      ${sql.json(queuePayload)}
+      ${queuePayloadJson}::jsonb
     ) as msg_id
   `;
   const msgId = rows[0]?.msg_id;
