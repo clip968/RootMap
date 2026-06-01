@@ -14,7 +14,10 @@ import { DetailLearningBlocks } from "@/components/detail-learning-blocks";
 import { GenerationLoadingPanel } from "@/components/generation-loading-panel";
 import { VisualBlockRenderer } from "@/components/visual-blocks/visual-block-renderer";
 import { buildDeepDiveGenerationTopic } from "@/lib/tree/deep-dive";
-import type { ApiNodeDetailResponse } from "@/lib/services/node-detail";
+import type {
+  ApiNodeDetailExtrasResponse,
+  ApiNodeDetailResponse,
+} from "@/lib/services/node-detail";
 import type {
   ApiLearningNode,
   ApiPersonalizedNode,
@@ -610,6 +613,8 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   const [detail, setDetail] = useState<ApiNodeDetailResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailExtrasLoading, setDetailExtrasLoading] = useState(false);
+  const [detailExtrasError, setDetailExtrasError] = useState<string | null>(null);
   const [regenLoading, setRegenLoading] = useState(false);
   const [regenElapsedSeconds, setRegenElapsedSeconds] = useState(0);
   const [regenError, setRegenError] = useState<string | null>(null);
@@ -904,9 +909,38 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     viewMode,
   ]);
 
+  const loadDetailExtras = useCallback(async (nodeId: string) => {
+    setDetailExtrasLoading(true);
+    setDetailExtrasError(null);
+    try {
+      const res = await fetch(
+        `/api/nodes/${nodeId}/detail/extras?tree_id=${encodeURIComponent(treeId)}`,
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error?.message ?? "연결 관계를 불러오지 못했습니다.");
+      }
+
+      // 본문 detail과 패널 graph를 다른 요청으로 받기 때문에 현재 노드에만 병합한다.
+      setDetail((current) =>
+        current?.node_id === nodeId
+          ? { ...current, ...(data as ApiNodeDetailExtrasResponse) }
+          : current,
+      );
+    } catch (error) {
+      setDetailExtrasError(
+        error instanceof Error ? error.message : "연결 관계를 불러오지 못했습니다.",
+      );
+    } finally {
+      setDetailExtrasLoading(false);
+    }
+  }, [treeId]);
+
   const loadDetail = useCallback(async (nodeId: string) => {
     setDetailLoading(true);
     setDetailError(null);
+    setDetailExtrasError(null);
+    setDetailExtrasLoading(false);
     setDetail(null);
     try {
       const res = await fetch(`/api/nodes/${nodeId}/detail`, {
@@ -919,6 +953,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
         throw new Error(data?.error?.message ?? "상세 설명을 불러오지 못했습니다.");
       }
       setDetail(data as ApiNodeDetailResponse);
+      void loadDetailExtras(nodeId);
       setTree((prev) =>
         prev
           ? {
@@ -936,7 +971,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     } finally {
       setDetailLoading(false);
     }
-  }, [treeId]);
+  }, [loadDetailExtras, treeId]);
 
   const recordPhase4NodeEvent = useCallback(
     async (node: ApiLearningNode, eventType: "node_opened" | "node_completed") => {
@@ -1941,6 +1976,20 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                                     </li>
                                   ))}
                                 </ul>
+                              </div>
+                            ) : null}
+
+                            {detailExtrasLoading ? (
+                              <div className="more-detail-group">
+                                <h3>연결 관계</h3>
+                                <p className="section-copy">연결 관계를 불러오는 중입니다.</p>
+                              </div>
+                            ) : null}
+
+                            {detailExtrasError ? (
+                              <div className="more-detail-group">
+                                <h3>연결 관계</h3>
+                                <p className="section-copy">{detailExtrasError}</p>
                               </div>
                             ) : null}
 

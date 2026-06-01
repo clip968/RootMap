@@ -7,6 +7,7 @@
 ## 관련 파일
 
 - `apps/web/src/lib/services/node-detail.ts`
+- `apps/web/src/app/api/nodes/[nodeId]/detail/extras/route.ts`
 - `apps/web/src/lib/llm/generate-node-detail.ts`
 - `apps/web/src/lib/llm/generate-document-node-detail.ts`
 - `apps/web/scripts/smoke-node-detail-generation.ts`
@@ -23,6 +24,11 @@
   - `generic_llm_generation`
   - `save_detail`
   - `panel_graph`
+  - `cache_check`
+  - `document_context`
+  - `tree_load`
+  - `detail_total`
+  - `detail_extras_total`
 - 로그 prefix는 기존 문서 detail 로그와 구분되게 `[node-detail-service]`로 둔다.
 - 로그에는 `treeId`, `nodeId`, `nodeKey`, `conceptId`, `durationMs`, `source` 정도만 남긴다.
 - learner-facing 텍스트 전문이나 문서 evidence 전문은 로그에 남기지 않는다.
@@ -35,7 +41,7 @@
 
 ### 3. smoke와 build gate 고정
 
-- `node-detail:generation-smoke`는 fast path와 generation path를 모두 검증한다.
+- `node-detail:generation-smoke`는 fast path, generation path, cache hit 본문 우선 응답, extras route 계약을 모두 검증한다.
 - `phase7:visual-detail-smoke`는 visual block renderer 계약이 깨지지 않았는지 확인한다.
 - `lint`와 `build`로 Next.js/TypeScript 회귀를 확인한다.
 

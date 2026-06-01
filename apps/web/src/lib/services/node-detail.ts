@@ -76,7 +76,7 @@ type PersistNodeDetail = (
 type DetailLogContext = {
   treeId: string;
   nodeId: string;
-  nodeKey: string;
+  nodeKey: string | null;
   conceptId: string | null;
 };
 
@@ -116,6 +116,15 @@ export interface ApiNodeDetailResponse {
     topic: string;
     role_in_tree: string;
   }>;
+}
+
+export interface ApiNodeDetailExtrasResponse {
+  concept_id: string | null;
+  topic_context_line?: string;
+  document_context?: ApiNodeDetailResponse["document_context"];
+  prerequisite_concepts: PanelGraph["prerequisite_concepts"];
+  related_concepts: PanelGraph["related_concepts"];
+  used_in_other_trees: PanelGraph["used_in_other_trees"];
 }
 
 async function buildPanelGraph(
@@ -321,8 +330,6 @@ async function responseFromStoredConcept(
   nodeRow: LearningNodeRow,
   c: ConceptRow,
   bundle: LearningTreeBundle,
-  treeId: string,
-  loadPanelGraph: LoadPanelGraph,
   qualityWarnings: string[] = [],
   extras: Partial<
     Pick<ApiNodeDetailResponse, "document_context" | "topic_context_line">
@@ -330,7 +337,6 @@ async function responseFromStoredConcept(
 ): Promise<ApiNodeDetailResponse> {
   const topic = bundle.tree.topic;
   const tline = extras.topic_context_line ?? topicContextLine(topic, nodeRow.title);
-  const graph = await loadPanelGraph(c.id, treeId);
   return {
     node_id: dbId,
     node_key: nodeKey,
@@ -351,7 +357,6 @@ async function responseFromStoredConcept(
     concept_id: c.id,
     topic_context_line: tline,
     from_concept_store: true,
-    ...graph,
     ...extras,
   };
 }
@@ -361,10 +366,8 @@ async function responseFromStoredConceptFallback(
   nodeKey: string,
   nodeRow: LearningNodeRow,
   bundle: LearningTreeBundle,
-  treeId: string,
   conceptId: string | null,
   loadConcept: LoadConcept,
-  loadPanelGraph: LoadPanelGraph,
   extras: Partial<
     Pick<ApiNodeDetailResponse, "document_context" | "topic_context_line">
   > = {},
@@ -378,8 +381,6 @@ async function responseFromStoredConceptFallback(
     nodeRow,
     c,
     bundle,
-    treeId,
-    loadPanelGraph,
     ["LLM_DETAIL_GENERATION_FELL_BACK_TO_CONCEPT_STORE"],
     extras,
   );
@@ -401,16 +402,21 @@ export async function getOrCreateNodeDetail(params: {
     params.loadDocumentTreeContext ?? getDocumentTreeContextForUser;
   const loadConcept =
     params.loadConcept ?? ((conceptId) => getConceptById(getDb(), conceptId));
-  const loadPanelGraph = params.loadPanelGraph ?? buildPanelGraph;
   const persistNodeDetail = params.persistNodeDetail ?? saveNodeDetail;
   const nodeRow = bundle.nodes.find((n) => n.id === nodeId);
   if (!nodeRow || nodeRow.treeId !== treeId) {
     throw new Error("NODE_NOT_IN_TREE");
   }
 
-  const documentTreeContext = await loadDocumentTreeContext(
-    treeId,
-    DEFAULT_USER_ID,
+  const documentTreeContext = await withDetailDuration(
+    "document_context",
+    {
+      treeId,
+      nodeId,
+      nodeKey: nodeRow.nodeKey,
+      conceptId: nodeRow.conceptId,
+    },
+    () => loadDocumentTreeContext(treeId, DEFAULT_USER_ID),
   );
   const documentNodeContext = findDocumentContextForNode(
     documentTreeContext,
@@ -425,30 +431,25 @@ export async function getOrCreateNodeDetail(params: {
     nodeKey: nodeRow.nodeKey,
     conceptId: detailConceptId,
   };
-  const measuredLoadPanelGraph: LoadPanelGraph = (conceptId, graphTreeId) =>
-    withDetailDuration(
-      "panel_graph",
-      { ...logContext, conceptId },
-      () => loadPanelGraph(conceptId, graphTreeId),
-    );
-
-  const extrasBase = async (): Promise<Partial<ApiNodeDetailResponse>> => {
+  const extrasBase = (): Partial<ApiNodeDetailResponse> => {
     const conceptId = detailConceptId;
     if (!conceptId) return { concept_id: null, ...documentExtras };
-    const graph = await measuredLoadPanelGraph(conceptId, treeId);
     return {
       concept_id: conceptId,
       topic_context_line:
         documentExtras.topic_context_line ??
         topicContextLine(bundle.tree.topic, nodeRow.title),
-      prerequisite_concepts: graph.prerequisite_concepts,
-      related_concepts: graph.related_concepts,
-      used_in_other_trees: graph.used_in_other_trees,
       ...documentExtras,
     };
   };
 
-  if (nodeRow.detailJson) {
+  const hasCachedDetail = await withDetailDuration(
+    "cache_check",
+    logContext,
+    async () => Boolean(nodeRow.detailJson),
+  );
+
+  if (hasCachedDetail) {
     return withDetailDuration(
       "cache_hit",
       logContext,
@@ -457,7 +458,7 @@ export async function getOrCreateNodeDetail(params: {
         nodeRow.nodeKey,
         nodeRow.detailJson!,
         [],
-        await extrasBase(),
+        extrasBase(),
       ),
     );
   }
@@ -473,8 +474,6 @@ export async function getOrCreateNodeDetail(params: {
         nodeRow,
         concept,
         bundle,
-        treeId,
-        measuredLoadPanelGraph,
         [],
         documentExtras,
       ),
@@ -521,7 +520,7 @@ export async function getOrCreateNodeDetail(params: {
         throw new Error("DETAIL_SAVE_FAILED");
       }
       return toApiBody(nodeId, nodeRow.nodeKey, genericDetail, qualityWarnings, {
-        ...(await extrasBase()),
+        ...extrasBase(),
         from_concept_store: false,
         why_it_matters_for_document: detail.why_it_matters_for_document,
         document_context_summary: detail.document_context_summary,
@@ -532,10 +531,8 @@ export async function getOrCreateNodeDetail(params: {
         nodeRow.nodeKey,
         nodeRow,
         bundle,
-        treeId,
         detailConceptId,
         loadConcept,
-        measuredLoadPanelGraph,
         documentExtras,
       );
       if (fallback) return fallback;
@@ -575,7 +572,7 @@ export async function getOrCreateNodeDetail(params: {
     }
 
     return toApiBody(nodeId, nodeRow.nodeKey, detail, qualityWarnings, {
-      ...(await extrasBase()),
+      ...extrasBase(),
       from_concept_store: false,
     });
   } catch (err) {
@@ -584,10 +581,8 @@ export async function getOrCreateNodeDetail(params: {
       nodeRow.nodeKey,
       nodeRow,
       bundle,
-      treeId,
       detailConceptId,
       loadConcept,
-      measuredLoadPanelGraph,
       documentExtras,
     );
     if (fallback) return fallback;
@@ -595,11 +590,85 @@ export async function getOrCreateNodeDetail(params: {
   }
 }
 
+export async function getNodeDetailExtras(params: {
+  treeId: string;
+  nodeId: string;
+  bundle: LearningTreeBundle;
+  loadDocumentTreeContext?: LoadDocumentTreeContext;
+  loadPanelGraph?: LoadPanelGraph;
+}): Promise<ApiNodeDetailExtrasResponse> {
+  const { treeId, nodeId, bundle } = params;
+  const loadDocumentTreeContext =
+    params.loadDocumentTreeContext ?? getDocumentTreeContextForUser;
+  const loadPanelGraph = params.loadPanelGraph ?? buildPanelGraph;
+  const nodeRow = bundle.nodes.find((n) => n.id === nodeId);
+  if (!nodeRow || nodeRow.treeId !== treeId) {
+    throw new Error("NODE_NOT_IN_TREE");
+  }
+
+  const documentTreeContext = await withDetailDuration(
+    "document_context",
+    {
+      treeId,
+      nodeId,
+      nodeKey: nodeRow.nodeKey,
+      conceptId: nodeRow.conceptId,
+    },
+    () => loadDocumentTreeContext(treeId, DEFAULT_USER_ID),
+  );
+  const documentNodeContext = findDocumentContextForNode(
+    documentTreeContext,
+    nodeRow.title,
+    nodeRow.conceptId,
+  );
+  const documentExtras = documentContextExtras(nodeRow, documentNodeContext);
+  const conceptId = nodeRow.conceptId ?? documentNodeContext?.concept_id ?? null;
+  const logContext: DetailLogContext = {
+    treeId,
+    nodeId,
+    nodeKey: nodeRow.nodeKey,
+    conceptId,
+  };
+  const emptyGraph: PanelGraph = {
+    prerequisite_concepts: [],
+    related_concepts: [],
+    used_in_other_trees: [],
+  };
+
+  // 본문 detail 응답에서는 제외한 무거운 오른쪽 패널 그래프만 이 별도 경로에서 만든다.
+  const graph = conceptId
+    ? await withDetailDuration("panel_graph", logContext, () =>
+        loadPanelGraph(conceptId, treeId),
+      )
+    : emptyGraph;
+
+  return {
+    concept_id: conceptId,
+    topic_context_line:
+      conceptId
+        ? documentExtras.topic_context_line ??
+          topicContextLine(bundle.tree.topic, nodeRow.title)
+        : documentExtras.topic_context_line,
+    document_context: documentExtras.document_context,
+    prerequisite_concepts: graph.prerequisite_concepts,
+    related_concepts: graph.related_concepts,
+    used_in_other_trees: graph.used_in_other_trees,
+  };
+}
+
 export async function getOrCreateNodeDetailForRequest(
   treeId: string,
   nodeId: string,
 ): Promise<ApiNodeDetailResponse> {
-  const bundle = await getLearningTree(treeId, DEFAULT_USER_ID);
+  const requestLogContext: DetailLogContext = {
+    treeId,
+    nodeId,
+    nodeKey: null,
+    conceptId: null,
+  };
+  const bundle = await withDetailDuration("tree_load", requestLogContext, () =>
+    getLearningTree(treeId, DEFAULT_USER_ID),
+  );
   if (!bundle) {
     throw new Error("NOT_FOUND");
   }
@@ -607,5 +676,46 @@ export async function getOrCreateNodeDetailForRequest(
   if (!nodeRow || nodeRow.treeId !== treeId) {
     throw new Error("NOT_FOUND");
   }
-  return getOrCreateNodeDetail({ treeId, nodeId, bundle });
+  return withDetailDuration(
+    "detail_total",
+    {
+      treeId,
+      nodeId,
+      nodeKey: nodeRow.nodeKey,
+      conceptId: nodeRow.conceptId,
+    },
+    () => getOrCreateNodeDetail({ treeId, nodeId, bundle }),
+  );
+}
+
+export async function getNodeDetailExtrasForRequest(
+  treeId: string,
+  nodeId: string,
+): Promise<ApiNodeDetailExtrasResponse> {
+  const requestLogContext: DetailLogContext = {
+    treeId,
+    nodeId,
+    nodeKey: null,
+    conceptId: null,
+  };
+  const bundle = await withDetailDuration("tree_load", requestLogContext, () =>
+    getLearningTree(treeId, DEFAULT_USER_ID),
+  );
+  if (!bundle) {
+    throw new Error("NOT_FOUND");
+  }
+  const nodeRow = bundle.nodes.find((n) => n.id === nodeId);
+  if (!nodeRow || nodeRow.treeId !== treeId) {
+    throw new Error("NOT_FOUND");
+  }
+  return withDetailDuration(
+    "detail_extras_total",
+    {
+      treeId,
+      nodeId,
+      nodeKey: nodeRow.nodeKey,
+      conceptId: nodeRow.conceptId,
+    },
+    () => getNodeDetailExtras({ treeId, nodeId, bundle }),
+  );
 }

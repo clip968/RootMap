@@ -9,7 +9,7 @@ Phase 08의 핵심은 상세 모달 UX를 다시 크게 바꾸는 것이 아니�
 1. 상세 모달 클릭 시 문서 기반 노드도 detail API 한 번으로 조회·생성·응답하도록 클라이언트 흐름을 단순화한다.
 2. 클릭 직후 이전 detail을 지우고 로딩 상태를 켜서 사용자가 멈춘 화면처럼 느끼지 않게 한다.
 3. `detailJson` 또는 Concept Store 설명이 충분한 경우 LLM 호출 전에 빠르게 응답하는 fast path를 고정한다.
-4. 오른쪽 패널용 concept graph 보강 조회에서 순차 DB 왕복을 줄인다.
+4. 오른쪽 패널용 concept graph 보강 조회를 본문 detail 응답에서 분리하고, 별도 extras 요청에서만 수행한다.
 5. LLM, DB 저장, graph 보강 시간을 나눠 기록해 이후 성능 문제를 추측이 아니라 수치로 판단한다.
 6. 기존 visual detail UI와 Phase 4 개인화 이벤트 흐름을 깨뜨리지 않는다.
 
@@ -39,6 +39,7 @@ Phase 08의 핵심은 상세 모달 UX를 다시 크게 바꾸는 것이 아니�
 
 - `TreePageClient`의 상세 모달 열기 흐름 정리
 - `/api/nodes/[nodeId]/detail` 중심의 단일 detail 조회·생성 경로
+- `/api/nodes/[nodeId]/detail/extras`를 통한 패널 graph 보강 조회
 - 기존 `/api/trees/[treeId]/nodes/[nodeId]/generate-detail` 경로의 역할 축소 또는 호환 유지 결정
 - `getOrCreateNodeDetail`의 cache hit, Concept Store fast path, LLM generation 순서 정리
 - `buildPanelGraph` 관련 concept 조회 최적화
@@ -65,4 +66,4 @@ Phase 08의 핵심은 상세 모달 UX를 다시 크게 바꾸는 것이 아니�
 
 ## 완료 조건
 
-Phase 08이 끝나면 문서 기반 노드도 클릭당 detail API 한 번만 사용하고, cache 또는 Concept Store 설명이 있는 노드는 LLM 호출 없이 응답해야 한다. LLM이 필요한 최초 생성은 여전히 시간이 걸릴 수 있지만, 사용자는 즉시 로딩 상태를 보고, 서버 로그에서는 LLM·저장·graph 보강 시간이 분리되어 확인되어야 한다. 최종 검증은 `apps/web`에서 `npm run node-detail:generation-smoke`, `npm run phase7:visual-detail-smoke`, `npm run lint`, `npm run build`가 통과하는 것으로 고정한다.
+Phase 08이 끝나면 문서 기반 노드도 클릭당 detail 본문 API 한 번으로 조회·생성되고, cache 또는 Concept Store 설명이 있는 노드는 LLM 호출 없이 응답해야 한다. 패널 graph 보강은 별도 extras API로 늦게 붙어서 cache hit 본문 응답을 막지 않아야 한다. LLM이 필요한 최초 생성은 여전히 시간이 걸릴 수 있지만, 사용자는 즉시 로딩 상태를 보고, 서버 로그에서는 LLM·저장·graph 보강 시간이 분리되어 확인되어야 한다. 최종 검증은 `apps/web`에서 `npm run node-detail:generation-smoke`, `npm run phase7:visual-detail-smoke`, `npm run lint`, `npm run build`가 통과하는 것으로 고정한다.

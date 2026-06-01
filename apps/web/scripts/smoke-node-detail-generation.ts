@@ -11,7 +11,12 @@ import type {
   LearningTreeBundle,
   LearningTreeRow,
 } from "../src/lib/repository/learning-repository";
-import { getOrCreateNodeDetail } from "../src/lib/services/node-detail";
+import {
+  getNodeDetailExtras,
+  getOrCreateNodeDetail,
+} from "../src/lib/services/node-detail";
+import fs from "node:fs";
+import path from "node:path";
 import type {
   LearningTreeResponse,
   NodeDetailResponse,
@@ -54,6 +59,12 @@ function assertServiceLog(logs: ServiceLog[], source: string): void {
   assert(typeof log.durationMs === "number", `${source} log should include durationMs`);
 }
 
+function readSource(relativePath: string): string {
+  const absolutePath = path.join(process.cwd(), relativePath);
+  assert(fs.existsSync(absolutePath), `${relativePath} file missing`);
+  return fs.readFileSync(absolutePath, "utf8");
+}
+
 function treeJson(): LearningTreeResponse {
   return {
     topic: "운영체제 스케줄링",
@@ -81,7 +92,10 @@ function treeJson(): LearningTreeResponse {
   };
 }
 
-function bundle(conceptId: string): LearningTreeBundle {
+function bundle(
+  conceptId: string,
+  detailJson: NodeDetailResponse | null = null,
+): LearningTreeBundle {
   const now = "2026-06-01T00:00:00.000Z";
   const tree: LearningTreeRow = {
     id: "tree-1",
@@ -102,7 +116,7 @@ function bundle(conceptId: string): LearningTreeBundle {
     difficulty: 2,
     prerequisites: [],
     children: ["scheduling_criteria"],
-    detailJson: null,
+    detailJson,
     conceptId,
     isReusedConcept: true,
     createdAt: now,
@@ -114,6 +128,35 @@ function bundle(conceptId: string): LearningTreeBundle {
     progress: [],
     conceptTreeCounts: new Map([[conceptId, 1]]),
   };
+}
+
+async function runCacheHitSkipsPanelGraphCase(): Promise<void> {
+  let graphLoaded = false;
+  const cachedDetail = detail("cpu_utilization");
+
+  const result = await getOrCreateNodeDetail({
+    treeId: "tree-1",
+    nodeId: "node-1",
+    bundle: bundle("concept-cached", cachedDetail),
+    loadDocumentTreeContext: async () => null,
+    loadConcept: async () => {
+      throw new Error("cache hit should not load Concept row");
+    },
+    loadPanelGraph: async () => {
+      graphLoaded = true;
+      throw new Error("cache hit should not wait for panel graph");
+    },
+    persistNodeDetail: async () => {
+      throw new Error("cache hit should not persist generated detail");
+    },
+    generateGenericNodeDetail: async () => {
+      throw new Error("cache hit should not run full generator");
+    },
+  });
+
+  assert(!graphLoaded, "cache hit should return detail body before panel graph");
+  assert(result.easy_explanation === cachedDetail.easy_explanation, "cache hit should reuse stored detail");
+  assert(result.concept_id === "concept-cached", "cache hit should still include the Concept id");
 }
 
 function concept(
@@ -223,16 +266,64 @@ async function runConceptExplanationFastPathCase(): Promise<void> {
   assert(result.visual_blocks.length === 0, "Concept fast path should use empty visual blocks");
 }
 
-async function main(): Promise<void> {
-  const logs = await captureServiceLogs(async () => {
-    await runShortDescriptionGenerationCase();
-    await runConceptExplanationFastPathCase();
+async function runDetailExtrasCase(): Promise<void> {
+  let graphLoaded = false;
+  const result = await getNodeDetailExtras({
+    treeId: "tree-1",
+    nodeId: "node-1",
+    bundle: bundle("concept-extra"),
+    loadDocumentTreeContext: async () => null,
+    loadPanelGraph: async (conceptId, treeId) => {
+      graphLoaded = true;
+      assert(conceptId === "concept-extra", "extras should load graph for the node Concept");
+      assert(treeId === "tree-1", "extras should scope graph to the current tree");
+      return {
+        prerequisite_concepts: [{ id: "concept-prereq", title: "선수 개념" }],
+        related_concepts: [{ id: "concept-related", title: "관련 개념" }],
+        used_in_other_trees: [
+          { tree_id: "tree-2", topic: "다른 주제", role_in_tree: "core" },
+        ],
+      };
+    },
   });
 
+  assert(graphLoaded, "extras endpoint should load the panel graph");
+  assert(result.concept_id === "concept-extra", "extras should include Concept id");
+  assert(result.prerequisite_concepts.length === 1, "extras should include prerequisite concepts");
+  assert(result.related_concepts.length === 1, "extras should include related concepts");
+  assert(result.used_in_other_trees.length === 1, "extras should include other tree usage");
+}
+
+async function main(): Promise<void> {
+  const logs = await captureServiceLogs(async () => {
+    await runCacheHitSkipsPanelGraphCase();
+    await runShortDescriptionGenerationCase();
+    await runConceptExplanationFastPathCase();
+    await runDetailExtrasCase();
+  });
+
+  assertServiceLog(logs, "cache_hit");
+  assertServiceLog(logs, "cache_check");
+  assertServiceLog(logs, "document_context");
   assertServiceLog(logs, "generic_llm_generation");
   assertServiceLog(logs, "save_detail");
   assertServiceLog(logs, "panel_graph");
   assertServiceLog(logs, "concept_fast_path");
+
+  const extrasRouteSource = readSource("src/app/api/nodes/[nodeId]/detail/extras/route.ts");
+  const treeClientSource = readSource("src/components/tree-page-client.tsx");
+  assert(
+    extrasRouteSource.includes("getNodeDetailExtrasForRequest"),
+    "detail extras route should call the extras-only service",
+  );
+  assert(
+    treeClientSource.includes("/api/nodes/${nodeId}/detail/extras?tree_id="),
+    "tree UI should load panel graph extras through the extras route",
+  );
+  assert(
+    treeClientSource.includes("setDetailExtrasLoading"),
+    "tree UI should track extras loading separately from body detail loading",
+  );
 
   console.info("[node-detail-generation-smoke] ok");
 }
