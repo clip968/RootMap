@@ -1,6 +1,9 @@
 import type { VisualBlock } from "@/lib/visualization/visual-block-schema";
+import { FlowPipelineDiagram } from "@/components/visual-blocks/flow-pipeline-diagram";
+import { LayerStackDiagram } from "@/components/visual-blocks/layer-stack-diagram";
 import { LinearSpaceDiagram } from "@/components/visual-blocks/linear-space-diagram";
 import { MappingTableDiagram } from "@/components/visual-blocks/mapping-table-diagram";
+import { TimelineDiagram } from "@/components/visual-blocks/timeline-diagram";
 import { VisualBlockAnnotations } from "@/components/visual-blocks/visual-block-annotations";
 import { VisualBlockEmptyState } from "@/components/visual-blocks/visual-block-empty-state";
 import {
@@ -50,6 +53,9 @@ function VisualBlockCard({ block }: { block: VisualBlock }) {
 function renderVisualBlockDiagram(block: VisualBlock) {
   if (block.type === "linear_space") return <LinearSpaceDiagram block={block} />;
   if (block.type === "mapping_table") return <MappingTableDiagram block={block} />;
+  if (block.type === "flow_pipeline") return <FlowPipelineDiagram block={block} />;
+  if (block.type === "timeline") return <TimelineDiagram block={block} />;
+  if (block.type === "layer_stack") return <LayerStackDiagram block={block} />;
   return <VisualBlockShellDiagram block={block} />;
 }
 
