@@ -12,6 +12,8 @@ import {
   DEFAULT_VISUAL_DECISION,
   visualBlocksSchema,
   visualDecisionSchema,
+  type VisualBlock,
+  type VisualDecision,
 } from "@/lib/visualization/visual-block-schema";
 
 const nodeTypeSchema = z.enum([
@@ -345,6 +347,43 @@ export function nodeDetailQualityWarnings(
   if (detail.common_misconceptions.length === 0) {
     w.push("common_misconceptions가 비어 있습니다.");
   }
+  w.push(...visualDetailQualityWarnings(detail));
+  return w;
+}
+
+function visualDetailQualityWarnings(detail: {
+  visual_decision?: VisualDecision;
+  visual_blocks?: VisualBlock[];
+}): string[] {
+  const w: string[] = [];
+  const decision = detail.visual_decision ?? DEFAULT_VISUAL_DECISION;
+  const blocks = detail.visual_blocks ?? [];
+
+  if (decision.should_visualize && blocks.length === 0) {
+    w.push("visual_decision.should_visualize=true이지만 visual_blocks가 비어 있습니다.");
+  }
+  if (blocks.length > 2) {
+    w.push("visual_blocks가 2개를 초과합니다. 핵심 시각화 1~2개만 권장합니다.");
+  }
+
+  blocks.forEach((block, blockIndex) => {
+    if (block.annotations.length === 0) {
+      w.push(`visual_blocks[${blockIndex}].annotations가 비어 있습니다.`);
+    }
+    block.annotations.forEach((annotation, annotationIndex) => {
+      if (!annotation.trim()) {
+        w.push(
+          `visual_blocks[${blockIndex}].annotations[${annotationIndex}]가 비어 있습니다.`,
+        );
+      }
+      if (annotation.length > 80) {
+        w.push(
+          `visual_blocks[${blockIndex}].annotations[${annotationIndex}]가 너무 깁니다.`,
+        );
+      }
+    });
+  });
+
   return w;
 }
 
@@ -864,5 +903,6 @@ export function documentNodeDetailQualityWarnings(
   if (!detail.why_it_matters_for_document) {
     w.push("why_it_matters_for_document가 비어 있습니다.");
   }
+  w.push(...visualDetailQualityWarnings(detail));
   return w;
 }
