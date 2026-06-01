@@ -533,6 +533,23 @@ body {
   font-weight: 800;
 }
 
+.detail-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-status-badge {
+  border: 1px solid #3f3f46;
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: #d4d4d8;
+  background: #000000;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .modal-header h2 {
   margin: 4px 0 8px;
   color: #ffffff;
@@ -620,6 +637,33 @@ body {
   gap: 8px;
   margin: 0;
   padding-left: 18px;
+}
+
+.detail-core-list,
+.detail-check-list {
+  padding-left: 0;
+  list-style: none;
+}
+
+.detail-core-list li,
+.detail-check-list li {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 10px;
+  background: #000000;
+}
+
+.detail-core-list span {
+  color: #34d399;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.detail-core-list p,
+.detail-check-list p {
+  margin: 0;
 }
 
 .detail-learning-blocks {
@@ -842,6 +886,27 @@ body {
   font-weight: 800;
 }
 
+.detail-inline-button.is-primary {
+  border-color: #047857;
+  background: #065f46;
+}
+
+.detail-inline-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.detail-action-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.detail-action-grid .detail-inline-button {
+  justify-self: stretch;
+  min-height: 38px;
+}
+
 .related-list {
   display: grid;
   gap: 8px;
@@ -894,6 +959,68 @@ body {
   padding: 7px 10px;
   background: #000000;
   color: #f4f4f5;
+}
+
+.modal-more-details {
+  align-content: start;
+}
+
+.modal-more-details summary {
+  cursor: pointer;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.more-detail-stack {
+  display: grid;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.more-detail-group {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid #27272a;
+  padding-top: 12px;
+}
+
+.more-detail-group h3 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.concept-metric {
+  display: grid;
+  gap: 7px;
+}
+
+.concept-metric-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #a1a1aa;
+  font-size: 12px;
+}
+
+.concept-metric-header strong {
+  color: #ffffff;
+}
+
+.concept-metric-bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #27272a;
+}
+
+.concept-metric-bar div {
+  height: 100%;
+  border-radius: 999px;
+  background: #059669;
 }
 
 .evidence-list {
@@ -952,6 +1079,10 @@ body {
     bottom: -1px;
     transform: translateX(50%) rotate(135deg);
   }
+
+  .detail-action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 760px) {
@@ -968,5 +1099,9 @@ body {
   .modal-main,
   .modal-side {
     padding: 18px;
+  }
+
+  .detail-action-grid {
+    grid-template-columns: 1fr;
   }
 }

@@ -814,6 +814,22 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     () => (tree ? nodeRelations(tree, selectedNode) : []),
     [selectedNode, tree],
   );
+  const detailNextNodes = detail?.next_nodes;
+  const nextActionNode = useMemo(() => {
+    const childRelation = relations.find((relation) => relation.direction === "child");
+    if (childRelation) return childRelation.node;
+    if (!tree || !detailNextNodes?.length) return null;
+
+    const nextNodeIds = new Set(detailNextNodes);
+    return (
+      tree.nodes.find(
+        (node) =>
+          nextNodeIds.has(node.id) ||
+          nextNodeIds.has(node.node_key) ||
+          nextNodeIds.has(node.title),
+      ) ?? null
+    );
+  }, [detailNextNodes, relations, tree]);
 
   const onProgressChange = useCallback(
     async (nodeId: string, status: ProgressStatus) => {
@@ -1620,7 +1636,22 @@ export function TreePageClient({ treeId }: { treeId: string }) {
               >
                 <div className="modal-header">
                   <div>
-                    <div className="detail-kind">{SECTION_LABEL[selectedNode.type]}</div>
+                    <div className="detail-badge-row">
+                      <span className="detail-kind">{SECTION_LABEL[selectedNode.type]}</span>
+                      <span className="detail-status-badge">
+                        {
+                          PROGRESS_LABEL[
+                            personalizationByNodeId.get(selectedNode.id)?.status ??
+                              selectedNode.progress
+                          ]
+                        }
+                      </span>
+                      {selectedNode.document_context ? (
+                        <span className="detail-status-badge">
+                          {documentSourceTypeLabel(selectedNode.document_context.source_type)}
+                        </span>
+                      ) : null}
+                    </div>
                     <h2 id="detail-modal-title">{selectedNode.title}</h2>
                     <p className="summary">
                       {selectedNode.description || "상세 설명을 생성하거나 불러오는 중입니다."}
@@ -1655,246 +1686,314 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                         </button>
                       </div>
                     ) : (
-                      <>
-                        <div className="detail-section">
-                          <h3>이게 뭔가요?</h3>
-                          <p className="section-copy">
-                            {detail?.easy_explanation ||
-                              selectedNode.description ||
-                              "아직 설명이 없습니다."}
-                          </p>
-                        </div>
+                      (() => {
+                        const easyExplanation =
+                          detail?.easy_explanation ||
+                          selectedNode.description ||
+                          "아직 설명이 없습니다.";
+                        const whyItMatters =
+                          detail?.why_it_matters_for_document ??
+                          detail?.why_it_matters ??
+                          "이 노드의 선수/후속 관계를 맵에서 확인하세요.";
+                        const appliedContext =
+                          detail?.document_context_summary ||
+                          detail?.topic_context_line ||
+                          `${SECTION_LABEL[selectedNode.type]} 흐름에서 다음 개념으로 이어집니다.`;
+                        const misconception = detail?.common_misconceptions?.[0];
+                        const checkQuestions = detail?.check_questions?.slice(0, 2) ?? [];
 
-                        <div className="detail-section">
-                          <h3>왜 중요한가</h3>
-                          <p className="section-copy">
-                            {detail?.why_it_matters_for_document ??
-                              detail?.why_it_matters ??
-                              "이 노드의 선수/후속 관계를 맵에서 확인하세요."}
-                          </p>
-                        </div>
+                        return (
+                          <>
+                            <DetailLearningBlocks
+                              node={selectedNode}
+                              detail={detail}
+                              sectionLabel={SECTION_LABEL}
+                            />
 
-                        <DetailLearningBlocks
-                          node={selectedNode}
-                          detail={detail}
-                          sectionLabel={SECTION_LABEL}
-                        />
+                            <div className="detail-section">
+                              <h3>핵심 3개</h3>
+                              <ul className="detail-core-list">
+                                <li>
+                                  <span>무엇인가</span>
+                                  <p>{easyExplanation}</p>
+                                </li>
+                                <li>
+                                  <span>왜 필요한가</span>
+                                  <p>{whyItMatters}</p>
+                                </li>
+                                <li>
+                                  <span>어디에 쓰이는가</span>
+                                  <p>{appliedContext}</p>
+                                </li>
+                              </ul>
+                            </div>
 
-                        {detail?.document_context ? (
-                          <div className="detail-section">
-                            <h3>문서에서의 역할</h3>
-                            <p className="section-copy">
-                              {detail.document_context_summary ||
-                                detail.topic_context_line ||
-                                selectedNode.description ||
-                                "문서 기반 맥락 정보가 연결되어 있습니다."}
-                            </p>
-                            {detail.document_context.evidence.length > 0 ? (
-                              <div className="evidence-list">
-                                {detail.document_context.evidence.map((evidence, index) => (
-                                  <div
-                                    key={`${evidence.section_title ?? "section"}-${index}`}
-                                    className="evidence-item"
-                                  >
-                                    <strong>{formatDocumentEvidenceLocation(evidence)}</strong>
-                                    <p>{evidence.snippet}</p>
-                                  </div>
-                                ))}
+                            {detail?.example ? (
+                              <div className="detail-section">
+                                <h3>예시 1개</h3>
+                                <pre className="detail-code">{detail.example}</pre>
                               </div>
                             ) : null}
-                          </div>
-                        ) : null}
 
-                        {detail?.example ? (
-                          <div className="detail-section">
-                            <h3>예시</h3>
-                            <pre className="detail-code">{detail.example}</pre>
-                          </div>
-                        ) : null}
+                            {misconception ? (
+                              <div className="detail-section">
+                                <h3>오해/주의 1개</h3>
+                                <p className="section-copy">{misconception}</p>
+                              </div>
+                            ) : null}
 
-                        {detail?.common_misconceptions?.length ? (
-                          <div className="detail-section">
-                            <h3>자주 하는 오해</h3>
-                            <ul>
-                              {detail.common_misconceptions.map((item) => (
-                                <li key={item}>{item}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        ) : null}
+                            <div className="detail-section">
+                              <h3>확인 질문</h3>
+                              {checkQuestions.length ? (
+                                <ul className="detail-check-list">
+                                  {checkQuestions.map((question, index) => (
+                                    <li key={`${question.question}-${index}`}>
+                                      <strong>{question.question}</strong>
+                                      <p>{question.answer}</p>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p className="section-copy">아직 이해 점검 항목이 없습니다.</p>
+                              )}
+                            </div>
 
-                        <div className="detail-section">
-                          <h3>이해 점검</h3>
-                          {detail?.check_questions?.length ? (
-                            <ul>
-                              {detail.check_questions.map((question, index) => (
-                                <li key={`${question.question}-${index}`}>
-                                  <strong>{question.question}</strong>
-                                  <p>{question.answer}</p>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="section-copy">아직 이해 점검 항목이 없습니다.</p>
-                          )}
-                        </div>
-                      </>
+                            <div className="detail-section">
+                              <h3>다음 행동</h3>
+                              <div className="detail-action-grid">
+                                <button
+                                  type="button"
+                                  className="detail-inline-button is-primary"
+                                  disabled={progressBusy === selectedNode.id}
+                                  onClick={() => void onProgressChange(selectedNode.id, "known")}
+                                >
+                                  이해했음
+                                </button>
+                                <button
+                                  type="button"
+                                  className="detail-inline-button"
+                                  disabled={progressBusy === selectedNode.id}
+                                  onClick={() => void onProgressChange(selectedNode.id, "partial")}
+                                >
+                                  애매함
+                                </button>
+                                <button
+                                  type="button"
+                                  className="detail-inline-button"
+                                  disabled={regenLoading}
+                                  onClick={() => void onDeepDive(selectedNode)}
+                                >
+                                  {regenLoading ? "생성 중" : "더 쪼개기"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="detail-inline-button"
+                                  disabled={!nextActionNode}
+                                  onClick={() => {
+                                    if (nextActionNode) void openNode(nextActionNode.id);
+                                  }}
+                                >
+                                  다음 개념 보기
+                                </button>
+                              </div>
+                            </div>
+                          </>
+                        );
+                      })()
                     )}
                   </div>
 
                   <aside className="modal-side">
-                    <div className="detail-section">
-                      <h3>연결 관계</h3>
-                      <div className="related-list">
-                        {relations.length > 0 ? (
-                          relations.map((relation) => (
-                            <button
-                              key={`${relation.direction}-${relation.node.id}`}
-                              onClick={() => void openNode(relation.node.id)}
-                            >
-                              <span>
-                                {relation.direction === "parent" ? "이전" : "다음"} ·{" "}
-                                {SECTION_LABEL[relation.node.type]}
-                              </span>
-                              <strong>{relation.node.title}</strong>
-                            </button>
-                          ))
-                        ) : (
-                          <p className="section-copy">연결된 노드가 없습니다.</p>
-                        )}
-                      </div>
-                    </div>
+                    {(() => {
+                      const personalized = personalizationByNodeId.get(selectedNode.id);
+                      const confidence = confidencePercent(personalized?.confidence_score);
+                      const currentProgress = personalized?.status ?? selectedNode.progress;
+                      const reasons = personalized?.reasons ?? [];
+                      const documentEvidence =
+                        detail?.document_context?.evidence ??
+                        selectedNode.document_context?.evidence ??
+                        [];
 
-                    <div className="detail-section">
-                      <h3>Concept 상태</h3>
-                      {(() => {
-                        const personalized = personalizationByNodeId.get(selectedNode.id);
-                        const confidence = confidencePercent(personalized?.confidence_score);
-                        const reasons = personalized?.reasons ?? [];
-                        return (
-                          <div className="grid gap-3">
-                            <div className="grid gap-1">
-                              <div className="flex items-center justify-between gap-2 text-xs text-zinc-400">
-                                <span>confidence_score</span>
-                                <strong className="text-white">{confidence}%</strong>
-                              </div>
-                              <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
-                                <div
-                                  className="h-full rounded-full bg-emerald-600"
-                                  style={{ width: `${confidence}%` }}
-                                />
+                      return (
+                        <details className="detail-section modal-more-details">
+                          <summary>자세히 보기</summary>
+                          <div className="more-detail-stack">
+                            <div className="more-detail-group">
+                              <h3>연결 관계</h3>
+                              <div className="related-list">
+                                {relations.length > 0 ? (
+                                  relations.map((relation) => (
+                                    <button
+                                      key={`${relation.direction}-${relation.node.id}`}
+                                      onClick={() => void openNode(relation.node.id)}
+                                    >
+                                      <span>
+                                        {relation.direction === "parent" ? "이전" : "다음"} ·{" "}
+                                        {SECTION_LABEL[relation.node.type]}
+                                      </span>
+                                      <strong>{relation.node.title}</strong>
+                                    </button>
+                                  ))
+                                ) : (
+                                  <p className="section-copy">연결된 노드가 없습니다.</p>
+                                )}
                               </div>
                             </div>
-                            {personalized ? (
-                              <div className="grid gap-1 text-xs text-zinc-400">
-                                <span>
-                                  recommendation_score{" "}
-                                  {Math.round(personalized.recommendation_score * 100)}%
-                                </span>
-                                {personalized.is_recommended ? (
-                                  <span className="font-semibold text-emerald-400">추천 대상</span>
+
+                            <div className="more-detail-group">
+                              <h3>Concept 상태</h3>
+                              <div className="concept-metric">
+                                <div className="concept-metric-header">
+                                  <span>이해도</span>
+                                  <strong>{confidence}%</strong>
+                                </div>
+                                <div className="concept-metric-bar">
+                                  <div style={{ width: `${confidence}%` }} />
+                                </div>
+                                {personalized ? (
+                                  <p className="section-copy">
+                                    추천도 {Math.round(personalized.recommendation_score * 100)}%
+                                    {personalized.is_recommended ? " · 지금 볼 것" : ""}
+                                  </p>
+                                ) : null}
+                              </div>
+                              {reasons.length > 0 ? (
+                                <ul>
+                                  {reasons.slice(0, 3).map((reason) => (
+                                    <li key={reason}>{reason}</li>
+                                  ))}
+                                </ul>
+                              ) : null}
+                              <label className="modal-progress">
+                                <span>{PROGRESS_LABEL[currentProgress]}</span>
+                                <select
+                                  value={currentProgress}
+                                  disabled={progressBusy === selectedNode.id}
+                                  onChange={(event) =>
+                                    void onProgressChange(
+                                      selectedNode.id,
+                                      event.target.value as ProgressStatus,
+                                    )
+                                  }
+                                >
+                                  {(Object.keys(PROGRESS_LABEL) as ProgressStatus[]).map(
+                                    (status) => (
+                                      <option key={status} value={status}>
+                                        {PROGRESS_LABEL[status]}
+                                      </option>
+                                    ),
+                                  )}
+                                </select>
+                              </label>
+                              <button
+                                type="button"
+                                className="detail-inline-button"
+                                disabled={!phase4AuthToken || !activeSessionId}
+                                onClick={() =>
+                                  void recordPhase4NodeEvent(selectedNode, "node_completed")
+                                }
+                              >
+                                완료 이벤트 기록
+                              </button>
+                            </div>
+
+                            <div className="more-detail-group">
+                              <h3>전체 설명</h3>
+                              <p className="section-copy">
+                                {detail?.easy_explanation ||
+                                  selectedNode.description ||
+                                  "아직 설명이 없습니다."}
+                              </p>
+                              <p className="section-copy">
+                                {detail?.why_it_matters_for_document ??
+                                  detail?.why_it_matters ??
+                                  "이 노드의 선수/후속 관계를 맵에서 확인하세요."}
+                              </p>
+                              {detail?.analogy ? (
+                                <p className="section-copy">{detail.analogy}</p>
+                              ) : null}
+                            </div>
+
+                            {selectedNode.document_context || detail?.document_context ? (
+                              <div className="more-detail-group">
+                                <h3>문서 근거 전체</h3>
+                                {renderDocumentNodeContext(selectedNode)}
+                                {documentEvidence.length > 0 ? (
+                                  <div className="evidence-list">
+                                    {documentEvidence.map((evidence, index) => (
+                                      <div
+                                        key={`${evidence.section_title ?? "section"}-${index}`}
+                                        className="evidence-item"
+                                      >
+                                        <strong>{formatDocumentEvidenceLocation(evidence)}</strong>
+                                        <p>{evidence.snippet}</p>
+                                      </div>
+                                    ))}
+                                  </div>
                                 ) : null}
                               </div>
                             ) : null}
-                            {reasons.length > 0 ? (
-                              <ul>
-                                {reasons.slice(0, 3).map((reason) => (
-                                  <li key={reason}>{reason}</li>
-                                ))}
-                              </ul>
+
+                            {detail?.prerequisite_concepts?.length ? (
+                              <div className="more-detail-group">
+                                <h3>선수 개념</h3>
+                                <ul>
+                                  {detail.prerequisite_concepts.map((concept) => (
+                                    <li key={concept.id}>{concept.title}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ) : null}
+
+                            {detail?.related_concepts?.length ? (
+                              <div className="more-detail-group">
+                                <h3>관련 개념</h3>
+                                <ul>
+                                  {detail.related_concepts.map((concept) => (
+                                    <li key={concept.id}>{concept.title}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ) : null}
+
+                            {detail?.used_in_other_trees?.length ? (
+                              <div className="more-detail-group">
+                                <h3>다른 Tree</h3>
+                                <ul>
+                                  {detail.used_in_other_trees.map((item) => (
+                                    <li key={item.tree_id}>
+                                      <strong>{item.topic}</strong>
+                                      <p>{item.role_in_tree}</p>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ) : null}
+
+                            {detail?.check_questions?.length ? (
+                              <div className="more-detail-group">
+                                <h3>전체 질문 목록</h3>
+                                <ul>
+                                  {detail.check_questions.map((question, index) => (
+                                    <li key={`${question.question}-${index}`}>
+                                      <strong>{question.question}</strong>
+                                      <p>{question.answer}</p>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ) : null}
+
+                            {detail?.next_nodes?.length ? (
+                              <div className="more-detail-group">
+                                <h3>다음에 볼 것</h3>
+                                <p className="section-copy">{detail.next_nodes.join(", ")}</p>
+                              </div>
                             ) : null}
                           </div>
-                        );
-                      })()}
-                      <label className="modal-progress">
-                        <span>
-                          {PROGRESS_LABEL[
-                            personalizationByNodeId.get(selectedNode.id)?.status ??
-                              selectedNode.progress
-                          ]}
-                        </span>
-                        <select
-                          value={
-                            personalizationByNodeId.get(selectedNode.id)?.status ??
-                            selectedNode.progress
-                          }
-                          disabled={progressBusy === selectedNode.id}
-                          onChange={(event) =>
-                            void onProgressChange(
-                              selectedNode.id,
-                              event.target.value as ProgressStatus,
-                            )
-                          }
-                        >
-                          {(Object.keys(PROGRESS_LABEL) as ProgressStatus[]).map((status) => (
-                            <option key={status} value={status}>
-                              {PROGRESS_LABEL[status]}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <button
-                        type="button"
-                        className="detail-inline-button mt-3"
-                        disabled={!phase4AuthToken || !activeSessionId}
-                        onClick={() => void recordPhase4NodeEvent(selectedNode, "node_completed")}
-                      >
-                        완료 이벤트 기록
-                      </button>
-                      <button
-                        type="button"
-                        className="detail-inline-button mt-3"
-                        disabled={regenLoading}
-                        onClick={() => void onDeepDive(selectedNode)}
-                      >
-                        {regenLoading ? "세부 맵 생성 중" : "이 개념을 더 쪼개기"}
-                      </button>
-                    </div>
-
-                    {renderDocumentNodeContext(selectedNode)}
-
-                    {detail?.prerequisite_concepts?.length ? (
-                      <div className="detail-section">
-                        <h3>선수 개념</h3>
-                        <ul>
-                          {detail.prerequisite_concepts.map((concept) => (
-                            <li key={concept.id}>{concept.title}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-
-                    {detail?.related_concepts?.length ? (
-                      <div className="detail-section">
-                        <h3>관련 개념</h3>
-                        <ul>
-                          {detail.related_concepts.map((concept) => (
-                            <li key={concept.id}>{concept.title}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-
-                    {detail?.used_in_other_trees?.length ? (
-                      <div className="detail-section">
-                        <h3>다른 Tree</h3>
-                        <ul>
-                          {detail.used_in_other_trees.map((item) => (
-                            <li key={item.tree_id}>
-                              <strong>{item.topic}</strong>
-                              <p>{item.role_in_tree}</p>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-
-                    {detail?.next_nodes?.length ? (
-                      <div className="detail-section">
-                        <h3>다음에 볼 것</h3>
-                        <p className="section-copy">{detail.next_nodes.join(", ")}</p>
-                      </div>
-                    ) : null}
+                        </details>
+                      );
+                    })()}
                   </aside>
                 </div>
               </motion.article>

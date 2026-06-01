@@ -36,7 +36,7 @@ Phase 07의 핵심은 RootMap의 노드 상세 경험을 긴 설명 페이지에
 
 - [x] 00. [00-phase7-ux-contract-and-scope.md](./00-phase7-ux-contract-and-scope.md) - Phase 07 범위와 현재 구현 매핑 고정
 - [x] 01. [01-node-card-and-left-navigation-density.md](./01-node-card-and-left-navigation-density.md) - 노드 카드와 좌측 패널 정보 밀도 축소
-- [ ] 02. [02-detail-modal-learning-card-layout.md](./02-detail-modal-learning-card-layout.md) - 상세 모달 학습 카드 레이아웃 적용
+- [x] 02. [02-detail-modal-learning-card-layout.md](./02-detail-modal-learning-card-layout.md) - 상세 모달 학습 카드 레이아웃 적용
 - [ ] 03. [03-visual-block-contract-and-schema.md](./03-visual-block-contract-and-schema.md) - 8개 visual skill 계약과 schema 추가
 - [ ] 04. [04-visual-decision-router-and-prompts.md](./04-visual-decision-router-and-prompts.md) - visual decision 프롬프트/파서 흐름 추가
 - [ ] 05. [05-visual-block-renderer-shell.md](./05-visual-block-renderer-shell.md) - 공통 visual block renderer shell 추가
