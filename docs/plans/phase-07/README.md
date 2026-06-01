@@ -39,7 +39,7 @@ Phase 07의 핵심은 RootMap의 노드 상세 경험을 긴 설명 페이지에
 - [x] 02. [02-detail-modal-learning-card-layout.md](./02-detail-modal-learning-card-layout.md) - 상세 모달 학습 카드 레이아웃 적용
 - [x] 03. [03-visual-block-contract-and-schema.md](./03-visual-block-contract-and-schema.md) - 8개 visual skill 계약과 schema 추가
 - [x] 04. [04-visual-decision-router-and-prompts.md](./04-visual-decision-router-and-prompts.md) - visual decision 프롬프트/파서 흐름 추가
-- [ ] 05. [05-visual-block-renderer-shell.md](./05-visual-block-renderer-shell.md) - 공통 visual block renderer shell 추가
+- [x] 05. [05-visual-block-renderer-shell.md](./05-visual-block-renderer-shell.md) - 공통 visual block renderer shell 추가
 - [ ] 06. [06-linear-space-and-mapping-table-renderers.md](./06-linear-space-and-mapping-table-renderers.md) - `linear_space`, `mapping_table` 렌더러 추가
 - [ ] 07. [07-flow-timeline-layer-stack-renderers.md](./07-flow-timeline-layer-stack-renderers.md) - `flow_pipeline`, `timeline`, `layer_stack` 렌더러 추가
 - [ ] 08. [08-tree-state-compare-renderers.md](./08-tree-state-compare-renderers.md) - `tree_graph`, `state_machine`, `compare_matrix` 렌더러 추가

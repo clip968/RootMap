@@ -12,6 +12,7 @@
 import type { ApiTreeResponse } from "@/lib/tree/bundle-to-api";
 import { DetailLearningBlocks } from "@/components/detail-learning-blocks";
 import { GenerationLoadingPanel } from "@/components/generation-loading-panel";
+import { VisualBlockRenderer } from "@/components/visual-blocks/visual-block-renderer";
 import { buildDeepDiveGenerationTopic } from "@/lib/tree/deep-dive";
 import type { ApiNodeDetailResponse } from "@/lib/services/node-detail";
 import type {
@@ -1704,6 +1705,8 @@ export function TreePageClient({ treeId }: { treeId: string }) {
 
                         return (
                           <>
+                            <VisualBlockRenderer blocks={detail?.visual_blocks ?? []} />
+
                             <DetailLearningBlocks
                               node={selectedNode}
                               detail={detail}
