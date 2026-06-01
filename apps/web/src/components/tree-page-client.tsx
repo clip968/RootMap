@@ -55,7 +55,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 const SECTION_ORDER: NodeType[] = [
   "prerequisite",
@@ -75,8 +75,8 @@ const SECTION_LABEL: Record<NodeType, string> = {
 
 const PROGRESS_LABEL: Record<ProgressStatus, string> = {
   known: "안다",
-  partial: "조금 안다",
-  unknown: "모른다",
+  partial: "애매하다",
+  unknown: "처음 본다",
 };
 
 const NODE_KIND_CONFIG: Record<
@@ -117,8 +117,8 @@ const FOCUS_OPTIONS = [
 ] as const;
 
 const VIEW_OPTIONS = [
-  { id: "path", label: "Learning Path", icon: Route },
-  { id: "community", label: "Community Map", icon: GitBranch },
+  { id: "path", label: "학습 순서 보기", icon: Route },
+  { id: "community", label: "개념 묶음 보기", icon: GitBranch },
 ] as const;
 
 const FLOW_PATH_COLUMN_GAP = 340;
@@ -163,6 +163,15 @@ interface UiRecommendationItem {
 function readPhase4AuthToken(): string | null {
   if (typeof window === "undefined") return null;
   return window.localStorage.getItem(PHASE4_AUTH_TOKEN_STORAGE_KEY)?.trim() || null;
+}
+
+function subscribePhase4AuthToken(callback: () => void): () => void {
+  window.addEventListener("storage", callback);
+  window.addEventListener(PHASE4_AUTH_TOKEN_EVENT, callback);
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener(PHASE4_AUTH_TOKEN_EVENT, callback);
+  };
 }
 
 function phase4AuthHeaders(token: string): HeadersInit {
@@ -554,8 +563,7 @@ function RootMapFlowNode({ data }: NodeProps<Node<RootMapNodeData>>) {
   const config = NODE_KIND_CONFIG[data.node.type];
   const Icon = config.icon;
   const personalized = data.personalization;
-  const confidence = personalized?.confidence_score;
-  const confidencePct = confidencePercent(confidence);
+  const progressLabel = PROGRESS_LABEL[personalized?.status ?? data.node.progress];
 
   return (
     <div
@@ -574,45 +582,14 @@ function RootMapFlowNode({ data }: NodeProps<Node<RootMapNodeData>>) {
           {SECTION_LABEL[data.node.type]}
         </span>
         {personalized?.is_recommended || data.recommended ? (
-          <span className="node-status">
-            {personalized?.is_recommended ? "개인화 추천" : "추천"}
-          </span>
+          <span className="node-status">지금 볼 것</span>
         ) : null}
       </div>
       {data.node.community ? (
         <span className="node-status">{data.node.community}</span>
       ) : null}
       <strong>{data.node.title}</strong>
-      <p>
-        {data.node.description ||
-          (data.node.document_context ? "상세 설명을 생성할 수 있습니다." : "설명 없음")}
-      </p>
-      {personalized ? (
-        <div className="node-mastery">
-          <span>confidence_score</span>
-          <strong>{confidencePct}%</strong>
-          <i aria-hidden="true">
-            <b style={{ width: `${confidencePct}%` }} />
-          </i>
-          <em>recommendation_score {Math.round(personalized.recommendation_score * 100)}%</em>
-        </div>
-      ) : null}
-      <label className="node-progress" onClick={(event) => event.stopPropagation()}>
-        <span>이해 정도</span>
-        <select
-          value={personalized?.status ?? data.node.progress}
-          disabled={data.progressBusy}
-          onChange={(event) =>
-            data.onProgressChange(data.node.id, event.target.value as ProgressStatus)
-          }
-        >
-          {(Object.keys(PROGRESS_LABEL) as ProgressStatus[]).map((status) => (
-            <option key={status} value={status}>
-              {PROGRESS_LABEL[status]}
-            </option>
-          ))}
-        </select>
-      </label>
+      <span className="node-progress-summary">{progressLabel}</span>
       <Handle type="source" position={Position.Bottom} />
     </div>
   );
@@ -640,7 +617,11 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   const [focusMode, setFocusMode] = useState<FocusMode>("all");
   const [enabledTypes, setEnabledTypes] = useState<NodeType[]>(SECTION_ORDER);
   const [progressBusy, setProgressBusy] = useState<string | null>(null);
-  const [phase4AuthToken, setPhase4AuthToken] = useState<string | null>(null);
+  const phase4AuthToken = useSyncExternalStore(
+    subscribePhase4AuthToken,
+    readPhase4AuthToken,
+    () => null,
+  );
   const [personalizedNodes, setPersonalizedNodes] = useState<ApiPersonalizedNode[]>([]);
   const [personalizedRecommendations, setPersonalizedRecommendations] = useState<
     ApiPersonalizedRecommendationItem[]
@@ -652,17 +633,6 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   const [reportBusy, setReportBusy] = useState(false);
   const [latestReport, setLatestReport] = useState<ApiSessionReportResponse | null>(null);
   const [hideKnownPrerequisites, setHideKnownPrerequisites] = useState(true);
-
-  useEffect(() => {
-    setPhase4AuthToken(readPhase4AuthToken());
-    const syncToken = () => setPhase4AuthToken(readPhase4AuthToken());
-    window.addEventListener("storage", syncToken);
-    window.addEventListener(PHASE4_AUTH_TOKEN_EVENT, syncToken);
-    return () => {
-      window.removeEventListener("storage", syncToken);
-      window.removeEventListener(PHASE4_AUTH_TOKEN_EVENT, syncToken);
-    };
-  }, []);
 
   const loadTree = useCallback(async (): Promise<boolean> => {
     setLoadError(null);
@@ -792,6 +762,23 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     () => new Set(effectiveRecommendations.map((item) => item.node_id)),
     [effectiveRecommendations],
   );
+
+  const nextStepItems: UiRecommendationItem[] = useMemo(() => {
+    if (effectiveRecommendations.length > 0) {
+      return effectiveRecommendations.slice(0, 3);
+    }
+
+    return orderedNodes
+      .filter((node) => (personalizationByNodeId.get(node.id)?.status ?? node.progress) !== "known")
+      .slice(0, 3)
+      .map((node) => ({
+        node_id: node.id,
+        title: node.title,
+        reason: `${SECTION_LABEL[node.type]} · ${
+          PROGRESS_LABEL[personalizationByNodeId.get(node.id)?.status ?? node.progress]
+        }`,
+      }));
+  }, [effectiveRecommendations, orderedNodes, personalizationByNodeId]);
 
   const filteredNodes = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -1247,172 +1234,38 @@ export function TreePageClient({ treeId }: { treeId: string }) {
             <p className="mt-2 text-sm leading-relaxed text-zinc-300">{tree.summary}</p>
           </div>
 
-          <label className="flex h-10 items-center gap-2 rounded-lg border border-zinc-800 bg-black px-3 text-zinc-400">
-            <Search size={16} />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="노드 검색"
-              className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
-            />
-          </label>
-
-          <div className="flex flex-wrap gap-2">
-            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-800 bg-black px-3 py-1.5 text-xs text-zinc-200">
-              <input
-                type="checkbox"
-                checked={reuseConcepts}
-                onChange={(event) => setReuseConcepts(event.target.checked)}
-                disabled={regenLoading}
-                className="rounded border-zinc-600 accent-emerald-700 disabled:opacity-60"
-              />
-              개념 재사용
-            </label>
-            <button
-              type="button"
-              onClick={() => void onRegenerate()}
-              disabled={regenLoading}
-              className="rounded-lg border border-emerald-700 bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
-            >
-              {regenLoading ? `재생성 중 · ${regenElapsedSeconds}초` : "다시 생성"}
-            </button>
-            <span className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300">
-              저장됨
-            </span>
-            <Link href="/" className="rounded-lg px-3 py-1.5 text-sm text-zinc-300 underline decoration-emerald-700 underline-offset-4">
-              새 주제
-            </Link>
-          </div>
-
-          {regenLoading ? (
-            <GenerationLoadingPanel
-              title="재생성 중"
-              elapsedSeconds={regenElapsedSeconds}
-              stageMessage={generationStageMessage(regenElapsedSeconds)}
-              reuseConcepts={reuseConcepts}
-              compact
-            />
-          ) : null}
-          {regenError ? (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {regenError} 다시 생성 버튼으로 재시도할 수 있습니다.
-            </p>
-          ) : null}
-
           <section className="rounded-lg border border-zinc-800 bg-black p-3">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-white">개인화 코치</h2>
-              <span className="rounded-full bg-zinc-900 px-2 py-0.5 text-xs font-medium text-zinc-300">
-                {activeSessionId ? "세션 중" : phase4AuthToken ? "대기" : "비활성"}
-              </span>
-            </div>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => void startPhase4Session()}
-                disabled={!phase4AuthToken || Boolean(activeSessionId) || sessionBusy}
-                className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs font-semibold text-white hover:border-emerald-700 disabled:opacity-45"
-              >
-                <Play size={13} />
-                시작
-              </button>
-              <button
-                type="button"
-                onClick={() => void generatePhase4Report()}
-                disabled={!phase4AuthToken || !activeSessionId || reportBusy}
-                className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs font-semibold text-white hover:border-emerald-700 disabled:opacity-45"
-              >
-                <FileText size={13} />
-                리포트
-              </button>
-              <button
-                type="button"
-                onClick={() => void endPhase4Session()}
-                disabled={!phase4AuthToken || !activeSessionId || sessionBusy}
-                className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs font-semibold text-white hover:border-emerald-700 disabled:opacity-45"
-              >
-                <Square size={12} />
-                종료
-              </button>
-            </div>
-            {phase4Error ? (
-              <p className="mt-2 rounded-md border border-amber-700/40 bg-amber-950/40 px-2 py-1.5 text-xs text-amber-100">
-                {phase4Error}
-              </p>
-            ) : null}
-            {latestReport ? (
-              <div className="mt-3 rounded-md border border-zinc-800 bg-zinc-950 p-2 text-xs">
-                <strong className="block text-white">{latestReport.title}</strong>
-                <p className="mt-1 line-clamp-3 text-zinc-400">{latestReport.summary}</p>
-                <div className="mt-2 grid gap-1 text-zinc-300">
-                  {latestReport.recommendations.slice(0, 2).map((item) => (
-                    <span key={item}>· {item}</span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </section>
-
-          <section className="rounded-lg border border-zinc-800 bg-black p-3">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-white">다음에 볼 만한 노드</h2>
+              <h2 className="text-sm font-semibold text-white">오늘의 다음 단계</h2>
               <span className="rounded-full bg-emerald-700 px-2 py-0.5 text-xs font-medium text-white">
-                {effectiveRecommendations.length}
+                {nextStepItems.length}
               </span>
             </div>
             {recoError ? (
               <p className="mt-2 text-sm text-zinc-400">{recoError}</p>
-            ) : effectiveRecommendations.length > 0 ? (
+            ) : nextStepItems.length > 0 ? (
               <div className="mt-2 grid gap-2">
-                {effectiveRecommendations.map((item) => (
+                {nextStepItems.map((item, index) => (
                   <button
                     key={item.node_id}
                     type="button"
                     onClick={() => void openRecommendedNode(item)}
-                    className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-left text-sm transition hover:border-emerald-700"
+                    className="grid grid-cols-[1.5rem_minmax(0,1fr)] items-start gap-2 rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-left text-sm transition hover:border-emerald-700"
                   >
-                    <strong className="block text-white">{item.title}</strong>
-                    <span className="mt-0.5 line-clamp-2 block text-xs text-zinc-400">
-                      {item.reason}
+                    <span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-700 text-xs font-semibold text-white">
+                      {index + 1}
                     </span>
-                    {typeof item.score === "number" ? (
-                      <span className="mt-1 block text-xs font-semibold text-emerald-400">
-                        recommendation_score {Math.round(item.score * 100)}%
+                    <span className="min-w-0">
+                      <strong className="line-clamp-2 block text-white">{item.title}</strong>
+                      <span className="mt-0.5 line-clamp-2 block text-xs text-zinc-400">
+                        {item.reason}
                       </span>
-                    ) : null}
+                    </span>
                   </button>
                 ))}
               </div>
             ) : (
-              <p className="mt-2 text-sm text-zinc-400">이해 상태를 바꾸면 추천이 갱신됩니다.</p>
-            )}
-          </section>
-
-          <section className="rounded-lg border border-zinc-800 bg-black p-3">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-white">복습 큐</h2>
-              <span className="rounded-full bg-zinc-900 px-2 py-0.5 text-xs font-medium text-zinc-300">
-                {reviewItems.length}
-              </span>
-            </div>
-            {reviewItems.length > 0 ? (
-              <div className="mt-2 grid gap-2">
-                {reviewItems.map((item) => (
-                  <div key={item.concept_id} className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <strong className="min-w-0 text-white">{item.title}</strong>
-                      <span className="shrink-0 text-xs font-semibold text-emerald-400">
-                        {Math.round(item.review_priority_score * 100)}%
-                      </span>
-                    </div>
-                    <p className="mt-1 line-clamp-2 text-xs text-zinc-400">
-                      {item.reasons[0] ?? "복습 우선순위가 있습니다."}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-2 text-sm text-zinc-400">복습 대상이 없습니다.</p>
+              <p className="mt-2 text-sm text-zinc-400">아직 다음 단계가 없습니다.</p>
             )}
           </section>
 
@@ -1420,7 +1273,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
             <div className="mb-2 flex items-center justify-between gap-2">
               <span className="text-xs font-semibold text-zinc-400">학습 경로</span>
               <span className="text-xs font-semibold text-zinc-400">
-                {filteredNodes.length} nodes
+                {filteredNodes.length}개 개념
               </span>
             </div>
             <div className="grid gap-2">
@@ -1459,8 +1312,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                       </span>
                       <span className={`mt-1 block text-xs ${active ? "text-emerald-50" : "text-zinc-400"}`}>
                         {PROGRESS_LABEL[personalized?.status ?? node.progress]}
-                        {recommendedSet.has(node.id) ? " · 추천" : ""}
-                        {personalized ? ` · ${confidencePercent(personalized.confidence_score)}%` : ""}
+                        {recommendedSet.has(node.id) ? " · 지금 볼 것" : ""}
                       </span>
                     </span>
                   </button>
@@ -1468,6 +1320,153 @@ export function TreePageClient({ treeId }: { treeId: string }) {
               })}
             </div>
           </section>
+
+          <details className="rounded-lg border border-zinc-800 bg-black p-3">
+            <summary className="cursor-pointer text-sm font-semibold text-white">
+              학습 도구
+            </summary>
+            <div className="mt-3 grid gap-3">
+              <label className="flex h-10 items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950 px-3 text-zinc-400">
+                <Search size={16} />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="개념 검색"
+                  className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
+                />
+              </label>
+
+              <div className="flex flex-wrap gap-2">
+                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-200">
+                  <input
+                    type="checkbox"
+                    checked={reuseConcepts}
+                    onChange={(event) => setReuseConcepts(event.target.checked)}
+                    disabled={regenLoading}
+                    className="rounded border-zinc-600 accent-emerald-700 disabled:opacity-60"
+                  />
+                  개념 재사용
+                </label>
+                <button
+                  type="button"
+                  onClick={() => void onRegenerate()}
+                  disabled={regenLoading}
+                  className="rounded-lg border border-emerald-700 bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
+                >
+                  {regenLoading ? `재생성 중 · ${regenElapsedSeconds}초` : "다시 생성"}
+                </button>
+                <span className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300">
+                  저장됨
+                </span>
+                <Link
+                  href="/"
+                  className="rounded-lg px-3 py-1.5 text-sm text-zinc-300 underline decoration-emerald-700 underline-offset-4"
+                >
+                  새 주제
+                </Link>
+              </div>
+
+              {regenLoading ? (
+                <GenerationLoadingPanel
+                  title="재생성 중"
+                  elapsedSeconds={regenElapsedSeconds}
+                  stageMessage={generationStageMessage(regenElapsedSeconds)}
+                  reuseConcepts={reuseConcepts}
+                  compact
+                />
+              ) : null}
+              {regenError ? (
+                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {regenError} 다시 생성 버튼으로 재시도할 수 있습니다.
+                </p>
+              ) : null}
+
+              <section className="rounded-lg border border-zinc-800 bg-zinc-950 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-semibold text-white">개인화 코치</h2>
+                  <span className="rounded-full bg-zinc-900 px-2 py-0.5 text-xs font-medium text-zinc-300">
+                    {activeSessionId ? "세션 중" : phase4AuthToken ? "대기" : "비활성"}
+                  </span>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void startPhase4Session()}
+                    disabled={!phase4AuthToken || Boolean(activeSessionId) || sessionBusy}
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-zinc-800 bg-black px-2 text-xs font-semibold text-white hover:border-emerald-700 disabled:opacity-45"
+                  >
+                    <Play size={13} />
+                    시작
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void generatePhase4Report()}
+                    disabled={!phase4AuthToken || !activeSessionId || reportBusy}
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-zinc-800 bg-black px-2 text-xs font-semibold text-white hover:border-emerald-700 disabled:opacity-45"
+                  >
+                    <FileText size={13} />
+                    리포트
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void endPhase4Session()}
+                    disabled={!phase4AuthToken || !activeSessionId || sessionBusy}
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-zinc-800 bg-black px-2 text-xs font-semibold text-white hover:border-emerald-700 disabled:opacity-45"
+                  >
+                    <Square size={12} />
+                    종료
+                  </button>
+                </div>
+                {phase4Error ? (
+                  <p className="mt-2 rounded-md border border-amber-700/40 bg-amber-950/40 px-2 py-1.5 text-xs text-amber-100">
+                    {phase4Error}
+                  </p>
+                ) : null}
+                {latestReport ? (
+                  <div className="mt-3 rounded-md border border-zinc-800 bg-black p-2 text-xs">
+                    <strong className="block text-white">{latestReport.title}</strong>
+                    <p className="mt-1 line-clamp-3 text-zinc-400">{latestReport.summary}</p>
+                    <div className="mt-2 grid gap-1 text-zinc-300">
+                      {latestReport.recommendations.slice(0, 2).map((item) => (
+                        <span key={item}>· {item}</span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+
+              <section className="rounded-lg border border-zinc-800 bg-zinc-950 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-semibold text-white">복습 큐</h2>
+                  <span className="rounded-full bg-zinc-900 px-2 py-0.5 text-xs font-medium text-zinc-300">
+                    {reviewItems.length}
+                  </span>
+                </div>
+                {reviewItems.length > 0 ? (
+                  <div className="mt-2 grid gap-2">
+                    {reviewItems.map((item) => (
+                      <div
+                        key={item.concept_id}
+                        className="rounded-md border border-zinc-800 bg-black px-3 py-2 text-sm"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <strong className="min-w-0 text-white">{item.title}</strong>
+                          <span className="shrink-0 text-xs font-semibold text-emerald-400">
+                            {Math.round(item.review_priority_score * 100)}%
+                          </span>
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-xs text-zinc-400">
+                          {item.reasons[0] ?? "복습 우선순위가 있습니다."}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm text-zinc-400">복습 대상이 없습니다.</p>
+                )}
+              </section>
+            </div>
+          </details>
         </aside>
 
         <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 shadow-[0_18px_42px_rgba(0,0,0,0.45)]">
@@ -1505,7 +1504,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
 
           <div className="flex flex-wrap items-center gap-3 border-b border-zinc-800 bg-black px-4 py-3">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-zinc-400">View</span>
+              <span className="text-xs font-bold text-zinc-400">보기</span>
               <div className="inline-flex rounded-lg border border-zinc-800 bg-zinc-950 p-1">
                 {VIEW_OPTIONS.map((option) => {
                   const Icon = option.icon;
@@ -1526,7 +1525,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-zinc-400">Focus</span>
+              <span className="text-xs font-bold text-zinc-400">보기 범위</span>
               <div className="inline-flex rounded-lg border border-zinc-800 bg-zinc-950 p-1">
                 {FOCUS_OPTIONS.map((option) => (
                   <button
@@ -1569,7 +1568,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
               </label>
             </div>
             <div className="text-xs font-bold text-zinc-400">
-              {flow.visibleCount} cards · {flow.edges.length} links
+              {flow.visibleCount}개 개념 · {flow.edges.length}개 연결
             </div>
           </div>
 
