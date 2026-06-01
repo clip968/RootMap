@@ -28,7 +28,7 @@ Phase 08의 핵심은 상세 모달 UX를 다시 크게 바꾸는 것이 아니�
 > 작업을 완료할 때마다 해당 항목을 `[x]`로 바꿔 진행 상황을 추적한다.
 
 - [x] 00. [00-detail-latency-contract-and-scope.md](./00-detail-latency-contract-and-scope.md) - 상세 지연 원인과 Phase 08 계약 고정
-- [ ] 01. [01-client-single-detail-request.md](./01-client-single-detail-request.md) - 클라이언트 detail 요청 단일화와 즉시 로딩 상태 적용
+- [x] 01. [01-client-single-detail-request.md](./01-client-single-detail-request.md) - 클라이언트 detail 요청 단일화와 즉시 로딩 상태 적용
 - [ ] 02. [02-server-cache-and-concept-fast-path.md](./02-server-cache-and-concept-fast-path.md) - 서버 cache/Concept fast path 추가
 - [ ] 03. [03-panel-graph-query-optimization.md](./03-panel-graph-query-optimization.md) - concept graph 보강 조회 최적화
 - [ ] 04. [04-detail-latency-observability-and-quality-gate.md](./04-detail-latency-observability-and-quality-gate.md) - duration 로그와 최종 품질 gate 적용

@@ -727,8 +727,6 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     };
   }, [treeId, loadTree, loadRecommendations, loadPhase4Data]);
 
-  const isDocumentTree = Boolean(tree?.document_id);
-
   const selectedNode = useMemo(() => {
     if (!tree || !selectedId) return null;
     return tree.nodes.find((node) => node.id === selectedId) ?? null;
@@ -975,44 +973,9 @@ export function TreePageClient({ treeId }: { treeId: string }) {
         void recordPhase4NodeEvent(openedNode, "node_opened");
       }
 
-      if (isDocumentTree && tree) {
-        const apiNode = tree.nodes.find((node) => node.id === nodeId);
-        if (apiNode && !apiNode.description) {
-          try {
-            const genRes = await fetch(`/api/trees/${treeId}/nodes/${nodeId}/generate-detail`, {
-              method: "POST",
-            });
-            if (genRes.ok) {
-              const genData = await genRes.json().catch(() => ({}));
-              const newDesc =
-                genData.description ||
-                genData.detail?.document_context_summary ||
-                genData.detail?.easy_explanation ||
-                "";
-              if (newDesc) {
-                setTree((prev) =>
-                  prev
-                    ? {
-                        ...prev,
-                        nodes: prev.nodes.map((node) =>
-                          node.id === nodeId
-                            ? { ...node, description: newDesc, has_detail: true }
-                            : node,
-                        ),
-                      }
-                    : prev,
-                );
-              }
-            }
-          } catch {
-            // 기존 detail API fallback을 그대로 사용한다.
-          }
-        }
-      }
-
       void loadDetail(nodeId);
     },
-    [isDocumentTree, loadDetail, recordPhase4NodeEvent, tree, treeId],
+    [loadDetail, recordPhase4NodeEvent, tree],
   );
 
   const openRecommendedNode = useCallback(
