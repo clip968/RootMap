@@ -3,6 +3,7 @@ import { jsonError } from "@/lib/api-errors";
 import { startDocumentProcessingJob } from "@/lib/document/processing-jobs";
 import { enqueueDocumentProcessingWakeTask } from "@/lib/gcp/cloud-tasks";
 import {
+  findOlderActiveDuplicateDocumentForProcessing,
   getDocumentForUser,
   getDocumentLearningTreeForUser,
 } from "@/lib/repository/document-repository";
@@ -31,10 +32,28 @@ export async function POST(
     });
   }
 
+  // 동일 사용자가 같은 파일을 다시 누르면 같은 PDF가 병렬로 분석되어 토큰 비용이 중복될 수 있다.
+  // 기존 활성 작업이 있으면 새 queue 메시지를 만들지 않고 사용자에게 재시도 가능 상태를 알려준다.
+  const duplicate = await findOlderActiveDuplicateDocumentForProcessing(document);
+  if (duplicate) {
+    return jsonError(
+      "INVALID_OPERATION",
+      "같은 파일의 문서 처리가 이미 진행 중입니다. 기존 문서 처리가 끝난 뒤 다시 시도해 주세요.",
+      409,
+    );
+  }
+
   const job = await startDocumentProcessingJob({
     documentId,
     userId: DEFAULT_USER_ID,
   });
+  if (job.status !== "queued") {
+    return jsonError(
+      "INVALID_OPERATION",
+      "문서 처리 작업을 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      409,
+    );
+  }
   let wakeTask:
     | Awaited<ReturnType<typeof enqueueDocumentProcessingWakeTask>>
     | { status: "failed"; error: string };

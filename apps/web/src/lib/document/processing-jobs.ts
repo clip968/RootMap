@@ -15,7 +15,7 @@ import { getDocumentForUser } from "@/lib/repository/document-repository";
 
 export const DOCUMENT_PROCESSING_WORKER_CHUNK_BATCH_SIZE = 3;
 
-export type DocumentProcessingJobStatus = "queued";
+export type DocumentProcessingJobStatus = "queued" | "duplicate_active";
 
 export interface DocumentProcessingJob {
   jobId: string;
@@ -25,11 +25,16 @@ export interface DocumentProcessingJob {
   messageId: string;
 }
 
-export interface StartDocumentProcessingJobResult {
-  status: DocumentProcessingJobStatus;
-  jobId: string;
-  messageId: string;
-}
+export type StartDocumentProcessingJobResult =
+  | {
+      status: "queued";
+      jobId: string;
+      messageId: string;
+    }
+  | {
+      status: "duplicate_active";
+      duplicateDocumentId: string;
+    };
 
 export type DocumentProcessingWorkerStatus =
   | "idle"
@@ -60,6 +65,10 @@ type DocumentProcessor = (
 type QueueEnqueuer = (
   payload: DocumentProcessingQueuePayload,
 ) => Promise<{ jobId: string; messageId: string }>;
+type DuplicateDocumentLookup = (
+  documentId: string,
+  userId: string,
+) => Promise<{ id: string } | null>;
 
 type QueueReader = () => Promise<DocumentProcessingQueueMessage[]>;
 type QueueDeleter = (messageId: string) => Promise<boolean>;
@@ -94,9 +103,20 @@ export async function startDocumentProcessingJob(options: {
   documentId: string;
   userId: string;
   enqueue?: QueueEnqueuer;
+  findActiveDuplicate?: DuplicateDocumentLookup;
   now?: () => Date;
 }): Promise<StartDocumentProcessingJobResult> {
   const enqueue = options.enqueue ?? enqueueDocumentProcessingMessage;
+  if (options.findActiveDuplicate) {
+    // API route에서 동일 파일의 기존 처리 작업을 찾은 경우 queue 메시지를 만들지 않는다.
+    const duplicate = await options.findActiveDuplicate(options.documentId, options.userId);
+    if (duplicate) {
+      return {
+        status: "duplicate_active",
+        duplicateDocumentId: duplicate.id,
+      };
+    }
+  }
   const queued = await enqueue(createQueuePayload(options));
   return {
     status: "queued",

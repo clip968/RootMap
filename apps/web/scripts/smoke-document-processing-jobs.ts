@@ -51,6 +51,23 @@ async function main(): Promise<void> {
   assert(enqueued[0]?.documentId === "doc-1", "payload should include document id");
   assert(enqueued[0]?.userId === "user-1", "payload should include user id");
 
+  let duplicateEnqueueCalls = 0;
+  const duplicate = await startDocumentProcessingJob({
+    documentId: "doc-duplicate",
+    userId: "user-1",
+    enqueue: async (payload) => {
+      duplicateEnqueueCalls += 1;
+      return { jobId: payload.jobId, messageId: "duplicate-should-not-enqueue" };
+    },
+    findActiveDuplicate: async () => ({ id: "doc-original" }),
+  });
+  assert(duplicate.status === "duplicate_active", "duplicate document should not enqueue");
+  assert(
+    duplicate.duplicateDocumentId === "doc-original",
+    "duplicate result should expose the active document id",
+  );
+  assert(duplicateEnqueueCalls === 0, "duplicate document should not create a queue message");
+
   const idle = await processNextDocumentProcessingMessage({
     readMessages: async () => [],
   });

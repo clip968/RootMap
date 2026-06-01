@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   getLearningTree,
@@ -165,6 +165,37 @@ export async function getDocumentForUser(
     .select()
     .from(documents)
     .where(and(eq(documents.id, documentId), eq(documents.userId, userId)));
+  return rows[0] ?? null;
+}
+
+const ACTIVE_DOCUMENT_PROCESSING_STATUSES: DocumentProcessingStatus[] = [
+  "uploaded",
+  "text_extracted",
+  "chunked",
+  "concepts_extracted",
+];
+
+// 같은 파일을 연속으로 업로드하면 worker가 동일 PDF를 여러 번 처리하며 LLM 토큰을 중복 소모할 수 있다.
+// 이 조회는 나중에 들어온 문서가 이미 진행 중인 동일 문서를 다시 enqueue하지 않도록 막는 용도다.
+export async function findOlderActiveDuplicateDocumentForProcessing(
+  document: DocumentRow,
+): Promise<DocumentRow | null> {
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(documents)
+    .where(
+      and(
+        eq(documents.userId, document.userId),
+        eq(documents.originalFilename, document.originalFilename),
+        eq(documents.fileType, document.fileType),
+        eq(documents.fileSizeBytes, document.fileSizeBytes),
+        inArray(documents.processingStatus, ACTIVE_DOCUMENT_PROCESSING_STATUSES),
+        lt(documents.createdAt, document.createdAt),
+      ),
+    )
+    .orderBy(desc(documents.createdAt))
+    .limit(1);
   return rows[0] ?? null;
 }
 
