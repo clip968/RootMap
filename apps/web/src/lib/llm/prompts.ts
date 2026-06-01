@@ -223,14 +223,14 @@ Requirements:
 - Keep easy_explanation, example, and check_questions concrete enough for a beginner to self-check.
 - Write all learner-facing text in Korean: title, why_it_matters, easy_explanation, analogy, example, common_misconceptions, questions, and answers.
 - For established English technical terms, use Korean-first wording with the original term in parentheses when helpful.
-- Keep node_id and next_nodes as ids, not Korean titles.
+- Do not translate node_id, type, or next_nodes. Keep type as one of the exact enum values below.
 - Return only the text detail fields in the JSON schema below.
 
 JSON schema:
 {
   "node_id": string,
   "title": string,
-  "type": string,
+  "type": "prerequisite" | "core" | "supplementary" | "misconception" | "quiz",
   "why_it_matters": string,
   "easy_explanation": string,
   "analogy": string,

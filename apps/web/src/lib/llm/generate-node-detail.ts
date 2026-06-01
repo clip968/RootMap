@@ -51,7 +51,7 @@ export async function generateNodeDetail(
           }),
         },
       ]);
-      const detail = parseNodeDetailResponse(rawText, input.nodeId);
+      const detail = parseNodeDetailResponse(rawText, input.nodeId, input.nodeType);
       const qualityWarnings = nodeDetailQualityWarnings(detail);
       return { detail, qualityWarnings };
     } catch (e) {

@@ -11,6 +11,8 @@ import type {
   LearningTreeBundle,
   LearningTreeRow,
 } from "../src/lib/repository/learning-repository";
+import { parseNodeDetailResponse } from "../src/lib/llm/parse";
+import { NODE_DETAIL_SYSTEM_BASE } from "../src/lib/llm/prompts";
 import {
   getNodeDetailExtras,
   getOrCreateNodeDetail,
@@ -209,6 +211,20 @@ function detail(nodeId: string): NodeDetailResponse {
   };
 }
 
+function runLocalizedTypeParsingCase(): void {
+  const raw = {
+    ...detail("cpu_utilization"),
+    type: "선수지식",
+  };
+  const parsed = parseNodeDetailResponse(
+    JSON.stringify(raw),
+    "cpu_utilization",
+    "prerequisite",
+  );
+
+  assert(parsed.type === "prerequisite", "parser should trust the requested node type");
+}
+
 async function runShortDescriptionGenerationCase(): Promise<void> {
   let generated = false;
   const result = await getOrCreateNodeDetail({
@@ -295,6 +311,16 @@ async function runDetailExtrasCase(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  runLocalizedTypeParsingCase();
+  assert(
+    NODE_DETAIL_SYSTEM_BASE.includes('"type": "prerequisite" | "core" | "supplementary" | "misconception" | "quiz"'),
+    "node detail prompt should document the exact type enum",
+  );
+  assert(
+    NODE_DETAIL_SYSTEM_BASE.includes("Do not translate node_id, type, or next_nodes"),
+    "node detail prompt should forbid translating structural fields",
+  );
+
   const logs = await captureServiceLogs(async () => {
     await runCacheHitSkipsPanelGraphCase();
     await runShortDescriptionGenerationCase();
@@ -311,7 +337,12 @@ async function main(): Promise<void> {
   assertServiceLog(logs, "concept_fast_path");
 
   const extrasRouteSource = readSource("src/app/api/nodes/[nodeId]/detail/extras/route.ts");
+  const generateNodeDetailSource = readSource("src/lib/llm/generate-node-detail.ts");
   const treeClientSource = readSource("src/components/tree-page-client.tsx");
+  assert(
+    generateNodeDetailSource.includes("parseNodeDetailResponse(rawText, input.nodeId, input.nodeType)"),
+    "generic node detail generation should parse with the requested node type",
+  );
   assert(
     extrasRouteSource.includes("getNodeDetailExtrasForRequest"),
     "detail extras route should call the extras-only service",

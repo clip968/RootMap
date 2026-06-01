@@ -101,8 +101,12 @@ export function parseLearningTreeDetailResponse(
 export function parseNodeDetailResponse(
   rawModelText: string,
   expectedNodeId: string,
+  expectedNodeType?: NodeDetailResponse["type"],
 ): NodeDetailResponse {
   const parsed = parseJsonObject(rawModelText);
+  if (expectedNodeType && parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    (parsed as Record<string, unknown>).type = expectedNodeType;
+  }
   const result = nodeDetailResponseSchema.safeParse(parsed);
   if (!result.success) {
     throw new LlmValidationError("응답 형식이 올바르지 않습니다.", result.error.issues);
