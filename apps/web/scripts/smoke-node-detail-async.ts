@@ -84,4 +84,18 @@ assert(repositorySource.includes("attempt_count = attempt_count + 1"), "claim mu
 assert(repositorySource.includes("transaction(async"), "ready path must use a transaction");
 assert(repositorySource.includes("detailJson"), "ready transaction must save learning_nodes.detailJson");
 
+const packageJson = readSource("package.json");
+assert(packageJson.includes('"node-detail:worker": "tsx scripts/run-node-detail-worker.ts"'), "node detail worker npm script missing");
+
+const processorSource = readSource("src/lib/node-detail-jobs/processor.ts");
+assert(processorSource.includes("processNodeDetailJob"), "worker core should export processNodeDetailJob");
+assert(processorSource.includes("claimQueuedNodeDetailJob"), "worker core should claim queued jobs");
+assert(processorSource.includes("markNodeDetailJobReady"), "worker core should mark ready transactionally");
+assert(processorSource.includes("loadConcept: async () => null"), "worker generation should not use concept fallback as a quality shortcut");
+
+const runnerSource = readSource("scripts/run-node-detail-worker.ts");
+assert(runnerSource.includes("--once"), "worker CLI should support --once");
+assert(runnerSource.includes("--loop"), "worker CLI should support --loop");
+assert(runnerSource.includes("--recover-stale"), "worker CLI should support stale recovery");
+
 console.log("Phase 10 async node detail smoke passed.");

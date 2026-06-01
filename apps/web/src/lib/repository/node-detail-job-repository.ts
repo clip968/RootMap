@@ -39,6 +39,12 @@ export interface MarkNodeDetailJobFailedInput {
   now?: Date;
 }
 
+export interface RequeueNodeDetailJobInput {
+  jobId: string;
+  errorMessage: string;
+  now?: Date;
+}
+
 export interface RecoverStaleRunningNodeDetailJobsInput {
   staleBefore: Date;
   now?: Date;
@@ -283,6 +289,24 @@ export async function markNodeDetailJobFailed(
       lockedAt: null,
       lockedBy: null,
       completedAt: now,
+      errorMessage: safeErrorMessage(input.errorMessage),
+      updatedAt: now,
+    })
+    .where(eq(nodeDetailJobs.id, input.jobId))
+    .returning();
+  return rows[0] ? toJobRow(rows[0]) : null;
+}
+
+export async function requeueNodeDetailJob(
+  input: RequeueNodeDetailJobInput,
+): Promise<NodeDetailJobRow | null> {
+  const now = input.now ?? new Date();
+  const rows = await getDb()
+    .update(nodeDetailJobs)
+    .set({
+      status: "queued",
+      lockedAt: null,
+      lockedBy: null,
       errorMessage: safeErrorMessage(input.errorMessage),
       updatedAt: now,
     })

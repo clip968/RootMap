@@ -1,0 +1,178 @@
+import { DEFAULT_USER_ID } from "@/db/constants";
+import {
+  CURRENT_NODE_DETAIL_VERSION,
+  claimQueuedNodeDetailJob,
+  markNodeDetailJobFailed,
+  markNodeDetailJobReady,
+  recoverStaleRunningNodeDetailJobs,
+  requeueNodeDetailJob,
+  type NodeDetailJobRow,
+} from "@/lib/repository/node-detail-job-repository";
+import { getLearningTree } from "@/lib/repository/learning-repository";
+import { getOrCreateNodeDetail } from "@/lib/services/node-detail";
+import type { NodeDetailResponse } from "@/types/learning";
+
+export const NODE_DETAIL_JOB_STALE_MS = 5 * 60 * 1000;
+
+export type NodeDetailWorkerStatus =
+  | "idle"
+  | "ready"
+  | "processed"
+  | "requeued"
+  | "failed";
+
+export interface NodeDetailWorkerResult {
+  status: NodeDetailWorkerStatus;
+  jobId?: string;
+  treeId?: string;
+  nodeId?: string;
+  attemptCount?: number;
+  reason?: string;
+  error?: string;
+}
+
+type JobClaimer = (input: {
+  workerId: string;
+  now?: Date;
+}) => Promise<NodeDetailJobRow | null>;
+
+type JobProcessor = (job: NodeDetailJobRow) => Promise<NodeDetailWorkerResult>;
+
+function safeMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "node detail worker failed";
+}
+
+function shouldRetry(job: NodeDetailJobRow): boolean {
+  return job.attemptCount < job.maxAttempts;
+}
+
+async function processGenerationForJob(
+  job: NodeDetailJobRow,
+): Promise<NodeDetailResponse> {
+  const bundle = await getLearningTree(job.treeId, DEFAULT_USER_ID);
+  if (!bundle) throw new Error("TREE_NOT_FOUND");
+
+  const nodeRow = bundle.nodes.find((node) => node.id === job.nodeId);
+  if (!nodeRow || nodeRow.treeId !== job.treeId) {
+    throw new Error("NODE_NOT_IN_TREE");
+  }
+
+  if (nodeRow.detailJson) {
+    return nodeRow.detailJson;
+  }
+
+  let generatedDetail: NodeDetailResponse | null = null;
+  await getOrCreateNodeDetail({
+    treeId: job.treeId,
+    nodeId: job.nodeId,
+    bundle,
+    // worker는 품질을 낮추는 Concept fallback을 ready detail로 저장하지 않고 full generator를 실행한다.
+    loadConcept: async () => null,
+    persistNodeDetail: async (_nodeId, detail) => {
+      generatedDetail = detail;
+      return true;
+    },
+  });
+
+  if (!generatedDetail) {
+    throw new Error("NODE_DETAIL_GENERATION_DID_NOT_RETURN_DETAIL");
+  }
+  return generatedDetail;
+}
+
+export async function processNodeDetailJob(
+  job: NodeDetailJobRow,
+): Promise<NodeDetailWorkerResult> {
+  try {
+    const detailJson = await processGenerationForJob(job);
+    await markNodeDetailJobReady({
+      jobId: job.id,
+      treeId: job.treeId,
+      nodeId: job.nodeId,
+      detailVersion: job.detailVersion,
+      detailJson,
+    });
+    return {
+      status: nodeAlreadyHadDetail(job) ? "ready" : "processed",
+      jobId: job.id,
+      treeId: job.treeId,
+      nodeId: job.nodeId,
+      attemptCount: job.attemptCount,
+    };
+  } catch (error) {
+    const message = safeMessage(error);
+    if (shouldRetry(job)) {
+      await requeueNodeDetailJob({
+        jobId: job.id,
+        errorMessage: message,
+      });
+      return {
+        status: "requeued",
+        jobId: job.id,
+        treeId: job.treeId,
+        nodeId: job.nodeId,
+        attemptCount: job.attemptCount,
+        reason: message,
+      };
+    }
+
+    await markNodeDetailJobFailed({
+      jobId: job.id,
+      errorMessage: message,
+    });
+    console.error("[node-detail-worker]", {
+      event: "job_failed",
+      jobId: job.id,
+      treeId: job.treeId,
+      nodeId: job.nodeId,
+      attemptCount: job.attemptCount,
+      error: message,
+    });
+    return {
+      status: "failed",
+      jobId: job.id,
+      treeId: job.treeId,
+      nodeId: job.nodeId,
+      attemptCount: job.attemptCount,
+      error: message,
+    };
+  }
+}
+
+function nodeAlreadyHadDetail(_job: NodeDetailJobRow): boolean {
+  // ready와 processed는 운영 로그 구분용이다. 현재는 생성 함수에서 detail 유무를 캡슐화하므로 processed로 취급한다.
+  void _job;
+  return false;
+}
+
+export async function processNextNodeDetailJob(options: {
+  workerId: string;
+  claim?: JobClaimer;
+  process?: JobProcessor;
+  now?: Date;
+}): Promise<NodeDetailWorkerResult> {
+  const claim = options.claim ?? claimQueuedNodeDetailJob;
+  const process = options.process ?? processNodeDetailJob;
+  const job = await claim({
+    workerId: options.workerId,
+    now: options.now,
+  });
+  if (!job) return { status: "idle" };
+  return process(job);
+}
+
+export async function recoverStaleNodeDetailJobs(options: {
+  staleMs?: number;
+  now?: Date;
+} = {}) {
+  const now = options.now ?? new Date();
+  const staleMs = options.staleMs ?? NODE_DETAIL_JOB_STALE_MS;
+  return recoverStaleRunningNodeDetailJobs({
+    staleBefore: new Date(now.getTime() - staleMs),
+    now,
+  });
+}
+
+export function currentNodeDetailVersion(): string {
+  return CURRENT_NODE_DETAIL_VERSION;
+}

@@ -35,7 +35,7 @@ Phase 10의 핵심은 상세 설명 품질을 낮추거나 15초 fallback을 보
 
 - [x] 00. [00-async-detail-contract-and-scope.md](./00-async-detail-contract-and-scope.md) - async detail endpoint 계약과 Phase 10 범위 고정
 - [x] 01. [01-node-detail-job-schema-and-repository.md](./01-node-detail-job-schema-and-repository.md) - job schema, atomic claim, transactional ready repository 구현
-- [ ] 02. [02-worker-core-and-cli-runner.md](./02-worker-core-and-cli-runner.md) - worker core와 CLI runner 구현
+- [x] 02. [02-worker-core-and-cli-runner.md](./02-worker-core-and-cli-runner.md) - worker core와 CLI runner 구현
 - [ ] 03. [03-detail-api-and-job-polling-routes.md](./03-detail-api-and-job-polling-routes.md) - detail request route와 job polling route 구현
 - [ ] 04. [04-client-polling-and-timeout-ui.md](./04-client-polling-and-timeout-ui.md) - client polling, cleanup, timeout UI 구현
 - [ ] 05. [05-prewarm-and-stale-recovery.md](./05-prewarm-and-stale-recovery.md) - prewarm enqueue와 stale running recovery 구현
