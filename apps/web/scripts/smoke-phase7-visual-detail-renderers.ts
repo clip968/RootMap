@@ -2,11 +2,14 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { VisualBlockRenderer } from "../src/components/visual-blocks/visual-block-renderer";
 import type {
+  CompareMatrixVisualBlock,
   FlowPipelineVisualBlock,
   LayerStackVisualBlock,
   LinearSpaceVisualBlock,
   MappingTableVisualBlock,
+  StateMachineVisualBlock,
   TimelineVisualBlock,
+  TreeGraphVisualBlock,
 } from "../src/lib/visualization/visual-block-schema";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -216,6 +219,119 @@ if (shouldRun("layer_stack")) {
   const tcpMarkup = render([tcpStack]);
   assert(tcpMarkup.includes("TCP/IP stack"), "TCP/IP title should render");
   assert(tcpMarkup.includes("Application"), "TCP/IP first layer should render");
+}
+
+if (shouldRun("tree_graph")) {
+  const btree: TreeGraphVisualBlock = {
+    type: "tree_graph",
+    title: "B-tree shape",
+    nodes: [
+      { id: "root", label: "root" },
+      { id: "left", label: "left leaf" },
+      { id: "right", label: "right leaf" },
+    ],
+    edges: [
+      { from: "root", to: "left", label: "< key" },
+      { from: "root", to: "right", label: ">= key" },
+    ],
+    annotations: ["B-tree 탐색은 root에서 leaf로 내려간다."],
+  };
+
+  const waitFor: TreeGraphVisualBlock = {
+    type: "tree_graph",
+    title: "Wait-for graph",
+    nodes: [
+      { id: "tx-a", label: "Tx A" },
+      { id: "tx-b", label: "Tx B" },
+    ],
+    edges: [{ from: "tx-a", to: "tx-b", label: "waits for" }],
+    annotations: ["순환이 생기면 deadlock 후보가 된다."],
+  };
+
+  const btreeMarkup = render([btree]);
+  assert(btreeMarkup.includes("B-tree shape"), "B-tree title should render");
+  assert(btreeMarkup.includes("left leaf"), "B-tree node should render");
+  assert(btreeMarkup.includes("&lt; key"), "B-tree edge label should render");
+
+  const waitForMarkup = render([waitFor]);
+  assert(waitForMarkup.includes("Wait-for graph"), "wait-for title should render");
+  assert(waitForMarkup.includes("waits for"), "wait-for edge should render");
+}
+
+if (shouldRun("state_machine")) {
+  const processState: StateMachineVisualBlock = {
+    type: "state_machine",
+    title: "Process lifecycle",
+    states: [
+      { id: "ready", label: "Ready", description: "CPU를 기다린다." },
+      { id: "running", label: "Running", description: "CPU에서 실행 중이다." },
+      { id: "blocked", label: "Blocked", description: "I/O를 기다린다." },
+    ],
+    transitions: [
+      { from: "ready", to: "running", label: "scheduled" },
+      { from: "running", to: "blocked", label: "wait I/O" },
+      { from: "blocked", to: "ready", label: "I/O done" },
+    ],
+    annotations: ["프로세스는 이벤트에 따라 상태가 바뀐다."],
+  };
+
+  const tcpState: StateMachineVisualBlock = {
+    type: "state_machine",
+    title: "TCP connection states",
+    states: [
+      { id: "closed", label: "CLOSED" },
+      { id: "listen", label: "LISTEN" },
+      { id: "established", label: "ESTABLISHED" },
+    ],
+    transitions: [
+      { from: "closed", to: "listen", label: "listen()" },
+      { from: "listen", to: "established", label: "handshake" },
+      { from: "established", to: "established", label: "data transfer" },
+    ],
+    annotations: ["TCP 연결은 상태 전이로 이해할 수 있다."],
+  };
+
+  const processMarkup = render([processState]);
+  assert(processMarkup.includes("Process lifecycle"), "process state title should render");
+  assert(processMarkup.includes("scheduled"), "process transition should render");
+  assert(processMarkup.includes("Blocked"), "process state should render");
+
+  const tcpMarkup = render([tcpState]);
+  assert(tcpMarkup.includes("TCP connection states"), "TCP state title should render");
+  assert(tcpMarkup.includes("data transfer"), "self-loop transition should render");
+}
+
+if (shouldRun("compare_matrix")) {
+  const processThread: CompareMatrixVisualBlock = {
+    type: "compare_matrix",
+    title: "Process vs Thread",
+    columns: ["Process", "Thread"],
+    rows: [
+      { criterion: "memory", values: ["독립 주소 공간", "주소 공간 공유"] },
+      { criterion: "switching", values: ["상대적으로 무거움", "상대적으로 가벼움"] },
+    ],
+    annotations: ["비슷한 개념은 같은 기준으로 나란히 비교한다."],
+  };
+
+  const pollingInterrupt: CompareMatrixVisualBlock = {
+    type: "compare_matrix",
+    title: "Polling vs Interrupt",
+    columns: ["Polling", "Interrupt"],
+    rows: [
+      { criterion: "trigger", values: ["CPU가 반복 확인", "장치가 알림"] },
+      { criterion: "cost", values: ["CPU 낭비 가능", "전환 비용 발생"] },
+    ],
+    annotations: ["둘 다 완료 확인 방식이지만 주도권이 다르다."],
+  };
+
+  const processThreadMarkup = render([processThread]);
+  assert(processThreadMarkup.includes("Process vs Thread"), "compare title should render");
+  assert(processThreadMarkup.includes("독립 주소 공간"), "compare value should render");
+  assert(processThreadMarkup.includes("data-label=\"Process\""), "compare mobile labels should render");
+
+  const pollingMarkup = render([pollingInterrupt]);
+  assert(pollingMarkup.includes("Polling vs Interrupt"), "polling comparison should render");
+  assert(pollingMarkup.includes("CPU가 반복 확인"), "polling value should render");
 }
 
 console.log("Phase 07 visual detail renderer smoke passed");

@@ -1291,6 +1291,200 @@ body {
   font-weight: 900;
 }
 
+.tree-graph-diagram,
+.state-machine-diagram {
+  display: grid;
+  gap: 12px;
+}
+
+.tree-graph-levels {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+}
+
+.tree-graph-level {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.tree-graph-node,
+.tree-graph-compact-list span {
+  display: grid;
+  place-items: center;
+  min-height: 36px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #e2e8f0;
+  background: #0f172a;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.tree-graph-compact-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tree-graph-edges,
+.state-machine-transitions {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tree-graph-edges li,
+.state-machine-transitions li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #020617;
+}
+
+.tree-graph-edges span,
+.state-machine-transitions span {
+  color: #dbeafe;
+  font-size: 12px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.tree-graph-edges strong {
+  color: #38bdf8;
+}
+
+.tree-graph-edges em {
+  color: #94a3b8;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.tree-graph-empty-edge {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.state-machine-states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.state-machine-state {
+  display: grid;
+  gap: 4px;
+  min-width: 138px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 10px;
+  background: #0f172a;
+}
+
+.state-machine-state strong {
+  color: #ffffff;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.state-machine-state p {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.state-machine-transitions strong {
+  border: 1px solid #334155;
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: #bae6fd;
+  background: #082f49;
+  font-size: 12px;
+}
+
+.state-machine-transitions strong::after {
+  content: " ->";
+}
+
+.state-machine-self-loops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.state-machine-self-loops span {
+  border: 1px solid #52525b;
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #e4e4e7;
+  background: #18181b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.compare-matrix-diagram {
+  padding: 0;
+}
+
+.compare-matrix-table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+}
+
+.compare-matrix-table th,
+.compare-matrix-table td {
+  border-bottom: 1px solid #1e293b;
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.compare-matrix-table thead th {
+  color: #93c5fd;
+  background: #0f172a;
+  font-weight: 900;
+}
+
+.compare-matrix-table tbody th {
+  width: 132px;
+  color: #ffffff;
+  background: #020617;
+  font-weight: 900;
+}
+
+.compare-matrix-table td {
+  color: #e2e8f0;
+}
+
+.compare-matrix-table tr:last-child th,
+.compare-matrix-table tr:last-child td {
+  border-bottom: 0;
+}
+
 .visual-block-annotations {
   display: grid;
   gap: 7px;
@@ -1581,5 +1775,44 @@ body {
 
   .timeline-event {
     grid-template-columns: 1fr;
+  }
+
+  .compare-matrix-table {
+    min-width: 0;
+  }
+
+  .compare-matrix-table,
+  .compare-matrix-table thead,
+  .compare-matrix-table tbody,
+  .compare-matrix-table tr,
+  .compare-matrix-table th,
+  .compare-matrix-table td {
+    display: block;
+  }
+
+  .compare-matrix-table thead {
+    display: none;
+  }
+
+  .compare-matrix-table tbody th {
+    width: auto;
+    border-bottom: 0;
+  }
+
+  .compare-matrix-table tbody tr {
+    border-bottom: 1px solid #1e293b;
+  }
+
+  .compare-matrix-table tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .compare-matrix-table td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 3px;
+    color: #93c5fd;
+    font-size: 11px;
+    font-weight: 900;
   }
 }

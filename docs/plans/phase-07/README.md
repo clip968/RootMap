@@ -42,7 +42,7 @@ Phase 07의 핵심은 RootMap의 노드 상세 경험을 긴 설명 페이지에
 - [x] 05. [05-visual-block-renderer-shell.md](./05-visual-block-renderer-shell.md) - 공통 visual block renderer shell 추가
 - [x] 06. [06-linear-space-and-mapping-table-renderers.md](./06-linear-space-and-mapping-table-renderers.md) - `linear_space`, `mapping_table` 렌더러 추가
 - [x] 07. [07-flow-timeline-layer-stack-renderers.md](./07-flow-timeline-layer-stack-renderers.md) - `flow_pipeline`, `timeline`, `layer_stack` 렌더러 추가
-- [ ] 08. [08-tree-state-compare-renderers.md](./08-tree-state-compare-renderers.md) - `tree_graph`, `state_machine`, `compare_matrix` 렌더러 추가
+- [x] 08. [08-tree-state-compare-renderers.md](./08-tree-state-compare-renderers.md) - `tree_graph`, `state_machine`, `compare_matrix` 렌더러 추가
 - [ ] 09. [09-visual-detail-smoke-and-fixtures.md](./09-visual-detail-smoke-and-fixtures.md) - visual detail smoke와 fixture 검증 추가
 - [ ] 10. [10-phase7-docs-accessibility-quality-gate.md](./10-phase7-docs-accessibility-quality-gate.md) - 문서, 접근성, 최종 품질 gate 정리
 
