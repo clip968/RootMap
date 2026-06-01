@@ -189,6 +189,20 @@ function subscribePhase4AuthToken(callback: () => void): () => void {
   };
 }
 
+function subscribeClientReady(callback: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  const frame = window.requestAnimationFrame(callback);
+  return () => window.cancelAnimationFrame(frame);
+}
+
+function readClientReady(): boolean {
+  return typeof window !== "undefined";
+}
+
+function readServerClientReady(): boolean {
+  return false;
+}
+
 function phase4AuthHeaders(token: string): HeadersInit {
   return {
     Authorization: `Bearer ${token}`,
@@ -616,14 +630,25 @@ function RootMapFlowNode({ data }: NodeProps<Node<RootMapNodeData>>) {
 
 const nodeTypes = { rootmap: RootMapFlowNode };
 
-export function TreePageClient({ treeId }: { treeId: string }) {
+export function TreePageClient({
+  treeId,
+  initialTree = null,
+}: {
+  treeId: string;
+  initialTree?: ApiTreeResponse | null;
+}) {
   const router = useRouter();
-  const [tree, setTree] = useState<ApiTreeResponse | null>(null);
+  const initialTreeMatchesRoute = initialTree?.tree_id === treeId;
+  const [tree, setTree] = useState<ApiTreeResponse | null>(() =>
+    initialTreeMatchesRoute ? initialTree : null,
+  );
   const [loadError, setLoadError] = useState<string | null>(null);
   const [recommendations, setRecommendations] = useState<ApiRecommendationItem[]>([]);
   const [recoError, setRecoError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(() =>
+    initialTreeMatchesRoute && initialTree ? initialSelectedId(initialTree) : null,
+  );
   const [modalOpen, setModalOpen] = useState(false);
   const [detail, setDetail] = useState<ApiNodeDetailResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -663,6 +688,11 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   const [reportBusy, setReportBusy] = useState(false);
   const [latestReport, setLatestReport] = useState<ApiSessionReportResponse | null>(null);
   const [hideKnownPrerequisites, setHideKnownPrerequisites] = useState(true);
+  const flowMounted = useSyncExternalStore(
+    subscribeClientReady,
+    readClientReady,
+    readServerClientReady,
+  );
 
   const loadTree = useCallback(async (): Promise<boolean> => {
     setLoadError(null);
@@ -746,15 +776,26 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const ok = await loadTree();
-      if (cancelled || !ok) return;
+      // 서버에서 받은 초기 트리가 있으면 첫 화면을 지우지 않고 부가 데이터만 보강한다.
+      if (!initialTreeMatchesRoute) {
+        const ok = await loadTree();
+        if (cancelled || !ok) return;
+      }
+      if (cancelled) return;
       await loadRecommendations();
+      if (cancelled) return;
       await loadPhase4Data();
     })();
     return () => {
       cancelled = true;
     };
-  }, [treeId, loadTree, loadRecommendations, loadPhase4Data]);
+  }, [
+    initialTreeMatchesRoute,
+    treeId,
+    loadTree,
+    loadRecommendations,
+    loadPhase4Data,
+  ]);
 
   const selectedNode = useMemo(() => {
     if (!tree || !selectedId) return null;
@@ -907,7 +948,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   );
 
   const flow = useMemo(() => {
-    if (!tree) return { nodes: [], edges: [], visibleCount: 0 };
+    if (!tree || !flowMounted) return { nodes: [], edges: [], visibleCount: 0 };
     return buildFlowElements(
       tree,
       selectedId,
@@ -924,6 +965,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     enabledTypes,
     effectiveRecommendations,
     focusMode,
+    flowMounted,
     hideKnownPrerequisites,
     onProgressChange,
     personalizationByNodeId,
@@ -1760,28 +1802,34 @@ export function TreePageClient({ treeId }: { treeId: string }) {
           </div>
 
           <div className="rootmap-flow-frame">
-            <ReactFlow
-              nodes={flow.nodes}
-              edges={flow.edges}
-              nodeTypes={nodeTypes}
-              fitView
-              fitViewOptions={{ padding: 0.18 }}
-              minZoom={0.2}
-              maxZoom={1.25}
-              onNodeClick={(_, node) => void openNode(node.id)}
-              proOptions={{ hideAttribution: true }}
-            >
-              <Background gap={22} color="#14532d" />
-              <Controls showInteractive={false} />
-              <MiniMap
-                pannable
-                zoomable
-                nodeColor={(node) => {
-                  const data = node.data as RootMapNodeData;
-                  return NODE_KIND_CONFIG[data.node.type].minimapColor;
-                }}
-              />
-            </ReactFlow>
+            {flowMounted ? (
+              <ReactFlow
+                nodes={flow.nodes}
+                edges={flow.edges}
+                nodeTypes={nodeTypes}
+                fitView
+                fitViewOptions={{ padding: 0.18 }}
+                minZoom={0.2}
+                maxZoom={1.25}
+                onNodeClick={(_, node) => void openNode(node.id)}
+                proOptions={{ hideAttribution: true }}
+              >
+                <Background gap={22} color="#14532d" />
+                <Controls showInteractive={false} />
+                <MiniMap
+                  pannable
+                  zoomable
+                  nodeColor={(node) => {
+                    const data = node.data as RootMapNodeData;
+                    return NODE_KIND_CONFIG[data.node.type].minimapColor;
+                  }}
+                />
+              </ReactFlow>
+            ) : (
+              <div className="flex h-full min-h-[420px] items-center justify-center bg-zinc-950 text-sm font-semibold text-zinc-400">
+                맵을 준비하는 중입니다.
+              </div>
+            )}
           </div>
         </section>
 
