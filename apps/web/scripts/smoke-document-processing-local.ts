@@ -15,6 +15,7 @@ import {
   summarizeLocalDocumentProcessing,
   type LocalProcessingSummary,
 } from "../src/lib/document/local-processing-summary";
+import { hasMinimumDocumentConceptQuality } from "../src/lib/document/processor";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -78,6 +79,38 @@ async function main(): Promise<void> {
   assert(
     chunkedSummary.recommended_next_action.includes("현재 문서도 처리할 수 있습니다"),
     "active duplicate should be shown as a warning, not a blocker",
+  );
+  assert(
+    hasMinimumDocumentConceptQuality([
+      {
+        canonical_title: "검색 엔진 최적화",
+        aliases: [],
+        type: "document_topic",
+        importance: 5,
+        difficulty: 3,
+        source_type: "explicit",
+        evidence: [],
+      },
+      {
+        canonical_title: "콘텐츠 품질",
+        aliases: [],
+        type: "document_core",
+        importance: 4,
+        difficulty: 3,
+        source_type: "explicit",
+        evidence: [],
+      },
+      {
+        canonical_title: "키워드 리서치",
+        aliases: [],
+        type: "method",
+        importance: 4,
+        difficulty: 2,
+        source_type: "explicit",
+        evidence: [],
+      },
+    ]),
+    "two core/topic concepts plus supporting concepts should pass document quality",
   );
 
   let processCalls = 0;

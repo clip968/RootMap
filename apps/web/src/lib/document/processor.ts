@@ -80,7 +80,7 @@ export class DocumentProcessorError extends Error {
 const MAX_PAGES = 80;
 const MAX_TEXT_LENGTH = 120_000;
 const MIN_EXTRACTED_TEXT_LENGTH = 50;
-const MIN_QUALITY_CONCEPT_COUNT = 3;
+const MIN_QUALITY_CONCEPT_COUNT = 2;
 const DEFAULT_CHUNK_CONCURRENCY = 3;
 const DOCUMENT_EVIDENCE_SNIPPET_MAX = 360;
 const CHUNK_CONCEPT_EXTRACTION_METADATA_KEY = "document_concept_extraction";
@@ -237,6 +237,15 @@ function consolidatedJsonFromDocumentConceptRows(rows: DocumentConceptRow[]): st
       : [],
   }));
   return JSON.stringify(concepts);
+}
+
+export function hasMinimumDocumentConceptQuality(
+  concepts: ConsolidatedConcept[],
+): boolean {
+  const coreConcepts = concepts.filter(
+    (c) => c.type === "document_core" || c.type === "document_topic",
+  );
+  return coreConcepts.length >= MIN_QUALITY_CONCEPT_COUNT;
 }
 
 export async function runWithConcurrency<T, R>(
@@ -473,11 +482,8 @@ async function consolidateConcepts(
     });
   }
 
-  // 품질 검사: 핵심 개념이 너무 적으면 실패 처리
-  const coreConcepts = consolidation.concepts.filter(
-    (c) => c.type === "document_core" || c.type === "document_topic",
-  );
-  if (coreConcepts.length < MIN_QUALITY_CONCEPT_COUNT) {
+  // 품질 검사: schema warning 기준과 맞춰 document_core/document_topic이 2개 이상이면 통과시킨다.
+  if (!hasMinimumDocumentConceptQuality(consolidation.concepts)) {
     throw new DocumentProcessorError(
       "LOW_QUALITY",
       "이 문서에서 충분한 학습 개념을 추출하지 못했습니다. 문서 품질을 확인하거나 다른 자료를 업로드해 주세요.",
