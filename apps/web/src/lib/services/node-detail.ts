@@ -8,6 +8,10 @@ import {
   type GenerateDocumentNodeDetailInput,
   type GenerateDocumentNodeDetailResult,
 } from "@/lib/llm/generate-document-node-detail";
+import {
+  ensureRequiredNodeDetailVisual,
+  type NodeDetailVisualGenerator,
+} from "@/lib/llm/generate-node-detail-visual";
 import { getDb } from "@/db/client";
 import type { LearningTreeBundle, LearningNodeRow } from "@/lib/repository/learning-repository";
 import {
@@ -334,6 +338,16 @@ function hasUsableConceptExplanation(c: ConceptRow): boolean {
   return (c.explanation?.trim().length ?? 0) >= 80;
 }
 
+function hasRequestReadyTextDetail(detail: NodeDetailResponse): boolean {
+  return Boolean(
+    detail.why_it_matters.trim() &&
+      detail.easy_explanation.trim() &&
+      detail.example.trim() &&
+      detail.common_misconceptions.length > 0 &&
+      detail.check_questions.length > 0,
+  );
+}
+
 async function responseFromStoredConcept(
   dbId: string,
   nodeKey: string,
@@ -402,6 +416,8 @@ export async function getOrCreateNodeDetail(params: {
   bundle: LearningTreeBundle;
   generateGenericNodeDetail?: GenericNodeDetailGenerator;
   generateDocumentDetail?: DocumentNodeDetailGenerator;
+  generateVisualDetail?: NodeDetailVisualGenerator;
+  requireVisualDetail?: boolean;
   loadDocumentTreeContext?: LoadDocumentTreeContext;
   loadConcept?: LoadConcept;
   loadPanelGraph?: LoadPanelGraph;
@@ -413,6 +429,7 @@ export async function getOrCreateNodeDetail(params: {
   const loadConcept =
     params.loadConcept ?? ((conceptId) => getConceptById(getDb(), conceptId));
   const persistNodeDetail = params.persistNodeDetail ?? saveNodeDetail;
+  const requireVisualDetail = params.requireVisualDetail ?? false;
   const nodeRow = bundle.nodes.find((n) => n.id === nodeId);
   if (!nodeRow || nodeRow.treeId !== treeId) {
     throw new Error("NODE_NOT_IN_TREE");
@@ -452,6 +469,26 @@ export async function getOrCreateNodeDetail(params: {
       ...documentExtras,
     };
   };
+  const prereqContext = buildPrerequisitePromptContext(
+    nodeRow,
+    bundle.nodes,
+    bundle.tree.treeJson.recommended_order,
+  );
+  const ensureVisualIfRequired = (detail: NodeDetailResponse) => {
+    if (!requireVisualDetail) return Promise.resolve(detail);
+    return withDetailDuration(
+      "visual_llm_generation",
+      logContext,
+      () => ensureRequiredNodeDetailVisual({
+        topic: bundle.tree.topic,
+        nodeTitle: nodeRow.title,
+        nodeType: nodeRow.type,
+        prerequisitesContext: prereqContext,
+        detail,
+        generateVisual: params.generateVisualDetail,
+      }),
+    );
+  };
 
   const hasCachedDetail = await withDetailDuration(
     "cache_check",
@@ -459,22 +496,42 @@ export async function getOrCreateNodeDetail(params: {
     async () => Boolean(nodeRow.detailJson),
   );
 
-  if (hasCachedDetail) {
+  if (hasCachedDetail && (!requireVisualDetail || hasRequestReadyTextDetail(nodeRow.detailJson!))) {
+    let cachedDetail = nodeRow.detailJson!;
+    if (requireVisualDetail && !hasRequiredNodeDetailVisual(cachedDetail)) {
+      cachedDetail = await ensureVisualIfRequired(cachedDetail);
+      const saved = await withDetailDuration(
+        "save_detail",
+        logContext,
+        () => persistNodeDetail(nodeId, cachedDetail),
+      );
+      if (!saved) {
+        throw new Error("DETAIL_SAVE_FAILED");
+      }
+    }
     return withDetailDuration(
       "cache_hit",
       logContext,
       async () => toApiBody(
         nodeId,
         nodeRow.nodeKey,
-        nodeRow.detailJson!,
+        cachedDetail,
         [],
         extrasBase(),
       ),
     );
   }
 
+  if (hasCachedDetail && requireVisualDetail) {
+    await withDetailDuration(
+      "cache_text_incomplete",
+      logContext,
+      async () => null,
+    );
+  }
+
   const concept = detailConceptId ? await loadConcept(detailConceptId) : null;
-  if (concept && hasUsableConceptExplanation(concept)) {
+  if (!requireVisualDetail && concept && hasUsableConceptExplanation(concept)) {
     return withDetailDuration(
       "concept_fast_path",
       logContext,
@@ -521,21 +578,23 @@ export async function getOrCreateNodeDetail(params: {
         visual_decision: detail.visual_decision,
         visual_blocks: detail.visual_blocks ?? [],
       };
+      const detailToSave = await ensureVisualIfRequired(genericDetail);
       const saved = await withDetailDuration(
         "save_detail",
         logContext,
-        () => persistNodeDetail(nodeId, genericDetail),
+        () => persistNodeDetail(nodeId, detailToSave),
       );
       if (!saved) {
         throw new Error("DETAIL_SAVE_FAILED");
       }
-      return toApiBody(nodeId, nodeRow.nodeKey, genericDetail, qualityWarnings, {
+      return toApiBody(nodeId, nodeRow.nodeKey, detailToSave, qualityWarnings, {
         ...extrasBase(),
         from_concept_store: false,
         why_it_matters_for_document: detail.why_it_matters_for_document,
         document_context_summary: detail.document_context_summary,
       });
     } catch (err) {
+      if (requireVisualDetail) throw err;
       const fallback = await responseFromStoredConceptFallback(
         nodeId,
         nodeRow.nodeKey,
@@ -549,12 +608,6 @@ export async function getOrCreateNodeDetail(params: {
       throw err;
     }
   }
-
-  const prereqContext = buildPrerequisitePromptContext(
-    nodeRow,
-    bundle.nodes,
-    bundle.tree.treeJson.recommended_order,
-  );
 
   const llmInput: GenerateNodeDetailInput = {
     topic: bundle.tree.topic,
@@ -572,20 +625,22 @@ export async function getOrCreateNodeDetail(params: {
       logContext,
       () => generateGenericNodeDetail(llmInput),
     );
+    const detailToSave = await ensureVisualIfRequired(detail);
     const saved = await withDetailDuration(
       "save_detail",
       logContext,
-      () => persistNodeDetail(nodeId, detail),
+      () => persistNodeDetail(nodeId, detailToSave),
     );
     if (!saved) {
       throw new Error("DETAIL_SAVE_FAILED");
     }
 
-    return toApiBody(nodeId, nodeRow.nodeKey, detail, qualityWarnings, {
+    return toApiBody(nodeId, nodeRow.nodeKey, detailToSave, qualityWarnings, {
       ...extrasBase(),
       from_concept_store: false,
     });
   } catch (err) {
+    if (requireVisualDetail) throw err;
     const fallback = await responseFromStoredConceptFallback(
       nodeId,
       nodeRow.nodeKey,
@@ -789,7 +844,12 @@ export async function getOrCreateNodeDetailForRequest(
       nodeKey: nodeRow.nodeKey,
       conceptId: nodeRow.conceptId,
     },
-    () => getOrCreateNodeDetail({ treeId, nodeId, bundle }),
+    () => getOrCreateNodeDetail({
+      treeId,
+      nodeId,
+      bundle,
+      requireVisualDetail: true,
+    }),
   );
 }
 

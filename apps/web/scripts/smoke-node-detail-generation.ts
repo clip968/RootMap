@@ -23,6 +23,7 @@ import type {
   LearningTreeResponse,
   NodeDetailResponse,
 } from "../src/types/learning";
+import type { VisualBlock, VisualDecision } from "../src/lib/visualization/visual-block-schema";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -211,6 +212,37 @@ function detail(nodeId: string): NodeDetailResponse {
   };
 }
 
+function incompleteDetail(nodeId: string): NodeDetailResponse {
+  return {
+    ...detail(nodeId),
+    example: "",
+    common_misconceptions: [],
+    check_questions: [],
+  };
+}
+
+function visualDecision(): VisualDecision {
+  return {
+    should_visualize: true,
+    skill: "mapping_table",
+    confidence: 0.9,
+    reason: "핵심 지표와 의미를 표로 보면 바로 비교할 수 있습니다.",
+  };
+}
+
+function visualBlock(): VisualBlock {
+  return {
+    type: "mapping_table",
+    title: "CPU 이용률 해석",
+    columns: ["항목", "의미"],
+    rows: [
+      ["실행 시간", "CPU가 실제 작업을 처리한 시간"],
+      ["전체 시간", "관찰한 전체 시간 구간"],
+    ],
+    annotations: ["CPU 이용률은 실행 시간을 전체 시간으로 나눈 비율입니다."],
+  };
+}
+
 function runLocalizedTypeParsingCase(): void {
   const raw = {
     ...detail("cpu_utilization"),
@@ -249,6 +281,98 @@ async function runShortDescriptionGenerationCase(): Promise<void> {
   assert(result.from_concept_store === false, "short description should not be Concept fast path");
   assert(result.example.length > 0, "generated detail should include example");
   assert(result.check_questions.length > 0, "generated detail should include check questions");
+}
+
+async function runRequiredVisualRepairForCachedDetailCase(): Promise<void> {
+  let generatedVisual = false;
+  let persistedDetail: NodeDetailResponse | null = null;
+
+  const result = await getOrCreateNodeDetail({
+    treeId: "tree-1",
+    nodeId: "node-1",
+    bundle: bundle("concept-cached", detail("cpu_utilization")),
+    requireVisualDetail: true,
+    loadDocumentTreeContext: async () => null,
+    loadConcept: async () => {
+      throw new Error("visual repair for cached full detail should not load Concept row");
+    },
+    persistNodeDetail: async (_nodeId, nextDetail) => {
+      persistedDetail = nextDetail;
+      return true;
+    },
+    generateGenericNodeDetail: async () => {
+      throw new Error("cached full detail should only need visual repair");
+    },
+    generateVisualDetail: async () => {
+      generatedVisual = true;
+      return {
+        visual_decision: visualDecision(),
+        visual_blocks: [visualBlock()],
+      };
+    },
+  });
+
+  assert(generatedVisual, "cached detail without visual should run visual generator");
+  assert(result.visual_blocks.length === 1, "cached detail response should include required visual block");
+  assert(persistedDetail?.visual_blocks?.length === 1, "visual-repaired cached detail should be persisted");
+}
+
+async function runRequiredVisualForNewDetailCase(): Promise<void> {
+  let generatedText = false;
+  let persistedDetail: NodeDetailResponse | null = null;
+
+  const result = await getOrCreateNodeDetail({
+    treeId: "tree-1",
+    nodeId: "node-1",
+    bundle: bundle("concept-short"),
+    requireVisualDetail: true,
+    loadDocumentTreeContext: async () => null,
+    loadConcept: async () => concept("concept-short", null),
+    persistNodeDetail: async (_nodeId, nextDetail) => {
+      persistedDetail = nextDetail;
+      return true;
+    },
+    generateGenericNodeDetail: async () => {
+      generatedText = true;
+      return { detail: detail("cpu_utilization"), qualityWarnings: [] };
+    },
+    generateVisualDetail: async () => ({
+      visual_decision: visualDecision(),
+      visual_blocks: [visualBlock()],
+    }),
+  });
+
+  assert(generatedText, "required visual path should still generate full text detail");
+  assert(result.from_concept_store === false, "required visual path should not use concept fallback");
+  assert(result.visual_blocks.length === 1, "new detail response should include required visual block");
+  assert(persistedDetail?.visual_blocks?.length === 1, "new required visual detail should persist visual block");
+}
+
+async function runRequiredVisualRegeneratesIncompleteCachedDetailCase(): Promise<void> {
+  let generatedText = false;
+
+  const result = await getOrCreateNodeDetail({
+    treeId: "tree-1",
+    nodeId: "node-1",
+    bundle: bundle("concept-incomplete-cache", incompleteDetail("cpu_utilization")),
+    requireVisualDetail: true,
+    loadDocumentTreeContext: async () => null,
+    loadConcept: async () => concept("concept-incomplete-cache", null),
+    persistNodeDetail: async () => true,
+    generateGenericNodeDetail: async () => {
+      generatedText = true;
+      return { detail: detail("cpu_utilization"), qualityWarnings: [] };
+    },
+    generateVisualDetail: async () => ({
+      visual_decision: visualDecision(),
+      visual_blocks: [visualBlock()],
+    }),
+  });
+
+  assert(generatedText, "incomplete cached fallback should regenerate full text detail");
+  assert(result.check_questions.length > 0, "regenerated detail should include check questions");
+  assert(result.common_misconceptions.length > 0, "regenerated detail should include misconceptions");
+  assert(result.visual_blocks.length === 1, "regenerated detail should include required visual block");
 }
 
 async function runConceptExplanationFastPathCase(): Promise<void> {
@@ -324,6 +448,9 @@ async function main(): Promise<void> {
   const logs = await captureServiceLogs(async () => {
     await runCacheHitSkipsPanelGraphCase();
     await runShortDescriptionGenerationCase();
+    await runRequiredVisualRepairForCachedDetailCase();
+    await runRequiredVisualForNewDetailCase();
+    await runRequiredVisualRegeneratesIncompleteCachedDetailCase();
     await runConceptExplanationFastPathCase();
     await runDetailExtrasCase();
   });
@@ -332,12 +459,14 @@ async function main(): Promise<void> {
   assertServiceLog(logs, "cache_check");
   assertServiceLog(logs, "document_context");
   assertServiceLog(logs, "generic_llm_generation");
+  assertServiceLog(logs, "visual_llm_generation");
   assertServiceLog(logs, "save_detail");
   assertServiceLog(logs, "panel_graph");
   assertServiceLog(logs, "concept_fast_path");
 
   const extrasRouteSource = readSource("src/app/api/nodes/[nodeId]/detail/extras/route.ts");
   const generateNodeDetailSource = readSource("src/lib/llm/generate-node-detail.ts");
+  const nodeDetailServiceSource = readSource("src/lib/services/node-detail.ts");
   const treeClientSource = readSource("src/components/tree-page-client.tsx");
   assert(
     generateNodeDetailSource.includes("parseNodeDetailResponse(rawText, input.nodeId, input.nodeType)"),
@@ -346,6 +475,10 @@ async function main(): Promise<void> {
   assert(
     extrasRouteSource.includes("getNodeDetailExtrasForRequest"),
     "detail extras route should call the extras-only service",
+  );
+  assert(
+    nodeDetailServiceSource.includes("requireVisualDetail: true"),
+    "request detail path should require visual blocks even when async flag is off",
   );
   assert(
     treeClientSource.includes("/api/nodes/${nodeId}/detail/extras?tree_id="),
