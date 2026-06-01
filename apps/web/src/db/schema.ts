@@ -143,6 +143,47 @@ export const learningNodes = pgTable(
   ],
 );
 
+/** Phase 10 async node detail generation jobs. */
+export const nodeDetailJobs = pgTable(
+  "node_detail_jobs",
+  {
+    id: text("id")
+      .primaryKey()
+      .notNull()
+      .$defaultFn(() => crypto.randomUUID()),
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => learningTrees.id, { onDelete: "cascade" }),
+    nodeId: text("node_id")
+      .notNull()
+      .references(() => learningNodes.id, { onDelete: "cascade" }),
+    detailVersion: text("detail_version").notNull(),
+    status: text("status").notNull(),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(3),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    lockedBy: text("locked_by"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex("node_detail_jobs_tree_node_version_uidx").on(
+      t.treeId,
+      t.nodeId,
+      t.detailVersion,
+    ),
+    index("node_detail_jobs_status_created_idx").on(t.status, t.createdAt),
+    index("node_detail_jobs_locked_at_idx").on(t.lockedAt),
+  ],
+);
+
 export const userNodeProgress = pgTable(
   "user_node_progress",
   {

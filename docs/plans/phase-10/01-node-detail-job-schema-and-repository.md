@@ -28,13 +28,13 @@ create table node_detail_jobs (
   status text not null check (status in ('queued', 'running', 'ready', 'failed')),
   attempt_count integer not null default 0,
   max_attempts integer not null default 3,
-  locked_at text,
+  locked_at timestamptz,
   locked_by text,
-  started_at text,
-  completed_at text,
+  started_at timestamptz,
+  completed_at timestamptz,
   error_message text,
-  created_at text not null,
-  updated_at text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
   unique (tree_id, node_id, detail_version)
 );
 ```

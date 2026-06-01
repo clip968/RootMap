@@ -28,6 +28,7 @@
     "document:detail-smoke": "DATABASE_URL=file:./data/document-detail-smoke.db tsx scripts/smoke-document-detail.ts",
     "document:detail-smoke:win": "set DATABASE_URL=file:./data/document-detail-smoke.db&& tsx scripts/smoke-document-detail.ts",
     "node-detail:generation-smoke": "tsx scripts/smoke-node-detail-generation.ts",
+    "node-detail:async-smoke": "tsx scripts/smoke-node-detail-async.ts",
     "llm:smoke-parse": "tsx scripts/smoke-llm-parse.ts",
     "llm:smoke-document": "tsx scripts/smoke-document-llm.ts",
     "llm:smoke-provider-settings": "tsx scripts/smoke-llm-provider-settings.ts",
