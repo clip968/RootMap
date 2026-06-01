@@ -73,6 +73,13 @@ type PersistNodeDetail = (
   detail: NodeDetailResponse,
 ) => Promise<boolean>;
 
+type DetailLogContext = {
+  treeId: string;
+  nodeId: string;
+  nodeKey: string;
+  conceptId: string | null;
+};
+
 export interface ApiNodeDetailResponse {
   node_id: string;
   node_key: string;
@@ -174,6 +181,42 @@ function topicContextLine(topic: string, nodeTitle: string): string {
   return `현재 주제 「${topic}」를 학습하는 경로에서 「${nodeTitle}」는 흐름을 이어 주는 개념입니다.`;
 }
 
+function logDetailDuration(
+  source: string,
+  ctx: DetailLogContext,
+  startedAt: number,
+  extra: Record<string, unknown> = {},
+): void {
+  console.info("[node-detail-service]", {
+    source,
+    treeId: ctx.treeId,
+    nodeId: ctx.nodeId,
+    nodeKey: ctx.nodeKey,
+    conceptId: ctx.conceptId,
+    durationMs: Date.now() - startedAt,
+    ...extra,
+  });
+}
+
+async function withDetailDuration<T>(
+  source: string,
+  ctx: DetailLogContext,
+  run: () => Promise<T>,
+): Promise<T> {
+  const startedAt = Date.now();
+  try {
+    const result = await run();
+    logDetailDuration(source, ctx, startedAt);
+    return result;
+  } catch (err) {
+    logDetailDuration(source, ctx, startedAt, {
+      ok: false,
+      errorClass: err instanceof Error ? err.name : "UnknownError",
+    });
+    throw err;
+  }
+}
+
 function toApiBody(
   dbId: string,
   nodeKey: string,
@@ -236,7 +279,7 @@ function documentContextToApi(ctx: DocumentTreeNodeContext): ApiNodeDetailRespon
 function documentContextExtras(
   nodeRow: LearningNodeRow,
   documentNodeContext: DocumentTreeNodeContext | null,
-): Pick<ApiNodeDetailResponse, "document_context" | "topic_context_line"> | {} {
+): Partial<Pick<ApiNodeDetailResponse, "document_context" | "topic_context_line">> {
   if (!documentNodeContext) return {};
   return {
     document_context: documentContextToApi(documentNodeContext),
@@ -376,11 +419,23 @@ export async function getOrCreateNodeDetail(params: {
   );
   const documentExtras = documentContextExtras(nodeRow, documentNodeContext);
   const detailConceptId = nodeRow.conceptId ?? documentNodeContext?.concept_id ?? null;
+  const logContext: DetailLogContext = {
+    treeId,
+    nodeId,
+    nodeKey: nodeRow.nodeKey,
+    conceptId: detailConceptId,
+  };
+  const measuredLoadPanelGraph: LoadPanelGraph = (conceptId, graphTreeId) =>
+    withDetailDuration(
+      "panel_graph",
+      { ...logContext, conceptId },
+      () => loadPanelGraph(conceptId, graphTreeId),
+    );
 
   const extrasBase = async (): Promise<Partial<ApiNodeDetailResponse>> => {
     const conceptId = detailConceptId;
     if (!conceptId) return { concept_id: null, ...documentExtras };
-    const graph = await loadPanelGraph(conceptId, treeId);
+    const graph = await measuredLoadPanelGraph(conceptId, treeId);
     return {
       concept_id: conceptId,
       topic_context_line:
@@ -394,27 +449,35 @@ export async function getOrCreateNodeDetail(params: {
   };
 
   if (nodeRow.detailJson) {
-    return toApiBody(
-      nodeId,
-      nodeRow.nodeKey,
-      nodeRow.detailJson,
-      [],
-      await extrasBase(),
+    return withDetailDuration(
+      "cache_hit",
+      logContext,
+      async () => toApiBody(
+        nodeId,
+        nodeRow.nodeKey,
+        nodeRow.detailJson!,
+        [],
+        await extrasBase(),
+      ),
     );
   }
 
   const concept = detailConceptId ? await loadConcept(detailConceptId) : null;
   if (concept && hasUsableConceptExplanation(concept)) {
-    return responseFromStoredConcept(
-      nodeId,
-      nodeRow.nodeKey,
-      nodeRow,
-      concept,
-      bundle,
-      treeId,
-      loadPanelGraph,
-      [],
-      documentExtras,
+    return withDetailDuration(
+      "concept_fast_path",
+      logContext,
+      () => responseFromStoredConcept(
+        nodeId,
+        nodeRow.nodeKey,
+        nodeRow,
+        concept,
+        bundle,
+        treeId,
+        measuredLoadPanelGraph,
+        [],
+        documentExtras,
+      ),
     );
   }
 
@@ -422,15 +485,19 @@ export async function getOrCreateNodeDetail(params: {
     try {
       const generateDocumentDetail =
         params.generateDocumentDetail ?? generateDocumentNodeDetail;
-      const { detail, qualityWarnings } = await generateDocumentDetail({
-        documentTitle: documentNodeContext.document_title,
-        nodeId: nodeRow.nodeKey,
-        conceptTitle: nodeRow.title,
-        sourceType: documentNodeContext.source_type,
-        evidenceText: formatDocumentEvidenceForPrompt(documentNodeContext),
-        prerequisites: nodeRow.prerequisites.join(", ") || "없음",
-        requestId: `doc-node-${treeId}-${nodeRow.nodeKey}`,
-      });
+      const { detail, qualityWarnings } = await withDetailDuration(
+        "document_llm_generation",
+        logContext,
+        () => generateDocumentDetail({
+          documentTitle: documentNodeContext.document_title,
+          nodeId: nodeRow.nodeKey,
+          conceptTitle: nodeRow.title,
+          sourceType: documentNodeContext.source_type,
+          evidenceText: formatDocumentEvidenceForPrompt(documentNodeContext),
+          prerequisites: nodeRow.prerequisites.join(", ") || "없음",
+          requestId: `doc-node-${treeId}-${nodeRow.nodeKey}`,
+        }),
+      );
       const genericDetail: NodeDetailResponse = {
         node_id: nodeRow.nodeKey,
         title: detail.title,
@@ -445,7 +512,11 @@ export async function getOrCreateNodeDetail(params: {
         visual_decision: detail.visual_decision,
         visual_blocks: detail.visual_blocks ?? [],
       };
-      const saved = await persistNodeDetail(nodeId, genericDetail);
+      const saved = await withDetailDuration(
+        "save_detail",
+        logContext,
+        () => persistNodeDetail(nodeId, genericDetail),
+      );
       if (!saved) {
         throw new Error("DETAIL_SAVE_FAILED");
       }
@@ -464,7 +535,7 @@ export async function getOrCreateNodeDetail(params: {
         treeId,
         detailConceptId,
         loadConcept,
-        loadPanelGraph,
+        measuredLoadPanelGraph,
         documentExtras,
       );
       if (fallback) return fallback;
@@ -489,8 +560,16 @@ export async function getOrCreateNodeDetail(params: {
   try {
     const generateGenericNodeDetail =
       params.generateGenericNodeDetail ?? generateNodeDetail;
-    const { detail, qualityWarnings } = await generateGenericNodeDetail(llmInput);
-    const saved = await persistNodeDetail(nodeId, detail);
+    const { detail, qualityWarnings } = await withDetailDuration(
+      "generic_llm_generation",
+      logContext,
+      () => generateGenericNodeDetail(llmInput),
+    );
+    const saved = await withDetailDuration(
+      "save_detail",
+      logContext,
+      () => persistNodeDetail(nodeId, detail),
+    );
     if (!saved) {
       throw new Error("DETAIL_SAVE_FAILED");
     }
@@ -508,7 +587,7 @@ export async function getOrCreateNodeDetail(params: {
       treeId,
       detailConceptId,
       loadConcept,
-      loadPanelGraph,
+      measuredLoadPanelGraph,
       documentExtras,
     );
     if (fallback) return fallback;

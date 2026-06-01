@@ -21,6 +21,39 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
+type ServiceLog = {
+  source?: unknown;
+  durationMs?: unknown;
+};
+
+async function captureServiceLogs(
+  run: () => Promise<void>,
+): Promise<ServiceLog[]> {
+  const logs: ServiceLog[] = [];
+  const originalInfo = console.info;
+  console.info = (message?: unknown, details?: unknown, ...rest: unknown[]) => {
+    if (message === "[node-detail-service]" && details && typeof details === "object") {
+      logs.push(details as ServiceLog);
+      return;
+    }
+    originalInfo(message, details, ...rest);
+  };
+
+  try {
+    await run();
+  } finally {
+    console.info = originalInfo;
+  }
+
+  return logs;
+}
+
+function assertServiceLog(logs: ServiceLog[], source: string): void {
+  const log = logs.find((item) => item.source === source);
+  assert(log, `expected ${source} service log`);
+  assert(typeof log.durationMs === "number", `${source} log should include durationMs`);
+}
+
 function treeJson(): LearningTreeResponse {
   return {
     topic: "운영체제 스케줄링",
@@ -191,8 +224,16 @@ async function runConceptExplanationFastPathCase(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  await runShortDescriptionGenerationCase();
-  await runConceptExplanationFastPathCase();
+  const logs = await captureServiceLogs(async () => {
+    await runShortDescriptionGenerationCase();
+    await runConceptExplanationFastPathCase();
+  });
+
+  assertServiceLog(logs, "generic_llm_generation");
+  assertServiceLog(logs, "save_detail");
+  assertServiceLog(logs, "panel_graph");
+  assertServiceLog(logs, "concept_fast_path");
+
   console.info("[node-detail-generation-smoke] ok");
 }
 
