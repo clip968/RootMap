@@ -11,6 +11,7 @@ import {
   parseLocalRunnerArgs,
   runLocalDocumentProcessing,
 } from "../src/lib/document/local-runner";
+import { resetDbSingleton } from "../src/db/client";
 
 async function main(): Promise<void> {
   let summaryForError = null;
@@ -33,6 +34,9 @@ async function main(): Promise<void> {
   } catch (err) {
     console.error(JSON.stringify(formatLocalRunnerErrorLog(err, summaryForError), null, 2));
     process.exitCode = 1;
+  } finally {
+    // standalone CLI는 Next.js request lifecycle이 없으므로 Postgres pool을 직접 닫아 프로세스가 남지 않게 한다.
+    await resetDbSingleton();
   }
 }
 
