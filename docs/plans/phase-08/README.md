@@ -11,7 +11,7 @@ Phase 08의 핵심은 상세 모달 UX를 다시 크게 바꾸는 것이 아니�
 3. `detailJson` 또는 Concept Store 설명이 충분한 경우 LLM 호출 전에 빠르게 응답하는 fast path를 고정한다.
 4. 오른쪽 패널용 concept graph 보강 조회를 본문 detail 응답에서 분리하고, 별도 extras 요청에서만 수행한다.
 5. LLM, DB 저장, graph 보강 시간을 나눠 기록해 이후 성능 문제를 추측이 아니라 수치로 판단한다.
-6. 기존 visual detail UI와 Phase 4 개인화 이벤트 흐름을 깨뜨리지 않는다.
+6. first-pass detail 프롬프트에서는 visual JSON 생성을 제외하고, 기존 visual detail UI와 Phase 4 개인화 이벤트 흐름은 깨뜨리지 않는다.
 
 ## 작업 순서 요약
 
@@ -44,6 +44,7 @@ Phase 08의 핵심은 상세 모달 UX를 다시 크게 바꾸는 것이 아니�
 - `getOrCreateNodeDetail`의 cache hit, Concept Store fast path, LLM generation 순서 정리
 - `buildPanelGraph` 관련 concept 조회 최적화
 - detail generation duration 로그
+- first-pass detail 프롬프트의 텍스트 전용 응답
 - smoke script와 lint/build 검증
 
 ### 제외

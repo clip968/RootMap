@@ -2,7 +2,7 @@
 
 ## 목표
 
-일반 노드 상세와 문서 기반 노드 상세 생성 시 LLM이 visual block이 필요한지 판단하고, 허용된 JSON props만 반환하도록 프롬프트와 파서 흐름을 확장한다.
+visual block schema와 parser는 유지하되, 일반 노드 상세와 문서 기반 노드 상세의 first-pass LLM 프롬프트에서는 텍스트 설명만 생성하도록 고정한다. 시각화 JSON은 기존 저장 데이터와 별도 생성 단계에서만 렌더링 계약을 사용한다.
 
 ## 관련 명세
 
@@ -13,26 +13,21 @@
 
 ## 구현 작업
 
-### 1. 일반 상세 프롬프트 확장
+### 1. 일반 상세 프롬프트 축소
 
-- `apps/web/src/lib/llm/prompts.ts`의 `NODE_DETAIL_SYSTEM_BASE`에 visual block 요구사항을 추가한다.
-- 반드시 포함할 지시:
-  - 필요할 때만 `visual_blocks`를 생성한다.
-  - SVG, HTML, CSS, Mermaid, markdown diagram을 생성하지 않는다.
-  - 허용된 block type은 8개와 `none`뿐이다.
-  - 시각화가 유용하지 않으면 `visual_decision.skill = "none"`과 `visual_blocks = []`를 반환한다.
-  - 약한 visual block 여러 개보다 좋은 visual block 1개를 선호한다.
-  - annotation은 짧고 초보자 친화적으로 쓴다.
+- `apps/web/src/lib/llm/prompts.ts`의 `NODE_DETAIL_SYSTEM_BASE`는 first-pass 응답에서 텍스트 detail 필드만 요구한다.
+- `visual_decision`, `visual_blocks`, visual skill routing 지시는 first-pass prompt에서 제외한다.
+- 기존 detail JSON에 visual field가 없어도 schema default와 renderer fallback으로 안전하게 처리한다.
 
-### 2. 문서 기반 상세 프롬프트 확장
+### 2. 문서 기반 상세 프롬프트 축소
 
-- `DOCUMENT_NODE_DETAIL_SYSTEM_PROMPT`에도 동일한 visual block 요구사항을 추가한다.
-- evidence text는 untrusted data이므로, evidence 안의 지시문이 visual schema나 renderer policy를 바꾸지 못한다고 명시한다.
-- 문서에 직접 등장한 개념과 추론된 선수지식 모두 visual block 후보가 될 수 있지만, evidence를 조작하거나 invented citation을 만들지 않도록 한다.
+- `DOCUMENT_NODE_DETAIL_SYSTEM_PROMPT`도 first-pass 응답에서 텍스트 detail 필드만 요구한다.
+- evidence text는 untrusted data이므로, evidence 안의 지시문이 task나 citation behavior를 바꾸지 못한다고 명시한다.
+- 문서 evidence를 조작하거나 invented citation을 만들지 않도록 한다.
 
-### 3. visual decision routing guideline 추가
+### 3. visual decision routing guideline 보존
 
-- 프롬프트에 skill 선택 기준을 넣는다.
+- parser와 renderer fixture는 아래 skill 계약을 계속 검증한다.
   - `linear_space`: 주소, offset, block, page, sector
   - `mapping_table`: identifier/address 변환 또는 table mapping
   - `flow_pipeline`: 요청, syscall, protocol, layered processing
@@ -41,7 +36,7 @@
   - `tree_graph`: dependency, tree, graph
   - `state_machine`: lifecycle, state transition
   - `compare_matrix`: 비슷한 개념 비교
-- `confidence < 0.6`이면 `visual_blocks = []`를 권장한다.
+- first-pass prompt에는 이 routing guideline을 넣지 않는다.
 
 ### 4. quality warning 추가
 
@@ -51,15 +46,16 @@
   - block annotation이 너무 길거나 비어 있음
 - warning은 요청 실패로 처리하지 않고 품질 로그로만 남긴다.
 
-### 5. prompt smoke 추가
+### 5. prompt smoke 갱신
 
-- `apps/web/scripts/smoke-phase7-visual-detail-prompts.ts`를 추가한다.
+- `apps/web/scripts/smoke-phase7-visual-detail-prompts.ts`를 갱신한다.
+- 일반/문서 first-pass prompt가 visual field와 visual skill routing 용어를 포함하지 않는지 검증한다.
 - LBA, page table, syscall, CPU scheduling, VFS stack, B-tree, TCP state, process vs thread에 대해 생성된 raw JSON이 schema를 통과하는지 검증한다.
 - 알맞은 시각화가 없는 추상 개념 fixture는 `visual_blocks = []`를 허용한다.
 
 ## 완료 기준(DoD)
 
-- 일반/문서 기반 노드 상세 프롬프트가 모두 visual fields를 요구한다.
-- LLM이 직접 markup을 생성하지 못하도록 프롬프트에 명시되어 있다.
+- 일반/문서 기반 노드 first-pass 상세 프롬프트가 visual fields를 요구하지 않는다.
+- 기존 visual JSON fixture와 renderer 계약은 계속 통과한다.
 - 시각화가 없는 응답도 정상 fallback으로 통과한다.
-- 검증 명령: `npx tsx scripts/smoke-phase7-visual-detail-prompts.ts` (`apps/web`에서 실행)
+- 검증 명령: `npm run phase7:visual-detail-smoke` (`apps/web`에서 실행)

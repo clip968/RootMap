@@ -52,8 +52,9 @@
     "phase6:quality": "tsx scripts/phase6-test-harness.ts quality",
     "phase6:graph-quality-smoke": "tsx scripts/phase6-graph-quality-smoke.ts",
     "phase7:visual-block-schema": "tsx scripts/smoke-phase7-visual-block-schema.ts",
+    "phase7:visual-detail-prompts": "tsx scripts/smoke-phase7-visual-detail-prompts.ts",
     "phase7:visual-detail-renderers": "tsx scripts/smoke-phase7-visual-detail-renderers.ts",
-    "phase7:visual-detail-smoke": "npm run phase7:visual-block-schema && npm run phase7:visual-detail-renderers"
+    "phase7:visual-detail-smoke": "npm run phase7:visual-block-schema && npm run phase7:visual-detail-prompts && npm run phase7:visual-detail-renderers"
   },
   "dependencies": {
     "@esbuild/linux-x64": "^0.28.0",

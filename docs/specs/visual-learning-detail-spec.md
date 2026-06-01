@@ -605,7 +605,7 @@ const visualBlocks = detail.visual_blocks ?? [];
 
 ## Prompt Requirements
 
-`NODE_DETAIL_SYSTEM_BASE`와 `DOCUMENT_NODE_DETAIL_SYSTEM_PROMPT`에 다음 요구사항을 추가한다.
+초기 노드 상세 클릭 응답의 지연을 줄이기 위해 현재 `NODE_DETAIL_SYSTEM_BASE`와 `DOCUMENT_NODE_DETAIL_SYSTEM_PROMPT`는 first-pass에서 visual field를 요구하지 않는다. 아래 요구사항은 별도 visual 생성 단계나 visual fixture 계약에서 사용할 수 있는 정책으로 유지한다.
 
 ```text
 Generate visual_blocks when the selected concept can be better understood visually.
@@ -888,7 +888,7 @@ block size가 4096 byte일 때 LBA 8의 시작 byte offset은?
 
 Phase 07 구현에서는 명세의 8개 visual skill을 모두 하나의 renderer 체계에 포함했다.
 
-- LLM 응답은 `visual_decision`과 `visual_blocks` JSON만 허용하고, SVG/HTML/CSS/Mermaid 직접 생성은 프롬프트에서 금지했다.
+- first-pass detail LLM 응답은 텍스트 detail 필드만 요청한다. `visual_decision`과 `visual_blocks`는 기존 저장 데이터와 별도 visual 생성 단계에서 사용할 수 있도록 schema/parser/renderer 호환을 유지한다.
 - 기존 detail JSON은 `visual_decision.skill = "none"`, `visual_blocks = []`로 정규화한다.
 - renderer는 schema 검증을 통과하지 못한 block이나 필수 표시 데이터가 없는 block을 렌더링하지 않는다.
 - `linear_space`, `mapping_table`, `flow_pipeline`, `timeline`, `layer_stack`, `tree_graph`, `state_machine`, `compare_matrix`는 각각 전용 React renderer를 갖는다.

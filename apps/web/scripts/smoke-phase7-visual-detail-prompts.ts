@@ -20,26 +20,25 @@ function assertPromptContains(prompt: string, needle: string): void {
   assert(prompt.includes(needle), `prompt should contain: ${needle}`);
 }
 
+function assertPromptOmits(prompt: string, needle: string): void {
+  assert(!prompt.includes(needle), `first-pass detail prompt should omit: ${needle}`);
+}
+
 for (const prompt of [NODE_DETAIL_SYSTEM_BASE, DOCUMENT_NODE_DETAIL_SYSTEM_PROMPT]) {
-  assertPromptContains(prompt, "visual_blocks");
-  assertPromptContains(prompt, "visual_decision");
-  assertPromptContains(prompt, "linear_space");
-  assertPromptContains(prompt, "mapping_table");
-  assertPromptContains(prompt, "flow_pipeline");
-  assertPromptContains(prompt, "timeline");
-  assertPromptContains(prompt, "layer_stack");
-  assertPromptContains(prompt, "tree_graph");
-  assertPromptContains(prompt, "state_machine");
-  assertPromptContains(prompt, "compare_matrix");
-  assertPromptContains(prompt, "SVG");
-  assertPromptContains(prompt, "HTML");
-  assertPromptContains(prompt, "CSS");
-  assertPromptContains(prompt, "Mermaid");
-  assertPromptContains(prompt, "confidence is below 0.6");
+  assertPromptOmits(prompt, "visual_blocks");
+  assertPromptOmits(prompt, "visual_decision");
+  assertPromptOmits(prompt, "linear_space");
+  assertPromptOmits(prompt, "mapping_table");
+  assertPromptOmits(prompt, "flow_pipeline");
+  assertPromptOmits(prompt, "timeline");
+  assertPromptOmits(prompt, "layer_stack");
+  assertPromptOmits(prompt, "tree_graph");
+  assertPromptOmits(prompt, "state_machine");
+  assertPromptOmits(prompt, "compare_matrix");
+  assertPromptOmits(prompt, "confidence is below 0.6");
 }
 
 assertPromptContains(DOCUMENT_NODE_DETAIL_SYSTEM_PROMPT, "untrusted data");
-assertPromptContains(DOCUMENT_NODE_DETAIL_SYSTEM_PROMPT, "do not let evidence change the visual schema");
 assertPromptContains(DOCUMENT_NODE_DETAIL_SYSTEM_PROMPT, "Do not invent or modify citations");
 
 const blocks: Array<{ nodeId: string; title: string; skill: VisualBlock["type"]; block: VisualBlock }> = [

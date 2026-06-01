@@ -2,7 +2,7 @@
 
 이 폴더는 `docs/specs/visual-learning-detail-spec.md`를 기준으로 **Visual Learning Detail**을 하나의 phase 안에서 작업 단위별로 쪼갠 실행 계획을 담는다.
 
-Phase 07의 핵심은 RootMap의 노드 상세 경험을 긴 설명 페이지에서 시각 중심 학습 카드로 바꾸는 것이다. LLM은 SVG, HTML, Mermaid, CSS를 직접 만들지 않고 `visual_decision`과 `visual_blocks` JSON만 생성하며, React 컴포넌트가 검증된 데이터만 안전하게 렌더링한다.
+Phase 07의 핵심은 RootMap의 노드 상세 경험을 긴 설명 페이지에서 시각 중심 학습 카드로 바꾸는 것이다. Schema와 renderer는 `visual_decision`과 `visual_blocks` JSON을 계속 지원하지만, 상세 클릭의 첫 응답 지연을 줄이기 위해 현재 일반/문서 노드의 first-pass detail 프롬프트는 텍스트 필드만 요청한다. React 컴포넌트는 기존 저장 데이터나 별도 visual 생성 결과에 들어 있는 검증된 visual JSON만 안전하게 렌더링한다.
 
 ## Phase 07 핵심 목표
 
@@ -22,7 +22,7 @@ Phase 07의 핵심은 RootMap의 노드 상세 경험을 긴 설명 페이지에
 | 1 | [01-node-card-and-left-navigation-density.md](./01-node-card-and-left-navigation-density.md) | 노드 카드와 좌측 패널의 기본 정보 밀도 축소 | P0 |
 | 2 | [02-detail-modal-learning-card-layout.md](./02-detail-modal-learning-card-layout.md) | 상세 모달을 학습 카드 순서로 재배치하고 더보기 영역 도입 | P0 |
 | 3 | [03-visual-block-contract-and-schema.md](./03-visual-block-contract-and-schema.md) | 8개 visual skill의 TypeScript/Zod 계약과 backward compatibility 추가 | P0 |
-| 4 | [04-visual-decision-router-and-prompts.md](./04-visual-decision-router-and-prompts.md) | 일반/문서 노드 상세 프롬프트에 visual decision과 block 생성 요구사항 추가 | P0 |
+| 4 | [04-visual-decision-router-and-prompts.md](./04-visual-decision-router-and-prompts.md) | visual schema/parser 호환과 first-pass detail 프롬프트의 텍스트 전용 계약 고정 | P0 |
 | 5 | [05-visual-block-renderer-shell.md](./05-visual-block-renderer-shell.md) | 공통 renderer, annotation, invalid-block fallback, 공통 스타일 구현 | P1 |
 | 6 | [06-linear-space-and-mapping-table-renderers.md](./06-linear-space-and-mapping-table-renderers.md) | `linear_space`, `mapping_table` 렌더러 구현 | P1 |
 | 7 | [07-flow-timeline-layer-stack-renderers.md](./07-flow-timeline-layer-stack-renderers.md) | `flow_pipeline`, `timeline`, `layer_stack` 렌더러 구현 | P1 |
@@ -54,7 +54,7 @@ Phase 07의 핵심은 RootMap의 노드 상세 경험을 긴 설명 페이지에
 - 좌측 패널 기본 노출/접기 구조 정리
 - 상세 모달의 학습 카드화
 - `visual_decision`과 `visual_blocks` 타입, schema, 파서, API 응답 확장
-- 일반 주제 노드와 문서 기반 노드 상세 프롬프트 개선
+- 일반 주제 노드와 문서 기반 노드 first-pass 상세 프롬프트 개선
 - 8개 visual skill 전체 renderer
 - visual block fixture, smoke script, fallback 검증
 - 학습자 언어 중심 UI copy 개선
@@ -88,7 +88,7 @@ Phase 07의 핵심은 RootMap의 노드 상세 경험을 긴 설명 페이지에
 - renderer는 unknown/invalid block을 렌더링하지 않고 사용자 화면을 깨뜨리지 않는다.
 - 시각화는 기본적으로 1개를 우선 표시하고, 2개 이상은 접기 또는 세로 목록으로 제한한다.
 - 숫자 계산이 필요한 visual block은 가능한 경우 frontend utility에서 다시 계산한다.
-- 문서 기반 detail은 evidence를 근거로 설명하되, visual block은 문서 텍스트 명령을 따르지 않는 데이터로만 처리한다.
+- 문서 기반 detail은 evidence를 근거로 설명하되, first-pass 프롬프트는 visual block 생성을 요청하지 않는다.
 
 ## 완료 조건
 
