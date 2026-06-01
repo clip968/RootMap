@@ -6,6 +6,10 @@
  */
 import { parseDocumentNodeDetailResponse, parseNodeDetailResponse } from "../src/lib/llm/parse";
 import {
+  legacyDetailWithoutVisualFields,
+  phase7VisualDetailFixtures,
+} from "./fixtures/phase7-visual-detail-fixtures";
+import {
   normalizeVisualBlocks,
   visualBlockSchema,
   visualBlocksSchema,
@@ -112,6 +116,19 @@ for (const block of validBlocks) {
 }
 assert(visualBlocksSchema.parse(validBlocks).length === 8, "all valid visual blocks should parse");
 
+const fixtureBlocks = phase7VisualDetailFixtures.flatMap(
+  (fixture) => fixture.detail.visual_blocks ?? [],
+);
+const fixtureSkills = new Set(fixtureBlocks.map((block) => block.type));
+assert(fixtureSkills.size === 8, "fixture set should cover 8 visual skills");
+for (const fixture of phase7VisualDetailFixtures) {
+  const parsed = parseNodeDetailResponse(JSON.stringify(fixture.detail), fixture.detail.node_id);
+  assert(
+    (parsed.visual_blocks ?? []).length === (fixture.detail.visual_blocks ?? []).length,
+    `${fixture.name} visual block count should round-trip`,
+  );
+}
+
 assertThrows("mapping row length", () => {
   visualBlockSchema.parse({
     type: "mapping_table",
@@ -170,20 +187,19 @@ assertThrows("linear range count", () => {
   });
 });
 
+assertThrows("compare value length", () => {
+  visualBlockSchema.parse({
+    type: "compare_matrix",
+    title: "bad compare",
+    columns: ["a", "b"],
+    rows: [{ criterion: "cost", values: ["only-a"] }],
+    annotations: [],
+  });
+});
+
 const legacyDetail = parseNodeDetailResponse(
-  JSON.stringify({
-    node_id: "node-1",
-    title: "legacy",
-    type: "core",
-    why_it_matters: "needed",
-    easy_explanation: "plain text only",
-    analogy: "",
-    example: "example",
-    common_misconceptions: [],
-    check_questions: [],
-    next_nodes: [],
-  }),
-  "node-1",
+  JSON.stringify(legacyDetailWithoutVisualFields),
+  legacyDetailWithoutVisualFields.node_id,
 );
 
 assert(legacyDetail.visual_decision?.skill === "none", "legacy detail should default decision");

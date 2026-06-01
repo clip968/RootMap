@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { VisualBlockRenderer } from "../src/components/visual-blocks/visual-block-renderer";
+import { phase7VisualDetailFixtures } from "./fixtures/phase7-visual-detail-fixtures";
 import type {
   CompareMatrixVisualBlock,
   FlowPipelineVisualBlock,
@@ -25,6 +26,18 @@ function shouldRun(skill: string): boolean {
 
 function render(blocks: unknown[]): string {
   return renderToStaticMarkup(createElement(VisualBlockRenderer, { blocks }));
+}
+
+for (const fixture of phase7VisualDetailFixtures) {
+  if (!shouldRun(fixture.expectedSkill)) continue;
+  const markup = render(fixture.detail.visual_blocks ?? []);
+  if (fixture.shouldRender) {
+    const title = fixture.detail.visual_blocks?.[0]?.title ?? fixture.detail.title;
+    assert(markup.includes(title), `${fixture.name} fixture should render title`);
+    assert(markup.length > 0, `${fixture.name} fixture should render markup`);
+  } else {
+    assert(markup.length === 0, `${fixture.name} fixture should render empty fallback`);
+  }
 }
 
 if (shouldRun("linear_space")) {
