@@ -128,6 +128,17 @@ const VIEW_OPTIONS = [
 const FLOW_PATH_COLUMN_GAP = 340;
 const FLOW_PATH_LEVEL_GAP = 260;
 const FLOW_COMMUNITY_COLUMN_GAP = 390;
+const DETAIL_JOB_POLL_INTERVAL_MS = 1_000;
+const DETAIL_JOB_TIMEOUT_MS = 90_000;
+
+type DetailRequestPayload =
+  | { status: "ready"; detail: ApiNodeDetailResponse }
+  | { status: "queued"; job_id: string };
+
+type DetailJobPayload =
+  | { status: "queued" | "running"; job_id: string; attempt_count?: number }
+  | { status: "ready"; job_id: string; detail: ApiNodeDetailResponse }
+  | { status: "failed"; job_id: string; error_message?: string };
 const FLOW_COMMUNITY_NODE_GAP = 210;
 const FLOW_COMMUNITY_DEPTH_OFFSET = 28;
 const PHASE4_AUTH_TOKEN_STORAGE_KEY = "rootmap_supabase_access_token";
@@ -619,10 +630,15 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailExtrasLoading, setDetailExtrasLoading] = useState(false);
   const [detailExtrasError, setDetailExtrasError] = useState<string | null>(null);
+  const [detailJobId, setDetailJobId] = useState<string | null>(null);
+  const [detailJobStatus, setDetailJobStatus] = useState<"queued" | "running" | null>(null);
+  const [detailJobTimedOut, setDetailJobTimedOut] = useState(false);
   const detailRequestSeqRef = useRef(0);
   const detailInFlightNodeRef = useRef<string | null>(null);
   const detailAbortControllerRef = useRef<AbortController | null>(null);
   const detailExtrasAbortControllerRef = useRef<AbortController | null>(null);
+  const detailJobAbortControllerRef = useRef<AbortController | null>(null);
+  const detailJobPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [regenLoading, setRegenLoading] = useState(false);
   const [regenElapsedSeconds, setRegenElapsedSeconds] = useState(0);
   const [regenError, setRegenError] = useState<string | null>(null);
@@ -917,12 +933,22 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     viewMode,
   ]);
 
+  const clearDetailPolling = useCallback(() => {
+    if (detailJobPollTimerRef.current) {
+      clearTimeout(detailJobPollTimerRef.current);
+      detailJobPollTimerRef.current = null;
+    }
+    detailJobAbortControllerRef.current?.abort();
+    detailJobAbortControllerRef.current = null;
+  }, []);
+
   useEffect(() => {
     return () => {
       detailAbortControllerRef.current?.abort();
       detailExtrasAbortControllerRef.current?.abort();
+      clearDetailPolling();
     };
-  }, []);
+  }, [clearDetailPolling]);
 
   const loadDetailExtras = useCallback(async (nodeId: string, requestSeq: number) => {
     detailExtrasAbortControllerRef.current?.abort();
@@ -963,9 +989,95 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     }
   }, [treeId]);
 
+  const applyReadyDetail = useCallback((nodeId: string, requestSeq: number, readyDetail: ApiNodeDetailResponse) => {
+    setDetail(readyDetail);
+    setDetailJobId(null);
+    setDetailJobStatus(null);
+    setDetailJobTimedOut(false);
+    void loadDetailExtras(nodeId, requestSeq);
+    setTree((prev) =>
+      prev
+        ? {
+            ...prev,
+            nodes: prev.nodes.map((node) =>
+              node.id === nodeId ? { ...node, has_detail: true } : node,
+            ),
+          }
+        : prev,
+    );
+  }, [loadDetailExtras]);
+
+  const pollDetailJob = useCallback((nodeId: string, jobId: string, requestSeq: number, startedAt: number) => {
+    clearDetailPolling();
+    setDetailJobId(jobId);
+    setDetailJobStatus("queued");
+    setDetailJobTimedOut(false);
+
+    const pollOnce = async () => {
+      if (detailRequestSeqRef.current !== requestSeq) return;
+      if (Date.now() - startedAt >= DETAIL_JOB_TIMEOUT_MS) {
+        setDetailJobTimedOut(true);
+        setDetailLoading(false);
+        detailInFlightNodeRef.current = null;
+        return;
+      }
+
+      const controller = new AbortController();
+      detailJobAbortControllerRef.current = controller;
+      try {
+        const res = await fetch(`/api/node-detail-jobs/${jobId}`, {
+          signal: controller.signal,
+          headers: { "Cache-Control": "no-store" },
+        });
+        const data = await res.json().catch(() => ({})) as Partial<DetailJobPayload>;
+        if (controller.signal.aborted || detailRequestSeqRef.current !== requestSeq) return;
+        if (!res.ok) {
+          throw new Error((data as { error?: { message?: string } })?.error?.message ?? "상세 설명 생성 상태를 확인하지 못했습니다.");
+        }
+
+        if (data.status === "ready" && "detail" in data && data.detail) {
+          clearDetailPolling();
+          applyReadyDetail(nodeId, requestSeq, data.detail);
+          setDetailLoading(false);
+          detailInFlightNodeRef.current = null;
+          return;
+        }
+
+        if (data.status === "failed") {
+          clearDetailPolling();
+          setDetailError(data.error_message ?? "상세 설명 생성에 실패했습니다.");
+          setDetailLoading(false);
+          detailInFlightNodeRef.current = null;
+          return;
+        }
+
+        if (data.status === "queued" || data.status === "running") {
+          setDetailJobStatus(data.status);
+        }
+        detailJobPollTimerRef.current = setTimeout(pollOnce, DETAIL_JOB_POLL_INTERVAL_MS);
+      } catch (error) {
+        if (isAbortError(error) || controller.signal.aborted) return;
+        if (detailRequestSeqRef.current !== requestSeq) return;
+        clearDetailPolling();
+        setDetailError(
+          error instanceof Error ? error.message : "상세 설명 생성 상태를 확인하지 못했습니다.",
+        );
+        setDetailLoading(false);
+        detailInFlightNodeRef.current = null;
+      } finally {
+        if (detailJobAbortControllerRef.current === controller) {
+          detailJobAbortControllerRef.current = null;
+        }
+      }
+    };
+
+    detailJobPollTimerRef.current = setTimeout(pollOnce, DETAIL_JOB_POLL_INTERVAL_MS);
+  }, [applyReadyDetail, clearDetailPolling]);
+
   const loadDetail = useCallback(async (nodeId: string) => {
     if (detailInFlightNodeRef.current === nodeId) return;
 
+    clearDetailPolling();
     detailAbortControllerRef.current?.abort();
     detailExtrasAbortControllerRef.current?.abort();
     const controller = new AbortController();
@@ -973,11 +1085,15 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     detailRequestSeqRef.current = requestSeq;
     detailInFlightNodeRef.current = nodeId;
     detailAbortControllerRef.current = controller;
+    let queued = false;
 
     setDetailLoading(true);
     setDetailError(null);
     setDetailExtrasError(null);
     setDetailExtrasLoading(false);
+    setDetailJobId(null);
+    setDetailJobStatus(null);
+    setDetailJobTimedOut(false);
     setDetail(null);
     try {
       const res = await fetch(`/api/nodes/${nodeId}/detail`, {
@@ -991,18 +1107,18 @@ export function TreePageClient({ treeId }: { treeId: string }) {
       if (!res.ok) {
         throw new Error(data?.error?.message ?? "상세 설명을 불러오지 못했습니다.");
       }
-      setDetail(data as ApiNodeDetailResponse);
-      void loadDetailExtras(nodeId, requestSeq);
-      setTree((prev) =>
-        prev
-          ? {
-              ...prev,
-              nodes: prev.nodes.map((node) =>
-                node.id === nodeId ? { ...node, has_detail: true } : node,
-              ),
-            }
-          : prev,
-      );
+      const payload = data as ApiNodeDetailResponse | DetailRequestPayload;
+      if ("status" in payload) {
+        if (payload.status === "ready") {
+          applyReadyDetail(nodeId, requestSeq, payload.detail);
+          return;
+        }
+        queued = true;
+        pollDetailJob(nodeId, payload.job_id, requestSeq, Date.now());
+        return;
+      }
+
+      applyReadyDetail(nodeId, requestSeq, payload);
     } catch (error) {
       if (isAbortError(error) || controller.signal.aborted) return;
       if (detailRequestSeqRef.current !== requestSeq) return;
@@ -1013,12 +1129,12 @@ export function TreePageClient({ treeId }: { treeId: string }) {
       if (detailAbortControllerRef.current === controller) {
         detailAbortControllerRef.current = null;
       }
-      if (detailRequestSeqRef.current === requestSeq) {
+      if (detailRequestSeqRef.current === requestSeq && !queued) {
         detailInFlightNodeRef.current = null;
         setDetailLoading(false);
       }
     }
-  }, [loadDetailExtras, treeId]);
+  }, [applyReadyDetail, clearDetailPolling, pollDetailJob, treeId]);
 
   const recordPhase4NodeEvent = useCallback(
     async (node: ApiLearningNode, eventType: "node_opened" | "node_completed") => {
@@ -1081,8 +1197,17 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   );
 
   const closeDetailModal = useCallback(() => {
+    detailRequestSeqRef.current += 1;
+    detailAbortControllerRef.current?.abort();
+    detailExtrasAbortControllerRef.current?.abort();
+    clearDetailPolling();
+    detailInFlightNodeRef.current = null;
+    setDetailLoading(false);
+    setDetailJobId(null);
+    setDetailJobStatus(null);
+    setDetailJobTimedOut(false);
     setModalOpen(false);
-  }, []);
+  }, [clearDetailPolling]);
 
   useEffect(() => {
     if (!modalOpen) return;
@@ -1716,8 +1841,31 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                   <div className="modal-main">
                     {detailLoading ? (
                       <div className="detail-section">
-                        <h3>불러오는 중</h3>
-                        <p className="section-copy">상세 설명을 준비하고 있습니다.</p>
+                        <h3>{detailJobId ? "상세 설명 생성 중" : "불러오는 중"}</h3>
+                        <p className="section-copy">
+                          {detailJobId
+                            ? detailJobStatus === "running"
+                              ? "전체 상세 설명을 생성하고 있습니다."
+                              : "상세 설명 생성 작업을 준비하고 있습니다."
+                            : "상세 설명을 준비하고 있습니다."}
+                        </p>
+                      </div>
+                    ) : detailJobTimedOut && detailJobId ? (
+                      <div className="detail-section">
+                        <h3>생성이 오래 걸리고 있습니다</h3>
+                        <p className="section-copy">
+                          상세 설명 생성이 예상보다 오래 걸리고 있습니다. 잠시 후 다시 열면 이어서 확인할 수 있습니다.
+                        </p>
+                        <button
+                          type="button"
+                          className="detail-inline-button"
+                          onClick={() => {
+                            setDetailLoading(true);
+                            pollDetailJob(selectedNode.id, detailJobId, detailRequestSeqRef.current, Date.now());
+                          }}
+                        >
+                          다시 확인
+                        </button>
                       </div>
                     ) : detailError ? (
                       <div className="detail-section">
@@ -1731,26 +1879,29 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                           다시 시도
                         </button>
                       </div>
+                    ) : !detail ? (
+                      <div className="detail-section">
+                        <h3>상세 설명 대기 중</h3>
+                        <p className="section-copy">전체 상세 설명이 준비되면 이곳에 표시됩니다.</p>
+                      </div>
                     ) : (
                       (() => {
                         const easyExplanation =
-                          detail?.easy_explanation ||
-                          selectedNode.description ||
-                          "아직 설명이 없습니다.";
+                          detail.easy_explanation || "아직 설명이 없습니다.";
                         const whyItMatters =
-                          detail?.why_it_matters_for_document ??
-                          detail?.why_it_matters ??
+                          detail.why_it_matters_for_document ??
+                          detail.why_it_matters ??
                           "이 노드의 선수/후속 관계를 맵에서 확인하세요.";
                         const appliedContext =
-                          detail?.document_context_summary ||
-                          detail?.topic_context_line ||
+                          detail.document_context_summary ||
+                          detail.topic_context_line ||
                           `${SECTION_LABEL[selectedNode.type]} 흐름에서 다음 개념으로 이어집니다.`;
-                        const misconception = detail?.common_misconceptions?.[0];
-                        const checkQuestions = detail?.check_questions?.slice(0, 2) ?? [];
+                        const misconception = detail.common_misconceptions?.[0];
+                        const checkQuestions = detail.check_questions?.slice(0, 2) ?? [];
 
                         return (
                           <>
-                            <VisualBlockRenderer blocks={detail?.visual_blocks ?? []} />
+                            <VisualBlockRenderer blocks={detail.visual_blocks ?? []} />
 
                             <DetailLearningBlocks
                               node={selectedNode}

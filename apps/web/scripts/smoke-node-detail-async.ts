@@ -109,4 +109,10 @@ assert(jobRouteSource.includes("export async function GET"), "job polling route 
 assert(jobRouteSource.includes('status: "ready"'), "job polling route should return ready status");
 assert(jobRouteSource.includes("detail:"), "job polling ready response should include detail");
 
+const treeClientSource = readSource("src/components/tree-page-client.tsx");
+assert(treeClientSource.includes("/api/node-detail-jobs/"), "client should poll node detail jobs");
+assert(treeClientSource.includes("detailJobTimedOut"), "client should expose node detail polling timeout state");
+assert(treeClientSource.includes("clearDetailPolling"), "client should clean up detail polling on node switch/close/unmount");
+assert(!treeClientSource.includes("detail?.easy_explanation ||\n                          selectedNode.description"), "client should not render selectedNode.description as detail fallback");
+
 console.log("Phase 10 async node detail smoke passed.");
