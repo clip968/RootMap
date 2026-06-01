@@ -1,4 +1,4 @@
-import { and, desc, eq, like, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, like, or, sql } from "drizzle-orm";
 import type { RootMapDbClient } from "@/db/client";
 import { concepts, conceptEdges, conceptMergeCandidates, learningTreeConcepts, learningTrees } from "@/db/schema";
 import {
@@ -302,6 +302,20 @@ export async function getConceptById(db: RootMapDbClient, id: string): Promise<C
     .from(concepts)
     .where(eq(concepts.id, id));
   return rows[0] ?? null;
+}
+
+export async function getConceptsByIds(
+  db: RootMapDbClient,
+  ids: string[],
+): Promise<Map<string, ConceptRow>> {
+  const uniqueIds = [...new Set(ids.filter((id) => id.trim().length > 0))];
+  if (uniqueIds.length === 0) return new Map();
+
+  const rows = await client(db)
+    .select()
+    .from(concepts)
+    .where(inArray(concepts.id, uniqueIds));
+  return new Map(rows.map((row) => [row.id, row]));
 }
 
 export async function updateConceptPatch(

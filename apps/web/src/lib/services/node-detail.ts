@@ -23,6 +23,7 @@ import {
 import { DEFAULT_USER_ID } from "@/db/constants";
 import {
   getConceptById,
+  getConceptsByIds,
   listEdgesForConcept,
   listTreesUsingConcept,
   type ConceptRow,
@@ -116,32 +117,42 @@ async function buildPanelGraph(
 ): Promise<PanelGraph> {
   const db = getDb();
   const edges = await listEdgesForConcept(db, conceptId);
+  const conceptIds: string[] = [];
+  const conceptIdByEdge = new Map<string, string>();
+
+  for (const e of edges) {
+    const otherId =
+      e.fromConceptId === conceptId ? e.toConceptId : e.fromConceptId;
+    conceptIds.push(otherId);
+    conceptIdByEdge.set(e.id, otherId);
+  }
+
+  const conceptsById = await getConceptsByIds(db, conceptIds);
   const prereq: Array<{ id: string; title: string }> = [];
   const related: Array<{ id: string; title: string }> = [];
   const seenP = new Set<string>();
   const seenR = new Set<string>();
   for (const e of edges) {
+    const otherId = conceptIdByEdge.get(e.id);
+    const other = otherId ? conceptsById.get(otherId) : null;
+    if (!other) continue;
+
     if (e.relationType === "prerequisite") {
       if (e.toConceptId === conceptId) {
-        const o = await getConceptById(db, e.fromConceptId);
-        if (o && !seenP.has(o.id)) {
-          seenP.add(o.id);
-          prereq.push({ id: o.id, title: o.title });
+        if (!seenP.has(other.id)) {
+          seenP.add(other.id);
+          prereq.push({ id: other.id, title: other.title });
         }
       } else if (e.fromConceptId === conceptId) {
-        const o = await getConceptById(db, e.toConceptId);
-        if (o && !seenR.has(o.id)) {
-          seenR.add(o.id);
-          related.push({ id: o.id, title: o.title });
+        if (!seenR.has(other.id)) {
+          seenR.add(other.id);
+          related.push({ id: other.id, title: other.title });
         }
       }
     } else {
-      const oid =
-        e.fromConceptId === conceptId ? e.toConceptId : e.fromConceptId;
-      const o = await getConceptById(db, oid);
-      if (o && !seenR.has(o.id)) {
-        seenR.add(o.id);
-        related.push({ id: o.id, title: o.title });
+      if (!seenR.has(other.id)) {
+        seenR.add(other.id);
+        related.push({ id: other.id, title: other.title });
       }
     }
   }
