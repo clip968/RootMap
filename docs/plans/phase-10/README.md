@@ -39,7 +39,7 @@ Phase 10의 핵심은 상세 설명 품질을 낮추거나 15초 fallback을 보
 - [x] 03. [03-detail-api-and-job-polling-routes.md](./03-detail-api-and-job-polling-routes.md) - detail request route와 job polling route 구현
 - [x] 04. [04-client-polling-and-timeout-ui.md](./04-client-polling-and-timeout-ui.md) - client polling, cleanup, timeout UI 구현
 - [x] 05. [05-prewarm-and-stale-recovery.md](./05-prewarm-and-stale-recovery.md) - prewarm enqueue와 stale running recovery 구현
-- [ ] 06. [06-async-smoke-and-quality-gate.md](./06-async-smoke-and-quality-gate.md) - async smoke와 최종 quality gate 적용
+- [x] 06. [06-async-smoke-and-quality-gate.md](./06-async-smoke-and-quality-gate.md) - async smoke와 최종 quality gate 적용
 
 ## 범위 요약
 
