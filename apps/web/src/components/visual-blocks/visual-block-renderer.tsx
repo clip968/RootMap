@@ -1,4 +1,6 @@
 import type { VisualBlock } from "@/lib/visualization/visual-block-schema";
+import { LinearSpaceDiagram } from "@/components/visual-blocks/linear-space-diagram";
+import { MappingTableDiagram } from "@/components/visual-blocks/mapping-table-diagram";
 import { VisualBlockAnnotations } from "@/components/visual-blocks/visual-block-annotations";
 import { VisualBlockEmptyState } from "@/components/visual-blocks/visual-block-empty-state";
 import {
@@ -30,19 +32,28 @@ export function VisualBlockRenderer({ blocks }: VisualBlockRendererProps) {
 }
 
 function VisualBlockCard({ block }: { block: VisualBlock }) {
+  const diagram = renderVisualBlockDiagram(block);
+  if (!diagram) return null;
+
   return (
     <article className="visual-block-card">
       <div className="visual-block-title">
         <span>{VISUAL_BLOCK_LABEL[block.type]}</span>
         <h3>{block.title}</h3>
       </div>
-      <VisualBlockDiagram block={block} />
+      {diagram}
       <VisualBlockAnnotations annotations={block.annotations} />
     </article>
   );
 }
 
-function VisualBlockDiagram({ block }: { block: VisualBlock }) {
+function renderVisualBlockDiagram(block: VisualBlock) {
+  if (block.type === "linear_space") return <LinearSpaceDiagram block={block} />;
+  if (block.type === "mapping_table") return <MappingTableDiagram block={block} />;
+  return <VisualBlockShellDiagram block={block} />;
+}
+
+function VisualBlockShellDiagram({ block }: { block: VisualBlock }) {
   const items = visualBlockSummaryItems(block).slice(0, 6);
 
   return (
