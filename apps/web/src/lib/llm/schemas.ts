@@ -8,6 +8,11 @@ import type {
   DocumentTreeStructureResponse,
   DocumentNodeDetailResponse,
 } from "@/types/learning";
+import {
+  DEFAULT_VISUAL_DECISION,
+  visualBlocksSchema,
+  visualDecisionSchema,
+} from "@/lib/visualization/visual-block-schema";
 
 const nodeTypeSchema = z.enum([
   "prerequisite",
@@ -279,6 +284,8 @@ export const nodeDetailResponseSchema = z.object({
   common_misconceptions: z.array(z.string()),
   check_questions: z.array(nodeDetailQuestionSchema),
   next_nodes: z.array(z.string()),
+  visual_decision: visualDecisionSchema.optional().default(DEFAULT_VISUAL_DECISION),
+  visual_blocks: visualBlocksSchema.optional().default([]),
 });
 
 /** 명세 §5·task 03 품질 가드레일: 스키마 통과 후 경고만 누적 */
@@ -754,6 +761,8 @@ export const documentNodeDetailResponseSchema = z
     common_misconceptions: z.array(z.string()),
     check_questions: z.array(documentNodeDetailQuestionSchema),
     next_nodes: z.array(z.string()),
+    visual_decision: visualDecisionSchema.optional().default(DEFAULT_VISUAL_DECISION),
+    visual_blocks: visualBlocksSchema.optional().default([]),
   })
   .transform(
     (data): DocumentNodeDetailResponse => ({
@@ -770,6 +779,8 @@ export const documentNodeDetailResponseSchema = z
         answer: q.answer,
       })),
       next_nodes: data.next_nodes,
+      visual_decision: data.visual_decision,
+      visual_blocks: data.visual_blocks,
     }),
   );
 
