@@ -19,6 +19,7 @@ import {
   getLearningTree,
 } from "@/lib/repository/learning-repository";
 import { bundleToApiTreeResponse } from "@/lib/tree/bundle-to-api";
+import { prewarmNodeDetailJobsForTree } from "@/lib/services/node-detail-prewarm";
 
 export class TreePersistError extends Error {
   constructor() {
@@ -163,6 +164,8 @@ export async function generateAndPersistTree(
   if (!bundle) {
     throw new TreePersistError();
   }
+
+  void prewarmNodeDetailJobsForTree(bundle);
 
   const responseStartedAt = Date.now();
   const response = {

@@ -115,4 +115,16 @@ assert(treeClientSource.includes("detailJobTimedOut"), "client should expose nod
 assert(treeClientSource.includes("clearDetailPolling"), "client should clean up detail polling on node switch/close/unmount");
 assert(!treeClientSource.includes("detail?.easy_explanation ||\n                          selectedNode.description"), "client should not render selectedNode.description as detail fallback");
 
+const prewarmSource = readSource("src/lib/services/node-detail-prewarm.ts");
+assert(prewarmSource.includes("NODE_DETAIL_PREWARM_LIMIT"), "prewarm should expose limit config");
+assert(prewarmSource.includes("NODE_DETAIL_PREWARM_CONCURRENCY"), "prewarm should expose concurrency config");
+assert(prewarmSource.includes("recommended_order"), "prewarm should use recommended_order");
+assert(prewarmSource.includes("enqueueNodeDetailJob"), "prewarm should enqueue node detail jobs");
+
+const treeGenerateSource = readSource("src/lib/services/learning-tree-generate.ts");
+assert(treeGenerateSource.includes("prewarmNodeDetailJobsForTree"), "normal tree generation should prewarm node detail jobs");
+
+const documentProcessorSource = readSource("src/lib/document/processor.ts");
+assert(documentProcessorSource.includes("prewarmNodeDetailJobsForTree"), "document tree generation should prewarm node detail jobs");
+
 console.log("Phase 10 async node detail smoke passed.");

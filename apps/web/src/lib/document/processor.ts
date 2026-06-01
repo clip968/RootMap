@@ -37,6 +37,8 @@ import { generateDocumentTreeStructure } from "@/lib/llm/generate-document-struc
 import { LlmExhaustedRetriesError } from "@/lib/llm/errors";
 import { getDb } from "@/db/client";
 import { learningTrees, learningNodes, userNodeProgress } from "@/db/schema";
+import { getLearningTree } from "@/lib/repository/learning-repository";
+import { prewarmNodeDetailJobsForTree } from "@/lib/services/node-detail-prewarm";
 import {
   addAliasesIfNew,
   allocateUniqueSlug,
@@ -1097,6 +1099,8 @@ export async function processDocument(
   // Step 9: 상태 → tree_generated
   // ══════════════════════════════════════════
   await updateDocumentStatus(documentId, "tree_generated");
+  const bundle = await getLearningTree(treeId, userId);
+  if (bundle) void prewarmNodeDetailJobsForTree(bundle);
 
   console.info("[document-processor]", {
     stage: "pipeline_complete",
