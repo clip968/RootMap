@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
-import { getDb } from "@/db/client";
+import { getDb, type RootMapDbClient } from "@/db/client";
 import {
   getLearningTree,
   type LearningTreeBundle,
@@ -403,8 +403,9 @@ export async function getDocumentConceptRows(
 export async function createDocumentLearningTreeLink(
   documentId: string,
   treeId: string,
+  client?: RootMapDbClient,
 ): Promise<string> {
-  const db = getDb();
+  const db = client ?? getDb();
   const rows = await db
     .insert(documentLearningTrees)
     .values({

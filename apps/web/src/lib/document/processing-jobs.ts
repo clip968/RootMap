@@ -178,6 +178,18 @@ export async function processNextDocumentProcessingMessage(options: {
     };
   }
 
+  if (document.processingStatus === "failed") {
+    const deleted = await deleteMessage(message.msgId);
+    return {
+      status: "already_processed",
+      messageId: message.msgId,
+      jobId: payload.jobId,
+      documentId: payload.documentId,
+      deleted,
+      reason: "document is already failed",
+    };
+  }
+
   try {
     const result = await run(payload.documentId, payload.userId, {
       chunkBatchSize: DOCUMENT_PROCESSING_WORKER_CHUNK_BATCH_SIZE,

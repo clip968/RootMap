@@ -146,6 +146,21 @@ async function main(): Promise<void> {
   assert(!deleted.includes("401"), "failed message should remain for queue retry");
   assert(processorCalls === 2, "processor should run for requeue and success cases");
 
+  const failedDocument = await processNextDocumentProcessingMessage({
+    readMessages: async () => [queueMessage("501", enqueued[0]!)],
+    deleteMessage: async (messageId) => {
+      deleted.push(messageId);
+      return true;
+    },
+    getDocument: async () => ({ processingStatus: "failed" }),
+    run: async () => {
+      throw new Error("failed documents should not run processor");
+    },
+  });
+
+  assert(failedDocument.status === "already_processed", "failed document should be skipped");
+  assert(deleted.includes("501"), "failed document queue message should be deleted");
+
   console.info("[document-processing-jobs-smoke] ok");
 }
 

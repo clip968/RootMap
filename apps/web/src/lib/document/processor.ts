@@ -732,7 +732,8 @@ async function persistDocumentTree(
     }
 
     // 4. document_learning_trees 연결
-    await createDocumentLearningTreeLink(documentId, treeId);
+    // 같은 transaction 안에서 방금 만든 learning_trees 행을 참조해야 FK 검증이 통과한다.
+    await createDocumentLearningTreeLink(documentId, treeId, tx);
 
     return treeId;
   });
