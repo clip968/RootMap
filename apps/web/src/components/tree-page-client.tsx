@@ -1767,6 +1767,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                                 <button
                                   type="button"
                                   className="detail-inline-button is-primary"
+                                  aria-label={`${selectedNode.title}을 이해한 상태로 저장`}
                                   disabled={progressBusy === selectedNode.id}
                                   onClick={() => void onProgressChange(selectedNode.id, "known")}
                                 >
@@ -1775,6 +1776,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                                 <button
                                   type="button"
                                   className="detail-inline-button"
+                                  aria-label={`${selectedNode.title}을 애매한 상태로 저장`}
                                   disabled={progressBusy === selectedNode.id}
                                   onClick={() => void onProgressChange(selectedNode.id, "partial")}
                                 >
@@ -1783,6 +1785,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                                 <button
                                   type="button"
                                   className="detail-inline-button"
+                                  aria-label={`${selectedNode.title} 세부 학습 맵 생성`}
                                   disabled={regenLoading}
                                   onClick={() => void onDeepDive(selectedNode)}
                                 >
@@ -1791,6 +1794,11 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                                 <button
                                   type="button"
                                   className="detail-inline-button"
+                                  aria-label={
+                                    nextActionNode
+                                      ? `다음 개념 ${nextActionNode.title} 보기`
+                                      : "다음 개념 없음"
+                                  }
                                   disabled={!nextActionNode}
                                   onClick={() => {
                                     if (nextActionNode) void openNode(nextActionNode.id);
@@ -1844,7 +1852,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                             </div>
 
                             <div className="more-detail-group">
-                              <h3>Concept 상태</h3>
+                              <h3>내 학습 상태</h3>
                               <div className="concept-metric">
                                 <div className="concept-metric-header">
                                   <span>이해도</span>

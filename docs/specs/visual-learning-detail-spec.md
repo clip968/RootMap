@@ -884,6 +884,18 @@ block size가 4096 byte일 때 LBA 8의 시작 byte offset은?
 
 ---
 
+## Implementation Decision Note
+
+Phase 07 구현에서는 명세의 8개 visual skill을 모두 하나의 renderer 체계에 포함했다.
+
+- LLM 응답은 `visual_decision`과 `visual_blocks` JSON만 허용하고, SVG/HTML/CSS/Mermaid 직접 생성은 프롬프트에서 금지했다.
+- 기존 detail JSON은 `visual_decision.skill = "none"`, `visual_blocks = []`로 정규화한다.
+- renderer는 schema 검증을 통과하지 못한 block이나 필수 표시 데이터가 없는 block을 렌더링하지 않는다.
+- `linear_space`, `mapping_table`, `flow_pipeline`, `timeline`, `layer_stack`, `tree_graph`, `state_machine`, `compare_matrix`는 각각 전용 React renderer를 갖는다.
+- Phase 07 회귀 검증은 `apps/web`에서 `npm run phase7:visual-detail-smoke`로 수행한다.
+
+---
+
 ## Summary
 
 이 개선은 단순한 UI polish가 아니다. RootMap의 학습 경험을 “긴 설명 읽기”에서 “개념 구조를 보고 이동하기”로 바꾸는 작업이다.

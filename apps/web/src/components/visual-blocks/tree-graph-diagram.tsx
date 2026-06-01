@@ -13,6 +13,7 @@ export function TreeGraphDiagram({ block }: TreeGraphDiagramProps) {
   if (block.nodes.length > 12) {
     return (
       <div className="visual-block-diagram tree-graph-diagram">
+        <p className="visual-block-sr-summary">{treeGraphSummary(block)}</p>
         <div className="tree-graph-compact-list">
           {block.nodes.map((node) => (
             <span key={node.id}>{node.label}</span>
@@ -25,6 +26,7 @@ export function TreeGraphDiagram({ block }: TreeGraphDiagramProps) {
 
   return (
     <div className="visual-block-diagram tree-graph-diagram">
+      <p className="visual-block-sr-summary">{treeGraphSummary(block)}</p>
       <div className="tree-graph-levels">
         {treeGraphLevels(block).map((level, index) => (
           <div className="tree-graph-level" key={`level-${index}`}>
@@ -39,6 +41,10 @@ export function TreeGraphDiagram({ block }: TreeGraphDiagramProps) {
       <EdgeList block={block} />
     </div>
   );
+}
+
+function treeGraphSummary(block: TreeGraphVisualBlock): string {
+  return `${block.title}: 노드 ${block.nodes.length}개와 연결 ${block.edges.length}개로 구성된 그래프입니다.`;
 }
 
 function EdgeList({ block }: { block: TreeGraphVisualBlock }) {

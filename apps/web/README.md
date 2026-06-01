@@ -62,6 +62,12 @@ npm run check
 
 `check`는 lint와 production build/type check를 순서대로 실행합니다. Supabase 실제 DB 검증은 `DATABASE_URL`을 Supabase Postgres URL로 설정한 뒤 API 라우트 또는 Drizzle 쿼리로 수행합니다.
 
+Phase 07 시각 학습 상세 화면의 schema, renderer, empty fallback fixture는 아래 명령으로 확인합니다.
+
+```bash
+npm run phase7:visual-detail-smoke
+```
+
 ## Phase 2 관리자/개발자 화면
 
 ```bash

@@ -19,6 +19,10 @@ export function StateMachineDiagram({ block }: StateMachineDiagramProps) {
 
   return (
     <div className="visual-block-diagram state-machine-diagram">
+      <p className="visual-block-sr-summary">
+        {block.title}: 상태 {block.states.length}개와 전이 {block.transitions.length}개로
+        구성된 상태 전이입니다.
+      </p>
       <div className="state-machine-states" role="list">
         {block.states.map((state) => (
           <div className="state-machine-state" role="listitem" key={state.id}>
