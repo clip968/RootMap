@@ -48,7 +48,10 @@
     "test:e2e": "tsx scripts/phase6-test-harness.ts e2e",
     "test:llm-eval": "tsx scripts/phase6-test-harness.ts llm-eval",
     "phase6:quality": "tsx scripts/phase6-test-harness.ts quality",
-    "phase6:graph-quality-smoke": "tsx scripts/phase6-graph-quality-smoke.ts"
+    "phase6:graph-quality-smoke": "tsx scripts/phase6-graph-quality-smoke.ts",
+    "phase7:visual-block-schema": "tsx scripts/smoke-phase7-visual-block-schema.ts",
+    "phase7:visual-detail-renderers": "tsx scripts/smoke-phase7-visual-detail-renderers.ts",
+    "phase7:visual-detail-smoke": "npm run phase7:visual-block-schema && npm run phase7:visual-detail-renderers"
   },
   "dependencies": {
     "@esbuild/linux-x64": "^0.28.0",

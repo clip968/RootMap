@@ -28,6 +28,13 @@ import {
 } from "@/lib/repository/concept-repository";
 import { buildPrerequisitePromptContext } from "@/lib/services/node-detail-context";
 import type { NodeDetailResponse, NodeType } from "@/types/learning";
+import {
+  DEFAULT_VISUAL_DECISION,
+  normalizeVisualBlocks,
+  normalizeVisualDecision,
+  type VisualBlock,
+  type VisualDecision,
+} from "@/lib/visualization/visual-block-schema";
 
 type GenericNodeDetailGenerator = (
   input: GenerateNodeDetailInput,
@@ -49,6 +56,8 @@ export interface ApiNodeDetailResponse {
   common_misconceptions: string[];
   check_questions: NodeDetailResponse["check_questions"];
   next_nodes: string[];
+  visual_decision: VisualDecision;
+  visual_blocks: VisualBlock[];
   quality_warnings: string[];
   concept_id: string | null;
   topic_context_line?: string;
@@ -166,6 +175,8 @@ function toApiBody(
     common_misconceptions: d.common_misconceptions,
     check_questions: d.check_questions,
     next_nodes: d.next_nodes,
+    visual_decision: normalizeVisualDecision(d.visual_decision),
+    visual_blocks: normalizeVisualBlocks(d.visual_blocks),
     quality_warnings: qw,
     concept_id: extras.concept_id ?? null,
     topic_context_line: extras.topic_context_line,
@@ -238,6 +249,8 @@ function responseFromStoredConcept(
     common_misconceptions: c.commonMisconceptions,
     check_questions: [],
     next_nodes: nodeRow.children,
+    visual_decision: DEFAULT_VISUAL_DECISION,
+    visual_blocks: [],
     quality_warnings: qualityWarnings,
     concept_id: c.id,
     topic_context_line: tline,
@@ -350,6 +363,8 @@ export async function getOrCreateNodeDetail(params: {
         common_misconceptions: detail.common_misconceptions,
         check_questions: detail.check_questions,
         next_nodes: detail.next_nodes,
+        visual_decision: detail.visual_decision,
+        visual_blocks: detail.visual_blocks ?? [],
       };
       const saved = await saveNodeDetail(nodeId, genericDetail);
       if (!saved) {

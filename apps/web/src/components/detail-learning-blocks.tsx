@@ -23,17 +23,13 @@ export function DetailLearningBlocks({
     detail?.easy_explanation || node.description || "",
   );
   const whyItMatters = detail?.why_it_matters_for_document ?? detail?.why_it_matters ?? "";
-  const misconception = detail?.common_misconceptions?.[0] ?? "";
   const nodeRole = sectionLabel[node.type];
   const prerequisiteLabel = detail?.prerequisite_concepts?.[0]?.title ?? "선수 개념";
   const nextLabel = detail?.next_nodes?.[0] ?? "다음 개념";
-  const riskLabel = misconception || "헷갈릴 지점";
   const tableRows = [
     { label: "핵심 역할", value: nodeRole },
     { label: "쉽게 말하면", value: detail?.easy_explanation || node.description },
     { label: "왜 중요한가", value: whyItMatters },
-    { label: "예시", value: detail?.example },
-    { label: "주의점", value: misconception },
   ].filter((row) => row.value?.trim());
 
   return (
@@ -45,7 +41,7 @@ export function DetailLearningBlocks({
         </section>
       ) : null}
 
-      {explanation || detail?.prerequisite_concepts?.length || detail?.next_nodes?.length || misconception ? (
+      {explanation || detail?.prerequisite_concepts?.length || detail?.next_nodes?.length ? (
         <section className="detail-learning-card">
           <h3>개념 스케치</h3>
           <div className="concept-sketch">
@@ -68,11 +64,6 @@ export function DetailLearningBlocks({
                 <em>이후 학습으로 확장</em>
               </div>
             </div>
-            <div className="sketch-branch" aria-hidden="true" />
-            <div className="sketch-risk-node">
-              <span>주의 분기</span>
-              <strong>{riskLabel}</strong>
-            </div>
           </div>
         </section>
       ) : null}
@@ -90,20 +81,6 @@ export function DetailLearningBlocks({
               ))}
             </tbody>
           </table>
-        </section>
-      ) : null}
-
-      {detail?.common_misconceptions?.length ? (
-        <section className="detail-learning-card">
-          <h3>헷갈리기 쉬운 점</h3>
-          <div className="misconception-card-list">
-            {detail.common_misconceptions.map((item) => (
-              <div key={item}>
-                <span>주의</span>
-                <p>{item}</p>
-              </div>
-            ))}
-          </div>
         </section>
       ) : null}
     </div>

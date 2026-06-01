@@ -34,17 +34,17 @@ Phase 07의 핵심은 RootMap의 노드 상세 경험을 긴 설명 페이지에
 
 > 작업을 완료할 때마다 해당 항목을 `[x]`로 바꿔 진행 상황을 추적한다.
 
-- [ ] 00. [00-phase7-ux-contract-and-scope.md](./00-phase7-ux-contract-and-scope.md) - Phase 07 범위와 현재 구현 매핑 고정
-- [ ] 01. [01-node-card-and-left-navigation-density.md](./01-node-card-and-left-navigation-density.md) - 노드 카드와 좌측 패널 정보 밀도 축소
-- [ ] 02. [02-detail-modal-learning-card-layout.md](./02-detail-modal-learning-card-layout.md) - 상세 모달 학습 카드 레이아웃 적용
-- [ ] 03. [03-visual-block-contract-and-schema.md](./03-visual-block-contract-and-schema.md) - 8개 visual skill 계약과 schema 추가
-- [ ] 04. [04-visual-decision-router-and-prompts.md](./04-visual-decision-router-and-prompts.md) - visual decision 프롬프트/파서 흐름 추가
-- [ ] 05. [05-visual-block-renderer-shell.md](./05-visual-block-renderer-shell.md) - 공통 visual block renderer shell 추가
-- [ ] 06. [06-linear-space-and-mapping-table-renderers.md](./06-linear-space-and-mapping-table-renderers.md) - `linear_space`, `mapping_table` 렌더러 추가
-- [ ] 07. [07-flow-timeline-layer-stack-renderers.md](./07-flow-timeline-layer-stack-renderers.md) - `flow_pipeline`, `timeline`, `layer_stack` 렌더러 추가
-- [ ] 08. [08-tree-state-compare-renderers.md](./08-tree-state-compare-renderers.md) - `tree_graph`, `state_machine`, `compare_matrix` 렌더러 추가
-- [ ] 09. [09-visual-detail-smoke-and-fixtures.md](./09-visual-detail-smoke-and-fixtures.md) - visual detail smoke와 fixture 검증 추가
-- [ ] 10. [10-phase7-docs-accessibility-quality-gate.md](./10-phase7-docs-accessibility-quality-gate.md) - 문서, 접근성, 최종 품질 gate 정리
+- [x] 00. [00-phase7-ux-contract-and-scope.md](./00-phase7-ux-contract-and-scope.md) - Phase 07 범위와 현재 구현 매핑 고정
+- [x] 01. [01-node-card-and-left-navigation-density.md](./01-node-card-and-left-navigation-density.md) - 노드 카드와 좌측 패널 정보 밀도 축소
+- [x] 02. [02-detail-modal-learning-card-layout.md](./02-detail-modal-learning-card-layout.md) - 상세 모달 학습 카드 레이아웃 적용
+- [x] 03. [03-visual-block-contract-and-schema.md](./03-visual-block-contract-and-schema.md) - 8개 visual skill 계약과 schema 추가
+- [x] 04. [04-visual-decision-router-and-prompts.md](./04-visual-decision-router-and-prompts.md) - visual decision 프롬프트/파서 흐름 추가
+- [x] 05. [05-visual-block-renderer-shell.md](./05-visual-block-renderer-shell.md) - 공통 visual block renderer shell 추가
+- [x] 06. [06-linear-space-and-mapping-table-renderers.md](./06-linear-space-and-mapping-table-renderers.md) - `linear_space`, `mapping_table` 렌더러 추가
+- [x] 07. [07-flow-timeline-layer-stack-renderers.md](./07-flow-timeline-layer-stack-renderers.md) - `flow_pipeline`, `timeline`, `layer_stack` 렌더러 추가
+- [x] 08. [08-tree-state-compare-renderers.md](./08-tree-state-compare-renderers.md) - `tree_graph`, `state_machine`, `compare_matrix` 렌더러 추가
+- [x] 09. [09-visual-detail-smoke-and-fixtures.md](./09-visual-detail-smoke-and-fixtures.md) - visual detail smoke와 fixture 검증 추가
+- [x] 10. [10-phase7-docs-accessibility-quality-gate.md](./10-phase7-docs-accessibility-quality-gate.md) - 문서, 접근성, 최종 품질 gate 정리
 
 ## 범위 요약
 

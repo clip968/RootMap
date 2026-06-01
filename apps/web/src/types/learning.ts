@@ -1,5 +1,10 @@
 /** Phase 1 공통 도메인 타입 (명세·01-project-foundation 기준) */
 
+import type {
+  VisualBlock,
+  VisualDecision,
+} from "@/lib/visualization/visual-block-schema";
+
 /** Phase 2 LLM·저장소 공통: 개념 간선 relation_type */
 export type ConceptRelationType =
   | "prerequisite"
@@ -80,6 +85,8 @@ export interface NodeDetailResponse {
     answer: string;
   }>;
   next_nodes: string[];
+  visual_decision?: VisualDecision;
+  visual_blocks?: VisualBlock[];
 }
 
 /** API·UI에서 사용하는 노드 (DB UUID id) */
@@ -343,4 +350,6 @@ export interface DocumentNodeDetailResponse {
     answer: string;
   }>;
   next_nodes: string[];
+  visual_decision?: VisualDecision;
+  visual_blocks?: VisualBlock[];
 }
