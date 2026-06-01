@@ -11,7 +11,8 @@ Phase 08의 핵심은 상세 모달 UX를 다시 크게 바꾸는 것이 아니�
 3. `detailJson` 또는 Concept Store 설명이 충분한 경우 LLM 호출 전에 빠르게 응답하는 fast path를 고정한다.
 4. 오른쪽 패널용 concept graph 보강 조회를 본문 detail 응답에서 분리하고, 별도 extras 요청에서만 수행한다.
 5. LLM, DB 저장, graph 보강 시간을 나눠 기록해 이후 성능 문제를 추측이 아니라 수치로 판단한다.
-6. first-pass detail 프롬프트에서는 visual JSON 생성을 제외하고, 기존 visual detail UI와 Phase 4 개인화 이벤트 흐름은 깨뜨리지 않는다.
+6. 동일 노드 중복 클릭과 오래된 detail 응답이 새 선택 노드 UI를 덮어쓰지 않게 막는다.
+7. first-pass detail 프롬프트에서는 visual JSON 생성을 제외하고, 기존 visual detail UI와 Phase 4 개인화 이벤트 흐름은 깨뜨리지 않는다.
 
 ## 작업 순서 요약
 
@@ -40,6 +41,7 @@ Phase 08의 핵심은 상세 모달 UX를 다시 크게 바꾸는 것이 아니�
 - `TreePageClient`의 상세 모달 열기 흐름 정리
 - `/api/nodes/[nodeId]/detail` 중심의 단일 detail 조회·생성 경로
 - `/api/nodes/[nodeId]/detail/extras`를 통한 패널 graph 보강 조회
+- 동일 노드 in-flight detail 요청 dedupe와 stale request abort
 - 기존 `/api/trees/[treeId]/nodes/[nodeId]/generate-detail` 경로의 역할 축소 또는 호환 유지 결정
 - `getOrCreateNodeDetail`의 cache hit, Concept Store fast path, LLM generation 순서 정리
 - `buildPanelGraph` 관련 concept 조회 최적화

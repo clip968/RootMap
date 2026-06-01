@@ -59,7 +59,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 const SECTION_ORDER: NodeType[] = [
   "prerequisite",
@@ -227,6 +227,10 @@ function documentSourceTypeTone(sourceType: DocumentSourceType): string {
   if (sourceType === "explicit") return "bg-zinc-950 text-white";
   if (sourceType === "inferred") return "bg-zinc-200 text-zinc-950";
   return "bg-white text-zinc-700 ring-1 ring-inset ring-zinc-300";
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
 }
 
 function generationStageMessage(elapsedSeconds: number): string {
@@ -615,6 +619,10 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailExtrasLoading, setDetailExtrasLoading] = useState(false);
   const [detailExtrasError, setDetailExtrasError] = useState<string | null>(null);
+  const detailRequestSeqRef = useRef(0);
+  const detailInFlightNodeRef = useRef<string | null>(null);
+  const detailAbortControllerRef = useRef<AbortController | null>(null);
+  const detailExtrasAbortControllerRef = useRef<AbortController | null>(null);
   const [regenLoading, setRegenLoading] = useState(false);
   const [regenElapsedSeconds, setRegenElapsedSeconds] = useState(0);
   const [regenError, setRegenError] = useState<string | null>(null);
@@ -909,14 +917,26 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     viewMode,
   ]);
 
-  const loadDetailExtras = useCallback(async (nodeId: string) => {
+  useEffect(() => {
+    return () => {
+      detailAbortControllerRef.current?.abort();
+      detailExtrasAbortControllerRef.current?.abort();
+    };
+  }, []);
+
+  const loadDetailExtras = useCallback(async (nodeId: string, requestSeq: number) => {
+    detailExtrasAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    detailExtrasAbortControllerRef.current = controller;
     setDetailExtrasLoading(true);
     setDetailExtrasError(null);
     try {
       const res = await fetch(
         `/api/nodes/${nodeId}/detail/extras?tree_id=${encodeURIComponent(treeId)}`,
+        { signal: controller.signal },
       );
       const data = await res.json().catch(() => ({}));
+      if (controller.signal.aborted || detailRequestSeqRef.current !== requestSeq) return;
       if (!res.ok) {
         throw new Error(data?.error?.message ?? "연결 관계를 불러오지 못했습니다.");
       }
@@ -928,15 +948,32 @@ export function TreePageClient({ treeId }: { treeId: string }) {
           : current,
       );
     } catch (error) {
+      if (isAbortError(error) || controller.signal.aborted) return;
+      if (detailRequestSeqRef.current !== requestSeq) return;
       setDetailExtrasError(
         error instanceof Error ? error.message : "연결 관계를 불러오지 못했습니다.",
       );
     } finally {
-      setDetailExtrasLoading(false);
+      if (detailExtrasAbortControllerRef.current === controller) {
+        detailExtrasAbortControllerRef.current = null;
+      }
+      if (detailRequestSeqRef.current === requestSeq) {
+        setDetailExtrasLoading(false);
+      }
     }
   }, [treeId]);
 
   const loadDetail = useCallback(async (nodeId: string) => {
+    if (detailInFlightNodeRef.current === nodeId) return;
+
+    detailAbortControllerRef.current?.abort();
+    detailExtrasAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    const requestSeq = detailRequestSeqRef.current + 1;
+    detailRequestSeqRef.current = requestSeq;
+    detailInFlightNodeRef.current = nodeId;
+    detailAbortControllerRef.current = controller;
+
     setDetailLoading(true);
     setDetailError(null);
     setDetailExtrasError(null);
@@ -945,15 +982,17 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     try {
       const res = await fetch(`/api/nodes/${nodeId}/detail`, {
         method: "POST",
+        signal: controller.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tree_id: treeId }),
       });
       const data = await res.json().catch(() => ({}));
+      if (controller.signal.aborted || detailRequestSeqRef.current !== requestSeq) return;
       if (!res.ok) {
         throw new Error(data?.error?.message ?? "상세 설명을 불러오지 못했습니다.");
       }
       setDetail(data as ApiNodeDetailResponse);
-      void loadDetailExtras(nodeId);
+      void loadDetailExtras(nodeId, requestSeq);
       setTree((prev) =>
         prev
           ? {
@@ -965,11 +1004,19 @@ export function TreePageClient({ treeId }: { treeId: string }) {
           : prev,
       );
     } catch (error) {
+      if (isAbortError(error) || controller.signal.aborted) return;
+      if (detailRequestSeqRef.current !== requestSeq) return;
       setDetailError(
         error instanceof Error ? error.message : "상세 설명을 불러오지 못했습니다.",
       );
     } finally {
-      setDetailLoading(false);
+      if (detailAbortControllerRef.current === controller) {
+        detailAbortControllerRef.current = null;
+      }
+      if (detailRequestSeqRef.current === requestSeq) {
+        detailInFlightNodeRef.current = null;
+        setDetailLoading(false);
+      }
     }
   }, [loadDetailExtras, treeId]);
 
@@ -1799,6 +1846,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                                   }
                                   disabled={!nextActionNode}
                                   onClick={() => {
+                                    // eslint-disable-next-line react-hooks/refs -- event handler calls a ref-guarded request helper after render.
                                     if (nextActionNode) void openNode(nextActionNode.id);
                                   }}
                                 >

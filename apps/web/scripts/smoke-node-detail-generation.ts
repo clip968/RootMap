@@ -324,6 +324,22 @@ async function main(): Promise<void> {
     treeClientSource.includes("setDetailExtrasLoading"),
     "tree UI should track extras loading separately from body detail loading",
   );
+  assert(
+    treeClientSource.includes("detailInFlightNodeRef.current === nodeId"),
+    "tree UI should skip duplicate detail requests for the same in-flight node",
+  );
+  assert(
+    treeClientSource.includes("detailAbortControllerRef.current?.abort()"),
+    "tree UI should abort stale detail requests when another node is opened",
+  );
+  assert(
+    treeClientSource.includes("detailExtrasAbortControllerRef.current?.abort()"),
+    "tree UI should abort stale detail extras requests when another node is opened",
+  );
+  assert(
+    treeClientSource.includes("detailRequestSeqRef.current"),
+    "tree UI should ignore stale detail responses by request sequence",
+  );
 
   console.info("[node-detail-generation-smoke] ok");
 }

@@ -37,9 +37,16 @@
 - `loadDetail` 초반의 `setDetail(null)`이 이 역할을 하므로 유지한다.
 - 필요하면 `openNode`에서 `setDetail(null)`을 선행 호출하지 않고 `loadDetail` 한 곳에서 상태 전환을 관리한다.
 
+### 4. 중복 요청과 stale response 방지
+
+- 같은 노드의 detail 요청이 이미 진행 중이면 새 detail 요청을 만들지 않는다.
+- 다른 노드를 열면 이전 detail 본문 요청과 extras 요청을 `AbortController`로 취소한다.
+- 취소되지 않고 늦게 도착한 응답도 request sequence가 현재 선택과 맞지 않으면 state에 반영하지 않는다.
+
 ## 테스트 전략
 
 - `tree-page-client.tsx`에서 `generate-detail` 문자열이 더 이상 호출 경로에 남지 않았는지 정적 확인한다.
+- `tree-page-client.tsx`에서 같은 노드 in-flight 요청 dedupe, stale request abort, request sequence guard가 있는지 정적 확인한다.
 - UI regression은 기존 `npm run phase7:visual-detail-smoke`와 `npm run build`로 확인한다.
 
 ## 완료 기준(DoD)
@@ -47,4 +54,6 @@
 - 노드 클릭당 클라이언트 detail fetch는 `/api/nodes/:nodeId/detail` 하나만 남는다.
 - 문서 기반 노드에서도 선행 `generate-detail` 호출이 없다.
 - 모달은 클릭 즉시 열리고 loading copy가 표시된다.
+- 같은 노드 중복 클릭은 중복 detail fetch를 만들지 않는다.
+- 다른 노드로 바뀐 뒤 도착한 이전 응답은 현재 detail을 덮어쓰지 않는다.
 - 검증 명령: `npm run lint`, `npm run build` (`apps/web`에서 실행)
