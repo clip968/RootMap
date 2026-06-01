@@ -32,16 +32,9 @@ export async function POST(
     });
   }
 
-  // 동일 사용자가 같은 파일을 다시 누르면 같은 PDF가 병렬로 분석되어 토큰 비용이 중복될 수 있다.
-  // 기존 활성 작업이 있으면 새 queue 메시지를 만들지 않고 사용자에게 재시도 가능 상태를 알려준다.
+  // 제출/시연 흐름에서는 같은 파일을 여러 번 업로드해도 새 document_id를 처리할 수 있어야 한다.
+  // 중복 정보는 비용 경고용 metadata로만 응답하고, queue enqueue 자체는 막지 않는다.
   const duplicate = await findOlderActiveDuplicateDocumentForProcessing(document);
-  if (duplicate) {
-    return jsonError(
-      "INVALID_OPERATION",
-      "같은 파일의 문서 처리가 이미 진행 중입니다. 기존 문서 처리가 끝난 뒤 다시 시도해 주세요.",
-      409,
-    );
-  }
 
   const job = await startDocumentProcessingJob({
     documentId,
@@ -84,6 +77,7 @@ export async function POST(
       job_status: job.status,
       job_id: job.jobId,
       message_id: job.messageId,
+      active_duplicate_document_id: duplicate?.id ?? null,
       wake_task: wakeTask,
     },
     { status: 202 },

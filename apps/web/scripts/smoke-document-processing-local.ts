@@ -74,7 +74,11 @@ async function main(): Promise<void> {
   assert(chunkedSummary.chunk_count === 3, "summary should include chunk count");
   assert(chunkedSummary.checkpointed_chunk_count === 2, "completed and skipped checkpoints should count");
   assert(chunkedSummary.pending_chunk_count === 1, "summary should include pending chunk count");
-  assert(chunkedSummary.can_process === false, "active duplicate should prevent local processing");
+  assert(chunkedSummary.can_process === true, "active duplicate should warn but allow local processing");
+  assert(
+    chunkedSummary.recommended_next_action.includes("현재 문서도 처리할 수 있습니다"),
+    "active duplicate should be shown as a warning, not a blocker",
+  );
 
   let processCalls = 0;
   const dryRun = await runLocalDocumentProcessing(

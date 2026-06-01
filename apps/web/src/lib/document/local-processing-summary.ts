@@ -80,25 +80,26 @@ function recommendedNextAction(options: {
   if (options.status === "not_found") {
     return "documentId와 사용자 ID를 확인한 뒤 다시 dry-run을 실행하세요.";
   }
-  if (options.activeDuplicateDocumentId) {
-    return `같은 파일의 활성 문서(${options.activeDuplicateDocumentId})가 있습니다. 기존 문서 처리를 먼저 확인하거나 중복 문서를 정리한 뒤 실행하세요.`;
-  }
+  const duplicateNotice =
+    options.activeDuplicateDocumentId ?
+      `같은 파일의 활성 문서(${options.activeDuplicateDocumentId})가 있지만 현재 문서도 처리할 수 있습니다. `
+    : "";
 
   switch (options.status) {
     case "uploaded":
-      return "텍스트 추출부터 로컬 처리를 시작할 수 있습니다. 먼저 --dry-run 결과를 확인한 뒤 --resume으로 실행하세요.";
+      return `${duplicateNotice}텍스트 추출부터 로컬 처리를 시작할 수 있습니다. 먼저 --dry-run 결과를 확인한 뒤 --resume으로 실행하세요.`;
     case "text_extracted":
-      return "이미 텍스트 추출이 끝났습니다. chunk 분할부터 이어서 처리하려면 --resume으로 실행하세요.";
+      return `${duplicateNotice}이미 텍스트 추출이 끝났습니다. chunk 분할부터 이어서 처리하려면 --resume으로 실행하세요.`;
     case "chunked":
       if (options.chunkCount === 0) {
         return "청크가 없습니다. 문서 상태와 document_chunks 저장 결과를 확인하세요.";
       }
-      return `미처리 chunk ${options.pendingChunkCount}개가 남았습니다. --chunk-batch-size를 작게 두고 --resume으로 실행하세요.`;
+      return `${duplicateNotice}미처리 chunk ${options.pendingChunkCount}개가 남았습니다. --chunk-batch-size를 작게 두고 --resume으로 실행하세요.`;
     case "concepts_extracted":
       if (options.documentConceptCount === 0) {
         return "document_concepts가 없습니다. chunk/concept 단계 결과를 복구한 뒤 다시 실행하세요.";
       }
-      return "chunk LLM 호출 없이 tree 생성/저장만 재시도하려면 --tree-only로 실행하세요.";
+      return `${duplicateNotice}chunk LLM 호출 없이 tree 생성/저장만 재시도하려면 --tree-only로 실행하세요.`;
     case "tree_generated":
       return "이미 tree_generated 상태입니다. 추가 LLM 호출 없이 기존 tree를 사용하세요.";
     case "failed":
@@ -113,7 +114,6 @@ function canProcess(options: {
   documentConceptCount: number;
 }): boolean {
   if (options.status === "not_found") return false;
-  if (options.activeDuplicateDocumentId) return false;
   if (options.status === "failed" || options.status === "tree_generated") return false;
   if (options.status === "chunked" && options.chunkCount === 0) return false;
   if (options.status === "concepts_extracted" && options.documentConceptCount === 0) {
