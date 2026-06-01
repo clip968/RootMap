@@ -32,6 +32,7 @@ import { buildPrerequisitePromptContext } from "@/lib/services/node-detail-conte
 import type { NodeDetailResponse, NodeType } from "@/types/learning";
 import {
   DEFAULT_VISUAL_DECISION,
+  hasRequiredNodeDetailVisual,
   normalizeVisualBlocks,
   normalizeVisualDecision,
   type VisualBlock,
@@ -657,6 +658,14 @@ export async function getReadyNodeDetail(params: {
     async () => Boolean(nodeRow.detailJson),
   );
   if (hasCachedDetail) {
+    if (!hasRequiredNodeDetailVisual(nodeRow.detailJson!)) {
+      await withDetailDuration(
+        "cache_missing_required_visual",
+        logContext,
+        async () => null,
+      );
+      return { status: "not_ready" };
+    }
     return {
       status: "ready",
       detail: await withDetailDuration(
@@ -675,22 +684,12 @@ export async function getReadyNodeDetail(params: {
 
   const concept = detailConceptId ? await loadConcept(detailConceptId) : null;
   if (concept && hasUsableConceptExplanation(concept)) {
-    return {
-      status: "ready",
-      detail: await withDetailDuration(
-        "concept_fast_path",
-        logContext,
-        () => responseFromStoredConcept(
-          nodeId,
-          nodeRow.nodeKey,
-          nodeRow,
-          concept,
-          bundle,
-          [],
-          documentExtras,
-        ),
-      ),
-    };
+    await withDetailDuration(
+      "concept_fast_path_missing_required_visual",
+      logContext,
+      async () => null,
+    );
+    return { status: "not_ready" };
   }
 
   return { status: "not_ready" };

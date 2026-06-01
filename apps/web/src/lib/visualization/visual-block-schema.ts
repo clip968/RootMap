@@ -11,6 +11,8 @@ export const VISUAL_BLOCK_TYPES = [
   "compare_matrix",
 ] as const;
 
+export const REQUIRED_NODE_DETAIL_VISUAL_BLOCK_COUNT = 1;
+
 export const visualDecisionSchema = z.object({
   should_visualize: z.boolean(),
   skill: z.enum([
@@ -253,4 +255,20 @@ export function normalizeVisualDecision(value: unknown): VisualDecision {
 export function normalizeVisualBlocks(value: unknown): VisualBlock[] {
   const result = visualBlocksSchema.safeParse(value ?? []);
   return result.success ? result.data : [];
+}
+
+// 세부 카드 ready 판정은 "렌더 가능한 block 1개"와 "그 block을 가리키는 decision"을 함께 요구한다.
+export function hasRequiredNodeDetailVisual(detail: {
+  visual_decision?: unknown;
+  visual_blocks?: unknown;
+}): boolean {
+  const decision = normalizeVisualDecision(detail.visual_decision);
+  const blocks = normalizeVisualBlocks(detail.visual_blocks);
+  const firstBlock = blocks[0];
+  return Boolean(
+    firstBlock &&
+      decision.should_visualize &&
+      decision.skill !== "none" &&
+      decision.skill === firstBlock.type,
+  );
 }

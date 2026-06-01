@@ -9,6 +9,7 @@ import {
   documentTreeResponseSchema,
   documentTreeStructureResponseSchema,
   documentNodeDetailResponseSchema,
+  nodeDetailVisualResponseSchema,
 } from "@/lib/llm/schemas";
 import type {
   LearningTreeResponse,
@@ -19,6 +20,7 @@ import type {
   DocumentTreeStructureResponse,
   DocumentNodeDetailResponse,
 } from "@/types/learning";
+import type { VisualBlock, VisualDecision } from "@/lib/visualization/visual-block-schema";
 
 export type LearningTreeOutlineResponse = ReturnType<
   typeof learningTreeOutlineResponseSchema.parse
@@ -118,6 +120,25 @@ export function parseNodeDetailResponse(
     );
   }
   return data;
+}
+
+export interface NodeDetailVisualResponse {
+  visual_decision: VisualDecision;
+  visual_blocks: VisualBlock[];
+}
+
+export function parseNodeDetailVisualResponse(
+  rawModelText: string,
+): NodeDetailVisualResponse {
+  const parsed = parseJsonObject(rawModelText);
+  const result = nodeDetailVisualResponseSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new LlmValidationError(
+      "노드 시각화 응답 형식이 올바르지 않습니다.",
+      result.error.issues,
+    );
+  }
+  return result.data;
 }
 
 // ──────────────────────────────────────────────

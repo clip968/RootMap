@@ -4,10 +4,16 @@
  * LLM API를 호출하지 않고 prompt policy 포함 여부와 raw JSON fixture가
  * 기존 parser/schema를 통과하는지 검증한다.
  */
-import { parseDocumentNodeDetailResponse, parseNodeDetailResponse } from "../src/lib/llm/parse";
+import {
+  parseDocumentNodeDetailResponse,
+  parseNodeDetailResponse,
+  parseNodeDetailVisualResponse,
+} from "../src/lib/llm/parse";
 import {
   DOCUMENT_NODE_DETAIL_SYSTEM_PROMPT,
+  NODE_DETAIL_VISUAL_SYSTEM_PROMPT,
   NODE_DETAIL_SYSTEM_BASE,
+  buildNodeDetailVisualUserMessage,
 } from "../src/lib/llm/prompts";
 import { nodeDetailQualityWarnings } from "../src/lib/llm/schemas";
 import type { VisualBlock } from "../src/lib/visualization/visual-block-schema";
@@ -40,6 +46,16 @@ for (const prompt of [NODE_DETAIL_SYSTEM_BASE, DOCUMENT_NODE_DETAIL_SYSTEM_PROMP
 
 assertPromptContains(DOCUMENT_NODE_DETAIL_SYSTEM_PROMPT, "untrusted data");
 assertPromptContains(DOCUMENT_NODE_DETAIL_SYSTEM_PROMPT, "Do not invent or modify citations");
+assertPromptContains(NODE_DETAIL_VISUAL_SYSTEM_PROMPT, "exactly one");
+assertPromptContains(NODE_DETAIL_VISUAL_SYSTEM_PROMPT, "visual_blocks");
+assertPromptContains(NODE_DETAIL_VISUAL_SYSTEM_PROMPT, "linear_space");
+assertPromptContains(NODE_DETAIL_VISUAL_SYSTEM_PROMPT, "mapping_table");
+assertPromptContains(NODE_DETAIL_VISUAL_SYSTEM_PROMPT, "flow_pipeline");
+assertPromptContains(NODE_DETAIL_VISUAL_SYSTEM_PROMPT, "timeline");
+assertPromptContains(NODE_DETAIL_VISUAL_SYSTEM_PROMPT, "layer_stack");
+assertPromptContains(NODE_DETAIL_VISUAL_SYSTEM_PROMPT, "tree_graph");
+assertPromptContains(NODE_DETAIL_VISUAL_SYSTEM_PROMPT, "state_machine");
+assertPromptContains(NODE_DETAIL_VISUAL_SYSTEM_PROMPT, "compare_matrix");
 
 const blocks: Array<{ nodeId: string; title: string; skill: VisualBlock["type"]; block: VisualBlock }> = [
   {
@@ -179,6 +195,20 @@ function detailRaw(nodeId: string, title: string, skill: VisualBlock["type"] | "
 }
 
 for (const fixture of blocks) {
+  const visualOnly = parseNodeDetailVisualResponse(
+    JSON.stringify({
+      visual_decision: {
+        should_visualize: true,
+        skill: fixture.skill,
+        confidence: 0.86,
+        reason: "핵심 구조를 시각적으로 확인해야 한다.",
+      },
+      visual_blocks: [fixture.block],
+    }),
+  );
+  assert(visualOnly.visual_blocks.length === 1, `${fixture.title} visual-only count`);
+  assert(visualOnly.visual_blocks[0]?.type === fixture.skill, `${fixture.title} visual-only block mismatch`);
+
   const detail = parseNodeDetailResponse(
     detailRaw(fixture.nodeId, fixture.title, fixture.skill, [fixture.block]),
     fixture.nodeId,
@@ -226,5 +256,37 @@ const documentDetail = parseDocumentNodeDetailResponse(
   "doc-vfs",
 );
 assert(documentDetail.visual_blocks?.[0]?.type === "layer_stack", "document detail visual block");
+
+const visualUserMessage = buildNodeDetailVisualUserMessage({
+  topic: "운영체제",
+  nodeTitle: "페이지 테이블",
+  nodeType: "core",
+  prerequisitesContext: "가상 주소와 물리 주소의 차이",
+  detail: parseNodeDetailResponse(
+    detailRaw("page-table", "페이지 테이블", "none", []),
+    "page-table",
+  ),
+});
+assert(visualUserMessage.includes("페이지 테이블"), "visual user prompt should include node title");
+assert(visualUserMessage.includes("easy_explanation"), "visual user prompt should include generated detail context");
+
+let rejectedEmptyVisual = false;
+try {
+  parseNodeDetailVisualResponse(
+    JSON.stringify({
+      visual_decision: {
+        should_visualize: false,
+        skill: "none",
+        confidence: 0.2,
+        reason: "텍스트가 적합하다.",
+      },
+      visual_blocks: [],
+    }),
+  );
+} catch (err) {
+  rejectedEmptyVisual = true;
+  assert(err instanceof Error, "visual-only rejection should throw an Error");
+}
+assert(rejectedEmptyVisual, "visual-only parser should reject empty visual_blocks");
 
 console.log("Phase 07 visual detail prompt smoke passed");

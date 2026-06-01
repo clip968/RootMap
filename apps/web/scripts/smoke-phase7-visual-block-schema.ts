@@ -10,6 +10,7 @@ import {
   phase7VisualDetailFixtures,
 } from "./fixtures/phase7-visual-detail-fixtures";
 import {
+  hasRequiredNodeDetailVisual,
   normalizeVisualBlocks,
   visualBlockSchema,
   visualBlocksSchema,
@@ -204,6 +205,14 @@ const legacyDetail = parseNodeDetailResponse(
 
 assert(legacyDetail.visual_decision?.skill === "none", "legacy detail should default decision");
 assert(legacyDetail.visual_blocks?.length === 0, "legacy detail should default visual blocks");
+assert(
+  !hasRequiredNodeDetailVisual(legacyDetail),
+  "legacy detail without a visual should not satisfy required visual policy",
+);
+assert(
+  hasRequiredNodeDetailVisual(phase7VisualDetailFixtures[0]!.detail),
+  "detail with matching decision and visual block should satisfy required visual policy",
+);
 
 const legacyDocumentDetail = parseDocumentNodeDetailResponse(
   JSON.stringify({

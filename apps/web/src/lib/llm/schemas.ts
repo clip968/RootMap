@@ -10,6 +10,7 @@ import type {
 } from "@/types/learning";
 import {
   DEFAULT_VISUAL_DECISION,
+  REQUIRED_NODE_DETAIL_VISUAL_BLOCK_COUNT,
   visualBlocksSchema,
   visualDecisionSchema,
   type VisualBlock,
@@ -289,6 +290,38 @@ export const nodeDetailResponseSchema = z.object({
   visual_decision: visualDecisionSchema.optional().default(DEFAULT_VISUAL_DECISION),
   visual_blocks: visualBlocksSchema.optional().default([]),
 });
+
+export const nodeDetailVisualResponseSchema = z
+  .object({
+    visual_decision: visualDecisionSchema,
+    visual_blocks: visualBlocksSchema
+      .min(REQUIRED_NODE_DETAIL_VISUAL_BLOCK_COUNT)
+      .max(REQUIRED_NODE_DETAIL_VISUAL_BLOCK_COUNT),
+  })
+  .superRefine((data, ctx) => {
+    const block = data.visual_blocks[0];
+    if (!data.visual_decision.should_visualize) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["visual_decision", "should_visualize"],
+        message: "required visual detail must set should_visualize=true",
+      });
+    }
+    if (data.visual_decision.skill === "none") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["visual_decision", "skill"],
+        message: "required visual detail cannot use skill=none",
+      });
+    }
+    if (block && data.visual_decision.skill !== block.type) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["visual_decision", "skill"],
+        message: "visual_decision.skill must match visual_blocks[0].type",
+      });
+    }
+  });
 
 /** 명세 §5·task 03 품질 가드레일: 스키마 통과 후 경고만 누적 */
 export function learningTreeQualityWarnings(

@@ -268,6 +268,99 @@ The app UI language is Korean. Return Korean learner-facing content, while prese
 Return only a single JSON object matching the schema above.`;
 }
 
+/**
+ * Phase 11: 세부 카드 필수 시각화 전용 프롬프트
+ *
+ * 클릭 요청의 첫 detail 생성은 가볍게 유지하고, worker가 완성된 텍스트 설명을 바탕으로
+ * 렌더 가능한 visual block 하나만 추가 생성한다.
+ */
+export const NODE_DETAIL_VISUAL_SYSTEM_PROMPT = `You are an AI tutor creating one visual learning aid for an already generated concept detail.
+
+Your task is to return exactly one visual block that helps a beginner understand the selected concept.
+
+Requirements:
+- Return valid JSON only.
+- Do not include markdown outside JSON.
+- Do not wrap the JSON in code fences.
+- Write all learner-facing labels, titles, annotations, and descriptions in Korean.
+- Use established English technical terms in parentheses when helpful.
+- Return exactly one item in visual_blocks.
+- Do not use skill "none".
+- Set visual_decision.should_visualize to true.
+- Set visual_decision.skill to the same type as visual_blocks[0].type.
+- Keep annotations short and useful.
+- Do not invent unrelated facts. Use the provided detail text as the source of truth.
+- Prefer the clearest visual type:
+  - linear_space for address, block, page, sector, slot, memory, or storage ranges
+  - mapping_table for translation, lookup, identifier mapping, or relation mapping
+  - flow_pipeline for process, algorithm, request path, or cause-effect sequence
+  - timeline for chronological order or evolution over time
+  - layer_stack for abstraction layers, stack, hierarchy, or system architecture
+  - tree_graph for tree, index, dependency, or parent-child structure
+  - state_machine for protocol, lifecycle, mode, or state transition
+  - compare_matrix for misconception, contrast, tradeoff, or similar concepts
+
+JSON schema:
+{
+  "visual_decision": {
+    "should_visualize": true,
+    "skill": "linear_space" | "mapping_table" | "flow_pipeline" | "timeline" | "layer_stack" | "tree_graph" | "state_machine" | "compare_matrix",
+    "confidence": number,
+    "reason": string
+  },
+  "visual_blocks": [
+    {
+      "type": "linear_space" | "mapping_table" | "flow_pipeline" | "timeline" | "layer_stack" | "tree_graph" | "state_machine" | "compare_matrix",
+      "...": "fields required by that visual type"
+    }
+  ]
+}
+
+Visual block field shapes:
+- linear_space: title, unit ("block"|"byte"|"page"|"sector"|"slot"), optional block_size_bytes, optional total_units_hint, highlighted_ranges[{label,start,length,note?}], annotations
+- mapping_table: title, columns, rows, annotations
+- flow_pipeline: title, steps[{label,description,layer?}], annotations
+- timeline: title, optional lanes, events[{time_label,lane?,label,description?}], annotations
+- layer_stack: title, layers[{label,description}], annotations
+- tree_graph: title, nodes[{id,label}], edges[{from,to,label?}], annotations
+- state_machine: title, states[{id,label,description?}], transitions[{from,to,label}], annotations
+- compare_matrix: title, columns, rows[{criterion,values}], annotations`;
+
+export function buildNodeDetailVisualUserMessage(input: {
+  topic: string;
+  nodeTitle: string;
+  nodeType: string;
+  prerequisitesContext: string;
+  detail: {
+    title: string;
+    why_it_matters: string;
+    easy_explanation: string;
+    analogy: string;
+    example: string;
+    common_misconceptions: string[];
+    check_questions: Array<{ question: string; answer: string }>;
+    next_nodes: string[];
+  };
+}): string {
+  const detailJson = JSON.stringify(input.detail, null, 2);
+  return `The learner is studying the topic:
+${input.topic}
+
+Selected concept:
+${input.nodeTitle}
+
+Node type:
+${input.nodeType}
+
+Known prerequisite context:
+${input.prerequisitesContext}
+
+Already generated text detail:
+${detailJson}
+
+Create exactly one visual_blocks item that complements this text detail. Return only the visual JSON object.`;
+}
+
 // ──────────────────────────────────────────────
 // Phase 3 문서 기반 프롬프트 (명세 §12)
 // ──────────────────────────────────────────────

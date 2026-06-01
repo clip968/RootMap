@@ -9,6 +9,7 @@ export {
 export {
   parseLearningTreeResponse,
   parseNodeDetailResponse,
+  parseNodeDetailVisualResponse,
   parseChunkConceptExtractionResponse,
   parseDocumentConsolidationResponse,
   parseDocumentTreeResponse,
@@ -19,12 +20,14 @@ export {
 export {
   buildLearningTreeUserMessage,
   buildNodeDetailUserMessage,
+  buildNodeDetailVisualUserMessage,
   buildDocumentChunkConceptUserMessage,
   buildDocumentConsolidationUserMessage,
   buildDocumentTreeUserMessage,
   buildDocumentNodeDetailUserMessage,
   LEARNING_TREE_SYSTEM_PROMPT,
   NODE_DETAIL_SYSTEM_BASE,
+  NODE_DETAIL_VISUAL_SYSTEM_PROMPT,
   DOCUMENT_CHUNK_CONCEPT_SYSTEM_PROMPT,
   DOCUMENT_CONSOLIDATION_SYSTEM_PROMPT,
   DOCUMENT_TREE_SYSTEM_PROMPT,
@@ -35,6 +38,7 @@ export {
   learningTreeResponseSchema,
   nodeDetailQualityWarnings,
   nodeDetailResponseSchema,
+  nodeDetailVisualResponseSchema,
   learningTreeNodeSchema,
   chunkConceptExtractionResponseSchema,
   documentConsolidationResponseSchema,
@@ -53,6 +57,13 @@ export {
   type GenerateNodeDetailInput,
   type GenerateNodeDetailResult,
 } from "@/lib/llm/generate-node-detail";
+export {
+  generateNodeDetailVisual,
+  ensureRequiredNodeDetailVisual,
+  NODE_DETAIL_MISSING_REQUIRED_VISUAL,
+  type GenerateNodeDetailVisualInput,
+  type NodeDetailVisualGenerator,
+} from "@/lib/llm/generate-node-detail-visual";
 export {
   generateChunkConcepts,
   type GenerateChunkConceptsOptions,

@@ -3,7 +3,7 @@ import { getDb, getSqlClient } from "@/db/client";
 import { concepts, learningNodes, nodeDetailJobs } from "@/db/schema";
 import type { NodeDetailResponse } from "@/types/learning";
 
-export const CURRENT_NODE_DETAIL_VERSION = "v1";
+export const CURRENT_NODE_DETAIL_VERSION = "v2";
 export const DEFAULT_NODE_DETAIL_JOB_MAX_ATTEMPTS = 3;
 
 export type NodeDetailJobStatus = "queued" | "running" | "ready" | "failed";

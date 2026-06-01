@@ -92,6 +92,23 @@ assert(processorSource.includes("processNodeDetailJob"), "worker core should exp
 assert(processorSource.includes("claimQueuedNodeDetailJob"), "worker core should claim queued jobs");
 assert(processorSource.includes("markNodeDetailJobReady"), "worker core should mark ready transactionally");
 assert(processorSource.includes("loadConcept: async () => null"), "worker generation should not use concept fallback as a quality shortcut");
+assert(processorSource.includes("ensureRequiredNodeDetailVisual"), "worker should add required visual before marking ready");
+assert(processorSource.includes("NODE_DETAIL_MISSING_REQUIRED_VISUAL"), "worker should reject details that still lack a required visual");
+assert(processorSource.includes("hasWorkerReadyTextDetail"), "worker should validate cached text detail quality before visual repair");
+assert(processorSource.includes("NODE_DETAIL_CACHED_TEXT_INCOMPLETE"), "worker should regenerate low-quality cached fallback details");
+
+const serviceSource = readSource("src/lib/services/node-detail.ts");
+assert(serviceSource.includes("hasRequiredNodeDetailVisual"), "ready lookup should enforce required visual blocks");
+assert(serviceSource.includes("cache_missing_required_visual"), "visual-free cached detail should be treated as not ready");
+assert(serviceSource.includes("concept_fast_path_missing_required_visual"), "concept fast path should not be ready in async visual-required mode");
+
+const visualGeneratorSource = readSource("src/lib/llm/generate-node-detail-visual.ts");
+assert(visualGeneratorSource.includes("generateNodeDetailVisual"), "visual-only generator should exist");
+assert(visualGeneratorSource.includes("parseNodeDetailVisualResponse"), "visual-only generator should parse the required visual schema");
+assert(visualGeneratorSource.includes("visual_blocks.length !== 1"), "visual-only generator should enforce exactly one visual block");
+
+const jobRepositorySource = readSource("src/lib/repository/node-detail-job-repository.ts");
+assert(jobRepositorySource.includes('CURRENT_NODE_DETAIL_VERSION = "v2"'), "required visual policy should bump detail version");
 
 const runnerSource = readSource("scripts/run-node-detail-worker.ts");
 assert(runnerSource.includes("--once"), "worker CLI should support --once");

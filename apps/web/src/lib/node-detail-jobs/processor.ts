@@ -1,5 +1,9 @@
 import { DEFAULT_USER_ID } from "@/db/constants";
 import {
+  ensureRequiredNodeDetailVisual,
+  NODE_DETAIL_MISSING_REQUIRED_VISUAL,
+} from "@/lib/llm/generate-node-detail-visual";
+import {
   CURRENT_NODE_DETAIL_VERSION,
   claimQueuedNodeDetailJob,
   markNodeDetailJobFailed,
@@ -10,9 +14,12 @@ import {
 } from "@/lib/repository/node-detail-job-repository";
 import { getLearningTree } from "@/lib/repository/learning-repository";
 import { getOrCreateNodeDetail } from "@/lib/services/node-detail";
+import { buildPrerequisitePromptContext } from "@/lib/services/node-detail-context";
 import type { NodeDetailResponse } from "@/types/learning";
 
 export const NODE_DETAIL_JOB_STALE_MS = 5 * 60 * 1000;
+const NODE_DETAIL_CACHED_TEXT_INCOMPLETE =
+  "NODE_DETAIL_CACHED_TEXT_INCOMPLETE";
 
 export type NodeDetailWorkerStatus =
   | "idle"
@@ -46,6 +53,16 @@ function shouldRetry(job: NodeDetailJobRow): boolean {
   return job.attemptCount < job.maxAttempts;
 }
 
+function hasWorkerReadyTextDetail(detail: NodeDetailResponse): boolean {
+  return Boolean(
+    detail.why_it_matters.trim() &&
+      detail.easy_explanation.trim() &&
+      detail.example.trim() &&
+      detail.common_misconceptions.length > 0 &&
+      detail.check_questions.length > 0,
+  );
+}
+
 async function processGenerationForJob(
   job: NodeDetailJobRow,
 ): Promise<NodeDetailResponse> {
@@ -57,15 +74,46 @@ async function processGenerationForJob(
     throw new Error("NODE_NOT_IN_TREE");
   }
 
-  if (nodeRow.detailJson) {
-    return nodeRow.detailJson;
+  const prerequisitesContext = buildPrerequisitePromptContext(
+    nodeRow,
+    bundle.nodes,
+    bundle.tree.treeJson.recommended_order,
+  );
+  const ensureVisual = (detail: NodeDetailResponse) =>
+    ensureRequiredNodeDetailVisual({
+      topic: bundle.tree.topic,
+      nodeTitle: nodeRow.title,
+      nodeType: nodeRow.type,
+      prerequisitesContext,
+      detail,
+    });
+
+  if (nodeRow.detailJson && hasWorkerReadyTextDetail(nodeRow.detailJson)) {
+    return ensureVisual(nodeRow.detailJson);
   }
+
+  if (nodeRow.detailJson) {
+    console.info("[node-detail-worker]", {
+      event: "cached_text_incomplete",
+      jobId: job.id,
+      treeId: job.treeId,
+      nodeId: job.nodeId,
+      reason: NODE_DETAIL_CACHED_TEXT_INCOMPLETE,
+    });
+  }
+
+  const generationBundle = {
+    ...bundle,
+    nodes: bundle.nodes.map((node) =>
+      node.id === job.nodeId ? { ...node, detailJson: null } : node,
+    ),
+  };
 
   let generatedDetail: NodeDetailResponse | null = null;
   await getOrCreateNodeDetail({
     treeId: job.treeId,
     nodeId: job.nodeId,
-    bundle,
+    bundle: generationBundle,
     // worker는 품질을 낮추는 Concept fallback을 ready detail로 저장하지 않고 full generator를 실행한다.
     loadConcept: async () => null,
     persistNodeDetail: async (_nodeId, detail) => {
@@ -77,7 +125,11 @@ async function processGenerationForJob(
   if (!generatedDetail) {
     throw new Error("NODE_DETAIL_GENERATION_DID_NOT_RETURN_DETAIL");
   }
-  return generatedDetail;
+  const detailWithVisual = await ensureVisual(generatedDetail);
+  if (!detailWithVisual.visual_blocks?.length) {
+    throw new Error(NODE_DETAIL_MISSING_REQUIRED_VISUAL);
+  }
+  return detailWithVisual;
 }
 
 export async function processNodeDetailJob(
