@@ -30,13 +30,13 @@ Phase 09의 핵심은 GCP billing, Cloud Tasks, Cloud Run worker를 다시 켜�
 
 > 작업을 완료할 때마다 해당 항목을 `[x]`로 바꿔 진행 상황을 추적한다.
 
-- [ ] 00. [00-local-runner-stop-state-and-scope.md](./00-local-runner-stop-state-and-scope.md) - GCP worker 중단 상태와 Phase 09 범위 고정
-- [ ] 01. [01-local-worker-env-and-cli-entrypoint.md](./01-local-worker-env-and-cli-entrypoint.md) - local worker env와 CLI entrypoint 준비
-- [ ] 02. [02-local-processing-summary-and-dry-run.md](./02-local-processing-summary-and-dry-run.md) - dry-run summary와 비용 guard 출력 추가
-- [ ] 03. [03-process-document-resume-and-tree-only-contract.md](./03-process-document-resume-and-tree-only-contract.md) - resume/tree-only 상태 처리 계약 구현
-- [ ] 04. [04-runner-execution-logging-and-recovery-flow.md](./04-runner-execution-logging-and-recovery-flow.md) - runner 실행과 실패 PDF 복구 흐름 구현
-- [ ] 05. [05-local-runner-smoke-and-cost-guard-tests.md](./05-local-runner-smoke-and-cost-guard-tests.md) - smoke test와 중복 LLM 방지 검증
-- [ ] 06. [06-phase9-docs-runbook-and-quality-gate.md](./06-phase9-docs-runbook-and-quality-gate.md) - runbook과 최종 quality gate 정리
+- [x] 00. [00-local-runner-stop-state-and-scope.md](./00-local-runner-stop-state-and-scope.md) - GCP worker 중단 상태와 Phase 09 범위 고정
+- [x] 01. [01-local-worker-env-and-cli-entrypoint.md](./01-local-worker-env-and-cli-entrypoint.md) - local worker env와 CLI entrypoint 준비
+- [x] 02. [02-local-processing-summary-and-dry-run.md](./02-local-processing-summary-and-dry-run.md) - dry-run summary와 비용 guard 출력 추가
+- [x] 03. [03-process-document-resume-and-tree-only-contract.md](./03-process-document-resume-and-tree-only-contract.md) - resume/tree-only 상태 처리 계약 구현
+- [x] 04. [04-runner-execution-logging-and-recovery-flow.md](./04-runner-execution-logging-and-recovery-flow.md) - runner 실행과 실패 PDF 복구 흐름 구현
+- [x] 05. [05-local-runner-smoke-and-cost-guard-tests.md](./05-local-runner-smoke-and-cost-guard-tests.md) - smoke test와 중복 LLM 방지 검증
+- [x] 06. [06-phase9-docs-runbook-and-quality-gate.md](./06-phase9-docs-runbook-and-quality-gate.md) - runbook과 최종 quality gate 정리
 
 ## 범위 요약
 

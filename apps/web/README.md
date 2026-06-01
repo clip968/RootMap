@@ -30,6 +30,30 @@ SUPABASE_DOCUMENT_BUCKET=rootmap-documents
 LLM provider는 기본적으로 위 `OPENROUTER_*` 환경 변수를 fallback으로 사용합니다.
 앱 실행 후 `/settings/llm-provider`에서 OpenRouter, CrofAI, OpenAI-compatible `Base URL`/`API Key`/`Model`/`JSON mode`를 저장하면 DB 설정이 fallback보다 우선됩니다.
 
+## 로컬 문서 처리 Runner
+
+Cloud Tasks/Cloud Run worker를 깨우지 않고 특정 문서 하나만 로컬에서 처리하려면 `apps/web/.env.local-worker`를 준비합니다. 이 파일은 git에 commit하지 않습니다.
+
+필수 값:
+
+```bash
+DATABASE_URL=postgresql://postgres.<project-ref>:<db-password>@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+SUPABASE_DOCUMENT_BUCKET=rootmap-documents
+LLM_SETTINGS_SECRET=change-this-long-random-secret
+```
+
+direct DB host가 IPv6 문제로 실패하면 Supabase connection pooler의 session mode URL을 사용합니다. `LLM_SETTINGS_SECRET`은 설정 화면에 저장된 LLM provider key를 복호화할 수 있는 값과 같아야 합니다.
+
+```bash
+npm run document:process-local -- --document-id <document-id> --dry-run
+npm run document:process-local -- --document-id <document-id> --resume --chunk-batch-size 1
+npm run document:process-local -- --document-id <document-id> --tree-only
+```
+
+`--dry-run`은 DB를 변경하지 않고 문서 상태, chunk/checkpoint/concept 수, 중복 문서 경고를 출력합니다. `--tree-only`는 `concepts_extracted` 상태에서만 사용하며 chunk concept LLM 호출 없이 tree 생성과 저장만 재시도합니다.
+
 DB 테이블을 준비하고 개발 서버를 실행합니다. 마이그레이션 SQL은 `drizzle/`에 있습니다.
 
 ```bash

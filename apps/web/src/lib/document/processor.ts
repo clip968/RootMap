@@ -19,6 +19,7 @@ import {
   updateDocumentChunkMetadata,
   bulkInsertDocumentConcepts,
   getDocumentConceptRows,
+  getDocumentLearningTreeForUser,
   createDocumentLearningTreeLink,
 } from "@/lib/repository/document-repository";
 import type {
@@ -746,7 +747,7 @@ async function persistDocumentTree(
 export interface ProcessDocumentResult {
   treeId: string | null;
   shouldRequeue?: boolean;
-  reason?: "chunk_concepts_pending" | "tree_generation_deferred";
+  reason?: "chunk_concepts_pending" | "tree_generation_deferred" | "already_processed";
   processedChunkCount?: number;
   totalChunkCount?: number;
   pendingChunkCount?: number;
@@ -755,6 +756,8 @@ export interface ProcessDocumentResult {
 export interface ProcessDocumentOptions {
   chunkBatchSize?: number;
   stopAfterConcepts?: boolean;
+  treeOnly?: boolean;
+  resumeFailed?: boolean;
 }
 
 export async function processDocument(
@@ -772,18 +775,30 @@ export async function processDocument(
   const documentTitle = doc.title || doc.originalFilename;
 
   // ── 상태 검증 ──
-  // "uploaded": 신규 처리, 그 외 상태는 재처리/오류 처리
+  // failed 상태는 자동 재개하지 않는다. 운영자가 원인을 확인하고 상태를 되돌린 뒤 tree-only를 실행하는 것이 기본 복구 경로다.
   const restartableStates = new Set<DocumentProcessingStatus>([
     "uploaded",
     "text_extracted",
     "chunked",
     "concepts_extracted",
-    "failed",
   ]);
   if (currentStatus === "tree_generated") {
+    const bundle = await getDocumentLearningTreeForUser(documentId, userId);
+    return { treeId: bundle?.tree.id ?? null, reason: "already_processed" };
+  }
+  if (currentStatus === "failed" && !options.resumeFailed) {
     throw new DocumentProcessorError(
-      "ALREADY_PROCESSED",
-      "이미 처리 완료된 문서입니다. 재처리가 필요하면 문서를 다시 업로드해 주세요.",
+      "INVALID_STATUS",
+      "failed 상태 문서는 자동 재개하지 않습니다. 실패 원인을 확인한 뒤 필요한 상태로 복구해 주세요.",
+    );
+  }
+  if (currentStatus === "failed" && options.resumeFailed) {
+    restartableStates.add("failed");
+  }
+  if (options.treeOnly && currentStatus !== "concepts_extracted") {
+    throw new DocumentProcessorError(
+      "INVALID_STATUS",
+      "--tree-only는 concepts_extracted 상태에서만 실행할 수 있습니다.",
     );
   }
   if (!restartableStates.has(currentStatus)) {
@@ -1035,7 +1050,6 @@ export async function processDocument(
     const consolidationMetadata = getDocumentConsolidationMetadata(documentMetadata);
     documentConceptRows = await getDocumentConceptRows(documentId);
     if (documentConceptRows.length === 0) {
-      await updateDocumentStatus(documentId, "failed", "저장된 문서 개념이 없습니다.");
       throw new DocumentProcessorError(
         "CONCEPT_EXTRACTION_FAILED",
         "문서 개념 저장 결과를 찾을 수 없습니다. 문서를 다시 처리해 주세요.",
