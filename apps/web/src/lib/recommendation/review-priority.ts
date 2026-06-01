@@ -125,7 +125,7 @@ export function buildReviewItems(
 ): ReviewItem[] {
   const now = options?.now ?? new Date();
   return candidates
-    .map((candidate) => {
+    .flatMap((candidate): ReviewItem[] => {
       const score = calculateReviewPriorityScore({
         confidenceScore: candidate.confidenceScore,
         lastStudiedAt: candidate.lastStudiedAt,
@@ -135,20 +135,18 @@ export function buildReviewItems(
         retrievability: candidate.retrievability,
         now,
       });
-      return {
+      if (!candidate.needsReview && score < 0.3) return [];
+      return [{
         concept_id: candidate.conceptId,
         title: candidate.title,
         review_priority_score: score,
         reasons: reviewReasons(candidate, score, now),
-        include: candidate.needsReview || score >= 0.3,
-      };
+      }];
     })
-    .filter((item) => item.include)
     .sort(
       (a, b) =>
         b.review_priority_score - a.review_priority_score ||
         a.title.localeCompare(b.title),
     )
-    .slice(0, options?.limit ?? 20)
-    .map(({ include: _include, ...item }) => item);
+    .slice(0, options?.limit ?? 20);
 }

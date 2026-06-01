@@ -55,7 +55,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 const SECTION_ORDER: NodeType[] = [
   "prerequisite",
@@ -163,6 +163,15 @@ interface UiRecommendationItem {
 function readPhase4AuthToken(): string | null {
   if (typeof window === "undefined") return null;
   return window.localStorage.getItem(PHASE4_AUTH_TOKEN_STORAGE_KEY)?.trim() || null;
+}
+
+function subscribePhase4AuthToken(callback: () => void): () => void {
+  window.addEventListener("storage", callback);
+  window.addEventListener(PHASE4_AUTH_TOKEN_EVENT, callback);
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener(PHASE4_AUTH_TOKEN_EVENT, callback);
+  };
 }
 
 function phase4AuthHeaders(token: string): HeadersInit {
@@ -640,7 +649,11 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   const [focusMode, setFocusMode] = useState<FocusMode>("all");
   const [enabledTypes, setEnabledTypes] = useState<NodeType[]>(SECTION_ORDER);
   const [progressBusy, setProgressBusy] = useState<string | null>(null);
-  const [phase4AuthToken, setPhase4AuthToken] = useState<string | null>(null);
+  const phase4AuthToken = useSyncExternalStore(
+    subscribePhase4AuthToken,
+    readPhase4AuthToken,
+    () => null,
+  );
   const [personalizedNodes, setPersonalizedNodes] = useState<ApiPersonalizedNode[]>([]);
   const [personalizedRecommendations, setPersonalizedRecommendations] = useState<
     ApiPersonalizedRecommendationItem[]
@@ -652,17 +665,6 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   const [reportBusy, setReportBusy] = useState(false);
   const [latestReport, setLatestReport] = useState<ApiSessionReportResponse | null>(null);
   const [hideKnownPrerequisites, setHideKnownPrerequisites] = useState(true);
-
-  useEffect(() => {
-    setPhase4AuthToken(readPhase4AuthToken());
-    const syncToken = () => setPhase4AuthToken(readPhase4AuthToken());
-    window.addEventListener("storage", syncToken);
-    window.addEventListener(PHASE4_AUTH_TOKEN_EVENT, syncToken);
-    return () => {
-      window.removeEventListener("storage", syncToken);
-      window.removeEventListener(PHASE4_AUTH_TOKEN_EVENT, syncToken);
-    };
-  }, []);
 
   const loadTree = useCallback(async (): Promise<boolean> => {
     setLoadError(null);
