@@ -1,68 +1,110 @@
 /**
- * 노드 상세 생성 품질 스모크(API/LLM 호출 없음)
+ * Node detail generation smoke without external DB or LLM calls.
  *
- * Concept Store에 짧은 설명이 있어도 detailJson이 없으면 full detail 생성이
- * 먼저 실행되어야 한다. 짧은 Concept 설명은 LLM 실패 fallback으로만 사용한다.
+ * Phase 08 keeps this script in-memory so it verifies service behavior even
+ * after the app moved to Postgres-only runtime configuration.
  */
-import fs from "node:fs";
-import path from "node:path";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import { getDb, resetDbSingleton } from "../src/db/client";
 import { DEFAULT_USER_ID } from "../src/db/constants";
-import {
-  createFullLearningTree,
-  getLearningTree,
+import type { ConceptRow } from "../src/lib/repository/concept-repository";
+import type {
+  LearningNodeRow,
+  LearningTreeBundle,
+  LearningTreeRow,
 } from "../src/lib/repository/learning-repository";
 import { getOrCreateNodeDetail } from "../src/lib/services/node-detail";
 import type {
-  LearningTreeNode,
   LearningTreeResponse,
   NodeDetailResponse,
-  NodeType,
 } from "../src/types/learning";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
-function setupDb(): void {
-  const dbRel = path.join("data", "node-detail-generation-smoke.db");
-  const dbAbs = path.join(process.cwd(), dbRel);
-  process.env.DATABASE_URL = `file:${dbAbs}`;
-
-  resetDbSingleton();
-  fs.mkdirSync(path.dirname(dbAbs), { recursive: true });
-  try {
-    fs.unlinkSync(dbAbs);
-  } catch {
-    /* noop */
-  }
-  resetDbSingleton();
-  migrate(getDb(), { migrationsFolder: path.join(process.cwd(), "drizzle") });
+function treeJson(): LearningTreeResponse {
+  return {
+    topic: "운영체제 스케줄링",
+    summary: "CPU 스케줄링 기준을 학습합니다.",
+    nodes: [
+      {
+        id: "cpu_utilization",
+        title: "CPU 이용률 (CPU Utilization)",
+        type: "prerequisite",
+        description: "CPU 사용 효율 지표.",
+        difficulty: 2,
+        prerequisites: [],
+        children: [],
+        concept_candidate: {
+          canonical_title: "CPU 이용률 (CPU Utilization)",
+          aliases: ["CPU Utilization"],
+          domain: "operating_system",
+          short_description: "CPU 사용 효율 지표.",
+          is_reusable: true,
+        },
+      },
+    ],
+    recommended_order: ["cpu_utilization"],
+    edges: [],
+  };
 }
 
-function node(
-  id: string,
-  title: string,
-  type: NodeType,
-  shortDescription: string,
-): LearningTreeNode {
-  return {
-    id,
-    title,
-    type,
-    description: shortDescription,
+function bundle(conceptId: string): LearningTreeBundle {
+  const now = "2026-06-01T00:00:00.000Z";
+  const tree: LearningTreeRow = {
+    id: "tree-1",
+    userId: DEFAULT_USER_ID,
+    topic: "운영체제 스케줄링",
+    summary: "CPU 스케줄링 기준을 학습합니다.",
+    treeJson: treeJson(),
+    createdAt: now,
+    updatedAt: now,
+  };
+  const node: LearningNodeRow = {
+    id: "node-1",
+    treeId: tree.id,
+    nodeKey: "cpu_utilization",
+    title: "CPU 이용률 (CPU Utilization)",
+    type: "prerequisite",
+    description: "CPU 사용 효율 지표.",
     difficulty: 2,
     prerequisites: [],
-    children: [],
-    concept_candidate: {
-      canonical_title: title,
-      aliases: [],
-      domain: "operating_system",
-      short_description: shortDescription,
-      is_reusable: true,
-    },
+    children: ["scheduling_criteria"],
+    detailJson: null,
+    conceptId,
+    isReusedConcept: true,
+    createdAt: now,
+    updatedAt: now,
   };
+  return {
+    tree,
+    nodes: [node],
+    progress: [],
+    conceptTreeCounts: new Map([[conceptId, 1]]),
+  };
+}
+
+function concept(
+  id: string,
+  explanation: string | null,
+  shortDescription = "CPU 사용 효율 지표.",
+): ConceptRow {
+  const now = "2026-06-01T00:00:00.000Z";
+  return {
+    id,
+    slug: id,
+    title: "CPU 이용률 (CPU Utilization)",
+    normalizedTitle: "cpu 이용률 cpu utilization",
+    aliases: ["CPU Utilization"],
+    domain: "operating_system",
+    shortDescription,
+    explanation,
+    examples: [],
+    commonMisconceptions: [],
+    difficulty: 2,
+    sourceType: "llm",
+    createdAt: now,
+    updatedAt: now,
+  } as ConceptRow;
 }
 
 function detail(nodeId: string): NodeDetailResponse {
@@ -91,61 +133,66 @@ function detail(nodeId: string): NodeDetailResponse {
   };
 }
 
-async function main(): Promise<void> {
-  setupDb();
-
-  const tree: LearningTreeResponse = {
-    topic: "운영체제 스케줄링",
-    summary: "CPU 스케줄링 기준을 학습합니다.",
-    nodes: [
-      node(
-        "cpu_utilization",
-        "CPU 이용률 (CPU Utilization)",
-        "prerequisite",
-        "CPU 사용 효율 지표.",
-      ),
-    ],
-    recommended_order: ["cpu_utilization"],
-    edges: [],
-  };
-
-  const treeId = createFullLearningTree(
-    tree.topic,
-    tree.summary,
-    tree,
-    DEFAULT_USER_ID,
-    { reuseConcepts: true },
-  );
-  const bundle = getLearningTree(treeId, DEFAULT_USER_ID);
-  assert(bundle, "tree bundle should exist");
-  const nodeRow = bundle.nodes[0];
-  assert(nodeRow, "node row should exist");
-  assert(nodeRow.conceptId, "fixture should be linked to Concept Store");
-  assert(!nodeRow.detailJson, "fixture should start without detailJson");
-
+async function runShortDescriptionGenerationCase(): Promise<void> {
   let generated = false;
   const result = await getOrCreateNodeDetail({
-    treeId,
-    nodeId: nodeRow.id,
-    bundle,
+    treeId: "tree-1",
+    nodeId: "node-1",
+    bundle: bundle("concept-short"),
+    loadDocumentTreeContext: async () => null,
+    loadConcept: async () => concept("concept-short", null),
+    loadPanelGraph: async () => ({
+      prerequisite_concepts: [],
+      related_concepts: [],
+      used_in_other_trees: [],
+    }),
+    persistNodeDetail: async () => true,
     generateGenericNodeDetail: async () => {
       generated = true;
-      return { detail: detail(nodeRow.nodeKey), qualityWarnings: [] };
+      return { detail: detail("cpu_utilization"), qualityWarnings: [] };
     },
   });
 
-  assert(generated, "full detail generator should run before Concept fallback");
-  assert(result.from_concept_store === false, "result should not be Concept fallback");
-  assert(
-    result.easy_explanation.length > "CPU 사용 효율 지표.".length,
-    "result should contain generated full explanation",
-  );
+  assert(generated, "short Concept description should still run full generator");
+  assert(result.from_concept_store === false, "short description should not be Concept fast path");
   assert(result.example.length > 0, "generated detail should include example");
-  assert(
-    result.check_questions.length > 0,
-    "generated detail should include check questions",
-  );
+  assert(result.check_questions.length > 0, "generated detail should include check questions");
+}
 
+async function runConceptExplanationFastPathCase(): Promise<void> {
+  let generated = false;
+  const richExplanation =
+    "CPU 이용률은 전체 시간 중 CPU가 실제로 프로세스를 실행한 시간의 비율입니다. 스케줄링 정책이 CPU를 놀리지 않고 작업을 배치하는지 판단할 때 쓰는 기본 성능 지표입니다.";
+
+  const result = await getOrCreateNodeDetail({
+    treeId: "tree-1",
+    nodeId: "node-1",
+    bundle: bundle("concept-rich"),
+    loadDocumentTreeContext: async () => null,
+    loadConcept: async () => concept("concept-rich", richExplanation),
+    loadPanelGraph: async () => ({
+      prerequisite_concepts: [],
+      related_concepts: [],
+      used_in_other_trees: [],
+    }),
+    persistNodeDetail: async () => {
+      throw new Error("Concept fast path should not persist generated detail");
+    },
+    generateGenericNodeDetail: async () => {
+      generated = true;
+      return { detail: detail("cpu_utilization"), qualityWarnings: [] };
+    },
+  });
+
+  assert(!generated, "rich Concept explanation should skip full generator");
+  assert(result.from_concept_store === true, "rich Concept explanation should use fast path");
+  assert(result.easy_explanation === richExplanation, "fast path should reuse Concept explanation");
+  assert(result.visual_blocks.length === 0, "Concept fast path should use empty visual blocks");
+}
+
+async function main(): Promise<void> {
+  await runShortDescriptionGenerationCase();
+  await runConceptExplanationFastPathCase();
   console.info("[node-detail-generation-smoke] ok");
 }
 

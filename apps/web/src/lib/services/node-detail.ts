@@ -17,6 +17,7 @@ import {
 import {
   findDocumentContextForNode,
   getDocumentTreeContextForUser,
+  type DocumentTreeContext,
   type DocumentTreeNodeContext,
 } from "@/lib/repository/document-repository";
 import { DEFAULT_USER_ID } from "@/db/constants";
@@ -43,6 +44,33 @@ type GenericNodeDetailGenerator = (
 type DocumentNodeDetailGenerator = (
   input: GenerateDocumentNodeDetailInput,
 ) => Promise<GenerateDocumentNodeDetailResult>;
+
+type PanelGraph = {
+  prerequisite_concepts: Array<{ id: string; title: string }>;
+  related_concepts: Array<{ id: string; title: string }>;
+  used_in_other_trees: Array<{
+    tree_id: string;
+    topic: string;
+    role_in_tree: string;
+  }>;
+};
+
+type LoadDocumentTreeContext = (
+  treeId: string,
+  userId: string,
+) => Promise<DocumentTreeContext | null>;
+
+type LoadConcept = (conceptId: string) => Promise<ConceptRow | null>;
+
+type LoadPanelGraph = (
+  conceptId: string,
+  treeId: string,
+) => Promise<PanelGraph>;
+
+type PersistNodeDetail = (
+  nodeId: string,
+  detail: NodeDetailResponse,
+) => Promise<boolean>;
 
 export interface ApiNodeDetailResponse {
   node_id: string;
@@ -85,15 +113,7 @@ export interface ApiNodeDetailResponse {
 async function buildPanelGraph(
   conceptId: string,
   treeId: string,
-): Promise<{
-  prerequisite_concepts: Array<{ id: string; title: string }>;
-  related_concepts: Array<{ id: string; title: string }>;
-  used_in_other_trees: Array<{
-    tree_id: string;
-    topic: string;
-    role_in_tree: string;
-  }>;
-}> {
+): Promise<PanelGraph> {
   const db = getDb();
   const edges = await listEdgesForConcept(db, conceptId);
   const prereq: Array<{ id: string; title: string }> = [];
@@ -202,6 +222,20 @@ function documentContextToApi(ctx: DocumentTreeNodeContext): ApiNodeDetailRespon
   };
 }
 
+function documentContextExtras(
+  nodeRow: LearningNodeRow,
+  documentNodeContext: DocumentTreeNodeContext | null,
+): Pick<ApiNodeDetailResponse, "document_context" | "topic_context_line"> | {} {
+  if (!documentNodeContext) return {};
+  return {
+    document_context: documentContextToApi(documentNodeContext),
+    topic_context_line:
+      documentNodeContext.source_type === "inferred"
+        ? `「${nodeRow.title}」는 「${documentNodeContext.document_title}」를 이해하기 위해 추론된 선수지식입니다.`
+        : `「${nodeRow.title}」는 「${documentNodeContext.document_title}」에서 확인된 문서 기반 개념입니다.`,
+  };
+}
+
 function formatDocumentEvidenceForPrompt(ctx: DocumentTreeNodeContext): string {
   if (ctx.evidence.length === 0) {
     return ctx.source_type === "inferred"
@@ -223,18 +257,26 @@ function formatDocumentEvidenceForPrompt(ctx: DocumentTreeNodeContext): string {
     .join("\n\n");
 }
 
-function responseFromStoredConcept(
+function hasUsableConceptExplanation(c: ConceptRow): boolean {
+  return (c.explanation?.trim().length ?? 0) >= 80;
+}
+
+async function responseFromStoredConcept(
   dbId: string,
   nodeKey: string,
   nodeRow: LearningNodeRow,
   c: ConceptRow,
   bundle: LearningTreeBundle,
   treeId: string,
+  loadPanelGraph: LoadPanelGraph,
   qualityWarnings: string[] = [],
-): ApiNodeDetailResponse {
+  extras: Partial<
+    Pick<ApiNodeDetailResponse, "document_context" | "topic_context_line">
+  > = {},
+): Promise<ApiNodeDetailResponse> {
   const topic = bundle.tree.topic;
-  const tline = topicContextLine(topic, nodeRow.title);
-  const graph = buildPanelGraph(c.id, treeId);
+  const tline = extras.topic_context_line ?? topicContextLine(topic, nodeRow.title);
+  const graph = await loadPanelGraph(c.id, treeId);
   return {
     node_id: dbId,
     node_key: nodeKey,
@@ -256,6 +298,7 @@ function responseFromStoredConcept(
     topic_context_line: tline,
     from_concept_store: true,
     ...graph,
+    ...extras,
   };
 }
 
@@ -265,9 +308,15 @@ async function responseFromStoredConceptFallback(
   nodeRow: LearningNodeRow,
   bundle: LearningTreeBundle,
   treeId: string,
+  conceptId: string | null,
+  loadConcept: LoadConcept,
+  loadPanelGraph: LoadPanelGraph,
+  extras: Partial<
+    Pick<ApiNodeDetailResponse, "document_context" | "topic_context_line">
+  > = {},
 ): Promise<ApiNodeDetailResponse | null> {
-  if (!nodeRow.conceptId) return null;
-  const c = await getConceptById(getDb(), nodeRow.conceptId);
+  if (!conceptId) return null;
+  const c = await loadConcept(conceptId);
   if (!c || !(c.explanation?.trim() || c.shortDescription?.trim())) return null;
   return responseFromStoredConcept(
     dbId,
@@ -276,7 +325,9 @@ async function responseFromStoredConceptFallback(
     c,
     bundle,
     treeId,
+    loadPanelGraph,
     ["LLM_DETAIL_GENERATION_FELL_BACK_TO_CONCEPT_STORE"],
+    extras,
   );
 }
 
@@ -286,14 +337,24 @@ export async function getOrCreateNodeDetail(params: {
   bundle: LearningTreeBundle;
   generateGenericNodeDetail?: GenericNodeDetailGenerator;
   generateDocumentDetail?: DocumentNodeDetailGenerator;
+  loadDocumentTreeContext?: LoadDocumentTreeContext;
+  loadConcept?: LoadConcept;
+  loadPanelGraph?: LoadPanelGraph;
+  persistNodeDetail?: PersistNodeDetail;
 }): Promise<ApiNodeDetailResponse> {
   const { treeId, nodeId, bundle } = params;
+  const loadDocumentTreeContext =
+    params.loadDocumentTreeContext ?? getDocumentTreeContextForUser;
+  const loadConcept =
+    params.loadConcept ?? ((conceptId) => getConceptById(getDb(), conceptId));
+  const loadPanelGraph = params.loadPanelGraph ?? buildPanelGraph;
+  const persistNodeDetail = params.persistNodeDetail ?? saveNodeDetail;
   const nodeRow = bundle.nodes.find((n) => n.id === nodeId);
   if (!nodeRow || nodeRow.treeId !== treeId) {
     throw new Error("NODE_NOT_IN_TREE");
   }
 
-  const documentTreeContext = await getDocumentTreeContextForUser(
+  const documentTreeContext = await loadDocumentTreeContext(
     treeId,
     DEFAULT_USER_ID,
   );
@@ -302,21 +363,13 @@ export async function getOrCreateNodeDetail(params: {
     nodeRow.title,
     nodeRow.conceptId,
   );
+  const documentExtras = documentContextExtras(nodeRow, documentNodeContext);
+  const detailConceptId = nodeRow.conceptId ?? documentNodeContext?.concept_id ?? null;
 
   const extrasBase = async (): Promise<Partial<ApiNodeDetailResponse>> => {
-    const conceptId = nodeRow.conceptId ?? documentNodeContext?.concept_id ?? null;
-    const documentExtras: Partial<ApiNodeDetailResponse> =
-      documentNodeContext ?
-        {
-          document_context: documentContextToApi(documentNodeContext),
-          topic_context_line:
-            documentNodeContext.source_type === "inferred"
-              ? `「${nodeRow.title}」는 「${documentNodeContext.document_title}」를 이해하기 위해 추론된 선수지식입니다.`
-              : `「${nodeRow.title}」는 「${documentNodeContext.document_title}」에서 확인된 문서 기반 개념입니다.`,
-        }
-      : {};
+    const conceptId = detailConceptId;
     if (!conceptId) return { concept_id: null, ...documentExtras };
-    const graph = await buildPanelGraph(conceptId, treeId);
+    const graph = await loadPanelGraph(conceptId, treeId);
     return {
       concept_id: conceptId,
       topic_context_line:
@@ -336,6 +389,21 @@ export async function getOrCreateNodeDetail(params: {
       nodeRow.detailJson,
       [],
       await extrasBase(),
+    );
+  }
+
+  const concept = detailConceptId ? await loadConcept(detailConceptId) : null;
+  if (concept && hasUsableConceptExplanation(concept)) {
+    return responseFromStoredConcept(
+      nodeId,
+      nodeRow.nodeKey,
+      nodeRow,
+      concept,
+      bundle,
+      treeId,
+      loadPanelGraph,
+      [],
+      documentExtras,
     );
   }
 
@@ -366,7 +434,7 @@ export async function getOrCreateNodeDetail(params: {
         visual_decision: detail.visual_decision,
         visual_blocks: detail.visual_blocks ?? [],
       };
-      const saved = await saveNodeDetail(nodeId, genericDetail);
+      const saved = await persistNodeDetail(nodeId, genericDetail);
       if (!saved) {
         throw new Error("DETAIL_SAVE_FAILED");
       }
@@ -383,6 +451,10 @@ export async function getOrCreateNodeDetail(params: {
         nodeRow,
         bundle,
         treeId,
+        detailConceptId,
+        loadConcept,
+        loadPanelGraph,
+        documentExtras,
       );
       if (fallback) return fallback;
       throw err;
@@ -407,7 +479,7 @@ export async function getOrCreateNodeDetail(params: {
     const generateGenericNodeDetail =
       params.generateGenericNodeDetail ?? generateNodeDetail;
     const { detail, qualityWarnings } = await generateGenericNodeDetail(llmInput);
-    const saved = await saveNodeDetail(nodeId, detail);
+    const saved = await persistNodeDetail(nodeId, detail);
     if (!saved) {
       throw new Error("DETAIL_SAVE_FAILED");
     }
@@ -423,6 +495,10 @@ export async function getOrCreateNodeDetail(params: {
       nodeRow,
       bundle,
       treeId,
+      detailConceptId,
+      loadConcept,
+      loadPanelGraph,
+      documentExtras,
     );
     if (fallback) return fallback;
     throw err;
