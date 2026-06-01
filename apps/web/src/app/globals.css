@@ -488,7 +488,7 @@ body {
 .detail-modal {
   display: flex;
   flex-direction: column;
-  width: min(1180px, 94vw);
+  width: min(1480px, 96vw);
   max-height: min(900px, 92vh);
   border: 1px solid #27272a;
   border-radius: 8px;
@@ -506,6 +506,10 @@ body {
   padding: 24px 28px;
   border-bottom: 1px solid #27272a;
   background: #09090b;
+}
+
+.modal-header > div {
+  min-width: 0;
 }
 
 .detail-kind {
@@ -546,7 +550,8 @@ body {
 
 .modal-content {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  /* 긴 개념명과 설명 문장이 잘리지 않도록 데스크톱에서는 본문 폭을 넓게 확보한다. */
+  grid-template-columns: minmax(0, 1fr) clamp(360px, 27vw, 420px);
   gap: 0;
   min-height: 0;
   overflow: auto;
@@ -557,6 +562,7 @@ body {
   display: grid;
   align-content: start;
   gap: 16px;
+  min-width: 0;
   padding: 24px 28px 28px;
 }
 
@@ -590,6 +596,8 @@ body {
   color: #d4d4d8;
   font-size: 13px;
   line-height: 1.6;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
 }
 
 .detail-section ul {
@@ -771,6 +779,8 @@ body {
 
 .detail-learning-table td {
   color: #d4d4d8;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
 }
 
 .misconception-card-list {
@@ -846,6 +856,8 @@ body {
   color: #ffffff;
   font-size: 13px;
   line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
 }
 
 .modal-progress {

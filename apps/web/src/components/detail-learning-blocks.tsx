@@ -14,12 +14,6 @@ function firstSentence(text: string): string {
   return sentence || trimmed;
 }
 
-function shortLabel(text: string, fallback: string): string {
-  const trimmed = text.trim();
-  if (!trimmed) return fallback;
-  return trimmed.length > 32 ? `${trimmed.slice(0, 31)}…` : trimmed;
-}
-
 export function DetailLearningBlocks({
   node,
   detail,
@@ -33,7 +27,7 @@ export function DetailLearningBlocks({
   const nodeRole = sectionLabel[node.type];
   const prerequisiteLabel = detail?.prerequisite_concepts?.[0]?.title ?? "선수 개념";
   const nextLabel = detail?.next_nodes?.[0] ?? "다음 개념";
-  const riskLabel = misconception ? shortLabel(misconception, "주의점") : "헷갈릴 지점";
+  const riskLabel = misconception || "헷갈릴 지점";
   const tableRows = [
     { label: "핵심 역할", value: nodeRole },
     { label: "쉽게 말하면", value: detail?.easy_explanation || node.description },

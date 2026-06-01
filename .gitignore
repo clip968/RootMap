@@ -16,7 +16,3 @@ templates
 .forge
 .mcp.json
 .playwright-cli
-
-# Graphify AST cache
-apps/web/graphify-out/cache/ast/
-graphify-out/cache/

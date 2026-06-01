@@ -40,14 +40,40 @@
 
 모든 코드에는 사용자가 이해할 수 있게 세부적인 주석을 달아야한다.
 
-## graphify
+<!-- CODEGRAPH_START -->
+## CodeGraph
 
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+This project has a CodeGraph MCP server (`codegraph_*` tools) configured. CodeGraph is a tree-sitter-parsed knowledge graph of every symbol, edge, and file. Reads are sub-millisecond and return structural information grep cannot.
 
-When the user types `/graphify`, invoke the `skill` tool with `skill: "graphify"` before doing anything else.
+### When to prefer CodeGraph over native search
 
-Rules:
-- ALWAYS read graphify-out/GRAPH_REPORT.md before reading any source files, running grep/glob searches, or answering codebase questions. The graph is your primary map of the codebase.
-- IF graphify-out/wiki/index.md EXISTS, navigate it instead of reading raw files
-- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+Use CodeGraph for structural questions: what calls what, what would break, where a symbol is defined, or what a symbol's signature is. Use native grep/read only for literal text queries, comments, log messages, or after a specific file is already open.
+
+| Question | Tool |
+|---|---|
+| "Where is X defined?" / "Find symbol named X" | `codegraph_search` |
+| "What calls function Y?" | `codegraph_callers` |
+| "What does Y call?" | `codegraph_callees` |
+| "How does X reach/become Y?" / "Trace the flow from X to Y" | `codegraph_trace` |
+| "What would break if I changed Z?" | `codegraph_impact` |
+| "Show me Y's signature / source / docstring" | `codegraph_node` |
+| "Give me focused context for a task/area" | `codegraph_context` |
+| "See several related symbols' source at once" | `codegraph_explore` |
+| "What files exist under path/" | `codegraph_files` |
+| "Is the index healthy?" | `codegraph_status` |
+
+### Rules of thumb
+
+- For architecture or "how does X work" questions, answer directly with `codegraph_context` first, then one `codegraph_explore` for the source of the symbols it surfaces.
+- For a specific flow question, start with `codegraph_trace` from -> to, then use one `codegraph_explore` for the relevant bodies if needed.
+- Do not rebuild trace paths with `codegraph_search` plus `codegraph_callers`; `codegraph_trace` is the dedicated tool for that.
+- Do not grep first when looking up a symbol by name. Use `codegraph_search`.
+- Do not chain `codegraph_search` plus `codegraph_node` when focused context is enough. Use `codegraph_context`.
+- Do not loop `codegraph_node` over many symbols. Use one capped `codegraph_explore` call.
+- Trust CodeGraph results for structural lookup. They come from an AST index; re-checking the same thing with grep usually wastes time.
+- After editing, check for the CodeGraph staleness banner. If a tool response says files are pending re-index, read those specific files directly for live content. Files not listed in the banner remain trustworthy.
+
+### If `.codegraph/` does not exist
+
+If CodeGraph reports that the project is not initialized, ask the user: "I notice this project doesn't have CodeGraph initialized. Want me to run `codegraph init -i` to build the index?"
+<!-- CODEGRAPH_END -->
