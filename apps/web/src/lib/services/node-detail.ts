@@ -127,6 +127,15 @@ export interface ApiNodeDetailExtrasResponse {
   used_in_other_trees: PanelGraph["used_in_other_trees"];
 }
 
+export type ReadyNodeDetailLookupResult =
+  | {
+      status: "ready";
+      detail: ApiNodeDetailResponse;
+    }
+  | {
+      status: "not_ready";
+    };
+
 async function buildPanelGraph(
   conceptId: string,
   treeId: string,
@@ -590,6 +599,103 @@ export async function getOrCreateNodeDetail(params: {
   }
 }
 
+export async function getReadyNodeDetail(params: {
+  treeId: string;
+  nodeId: string;
+  bundle: LearningTreeBundle;
+  loadDocumentTreeContext?: LoadDocumentTreeContext;
+  loadConcept?: LoadConcept;
+}): Promise<ReadyNodeDetailLookupResult> {
+  const { treeId, nodeId, bundle } = params;
+  const loadDocumentTreeContext =
+    params.loadDocumentTreeContext ?? getDocumentTreeContextForUser;
+  const loadConcept =
+    params.loadConcept ?? ((conceptId) => getConceptById(getDb(), conceptId));
+  const nodeRow = bundle.nodes.find((n) => n.id === nodeId);
+  if (!nodeRow || nodeRow.treeId !== treeId) {
+    throw new Error("NODE_NOT_IN_TREE");
+  }
+
+  const documentTreeContext = await withDetailDuration(
+    "document_context",
+    {
+      treeId,
+      nodeId,
+      nodeKey: nodeRow.nodeKey,
+      conceptId: nodeRow.conceptId,
+    },
+    () => loadDocumentTreeContext(treeId, DEFAULT_USER_ID),
+  );
+  const documentNodeContext = findDocumentContextForNode(
+    documentTreeContext,
+    nodeRow.title,
+    nodeRow.conceptId,
+  );
+  const documentExtras = documentContextExtras(nodeRow, documentNodeContext);
+  const detailConceptId = nodeRow.conceptId ?? documentNodeContext?.concept_id ?? null;
+  const logContext: DetailLogContext = {
+    treeId,
+    nodeId,
+    nodeKey: nodeRow.nodeKey,
+    conceptId: detailConceptId,
+  };
+  const extrasBase = (): Partial<ApiNodeDetailResponse> => {
+    const conceptId = detailConceptId;
+    if (!conceptId) return { concept_id: null, ...documentExtras };
+    return {
+      concept_id: conceptId,
+      topic_context_line:
+        documentExtras.topic_context_line ??
+        topicContextLine(bundle.tree.topic, nodeRow.title),
+      ...documentExtras,
+    };
+  };
+
+  const hasCachedDetail = await withDetailDuration(
+    "cache_check",
+    logContext,
+    async () => Boolean(nodeRow.detailJson),
+  );
+  if (hasCachedDetail) {
+    return {
+      status: "ready",
+      detail: await withDetailDuration(
+        "cache_hit",
+        logContext,
+        async () => toApiBody(
+          nodeId,
+          nodeRow.nodeKey,
+          nodeRow.detailJson!,
+          [],
+          extrasBase(),
+        ),
+      ),
+    };
+  }
+
+  const concept = detailConceptId ? await loadConcept(detailConceptId) : null;
+  if (concept && hasUsableConceptExplanation(concept)) {
+    return {
+      status: "ready",
+      detail: await withDetailDuration(
+        "concept_fast_path",
+        logContext,
+        () => responseFromStoredConcept(
+          nodeId,
+          nodeRow.nodeKey,
+          nodeRow,
+          concept,
+          bundle,
+          [],
+          documentExtras,
+        ),
+      ),
+    };
+  }
+
+  return { status: "not_ready" };
+}
+
 export async function getNodeDetailExtras(params: {
   treeId: string;
   nodeId: string;
@@ -685,6 +791,38 @@ export async function getOrCreateNodeDetailForRequest(
       conceptId: nodeRow.conceptId,
     },
     () => getOrCreateNodeDetail({ treeId, nodeId, bundle }),
+  );
+}
+
+export async function getReadyNodeDetailForRequest(
+  treeId: string,
+  nodeId: string,
+): Promise<ReadyNodeDetailLookupResult> {
+  const requestLogContext: DetailLogContext = {
+    treeId,
+    nodeId,
+    nodeKey: null,
+    conceptId: null,
+  };
+  const bundle = await withDetailDuration("tree_load", requestLogContext, () =>
+    getLearningTree(treeId, DEFAULT_USER_ID),
+  );
+  if (!bundle) {
+    throw new Error("NOT_FOUND");
+  }
+  const nodeRow = bundle.nodes.find((n) => n.id === nodeId);
+  if (!nodeRow || nodeRow.treeId !== treeId) {
+    throw new Error("NOT_FOUND");
+  }
+  return withDetailDuration(
+    "detail_total",
+    {
+      treeId,
+      nodeId,
+      nodeKey: nodeRow.nodeKey,
+      conceptId: nodeRow.conceptId,
+    },
+    () => getReadyNodeDetail({ treeId, nodeId, bundle }),
   );
 }
 

@@ -5,7 +5,14 @@ import {
   LlmTransportError,
   LlmValidationError,
 } from "@/lib/llm/errors";
-import { getOrCreateNodeDetailForRequest } from "@/lib/services/node-detail";
+import {
+  getOrCreateNodeDetailForRequest,
+  getReadyNodeDetailForRequest,
+} from "@/lib/services/node-detail";
+import {
+  CURRENT_NODE_DETAIL_VERSION,
+  enqueueNodeDetailJob,
+} from "@/lib/repository/node-detail-job-repository";
 import { NextResponse } from "next/server";
 import { z } from "zod/v3";
 
@@ -16,6 +23,10 @@ const bodySchema = z.object({
 });
 
 type Ctx = { params: Promise<{ nodeId: string }> };
+
+function NODE_DETAIL_ASYNC_ENABLED(): boolean {
+  return process.env.NODE_DETAIL_ASYNC_ENABLED === "true";
+}
 
 export async function POST(req: Request, ctx: Ctx) {
   const { nodeId } = await ctx.params;
@@ -42,6 +53,32 @@ export async function POST(req: Request, ctx: Ctx) {
   const { tree_id: treeId } = parsed.data;
 
   try {
+    if (NODE_DETAIL_ASYNC_ENABLED()) {
+      const ready = await getReadyNodeDetailForRequest(treeId, nodeId);
+      if (ready.status === "ready") {
+        return NextResponse.json(
+          { status: "ready", detail: ready.detail },
+          { headers: { "Cache-Control": "no-store" } },
+        );
+      }
+
+      const job = await enqueueNodeDetailJob({
+        treeId,
+        nodeId,
+        detailVersion: CURRENT_NODE_DETAIL_VERSION,
+      });
+      return NextResponse.json(
+        {
+          status: "queued",
+          job_id: job.id,
+        },
+        {
+          status: 202,
+          headers: { "Cache-Control": "no-store" },
+        },
+      );
+    }
+
     const detail = await getOrCreateNodeDetailForRequest(treeId, nodeId);
     return NextResponse.json(detail);
   } catch (e) {
