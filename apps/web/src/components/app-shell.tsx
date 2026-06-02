@@ -6,11 +6,17 @@
 
 import {
   authenticatedFetch,
+  clearSupabaseAccessTokenBridge,
   readSupabaseAccessToken,
   subscribeSupabaseAccessToken,
+  syncSupabaseSessionToAccessTokenBridge,
 } from "@/lib/auth/browser-auth";
+import {
+  getBrowserSupabaseClient,
+  getSupabaseBrowserConfig,
+} from "@/lib/auth/supabase-browser-client";
 import type { ApiTreeHistoryItem } from "@/types/learning";
-import { Settings } from "lucide-react";
+import { LogIn, LogOut, Settings, UserCircle } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
@@ -39,11 +45,72 @@ export function AppShell({ children }: AppShellProps) {
   const [history, setHistory] = useState<ApiTreeHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [authEmail, setAuthEmail] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(
+    () => Boolean(getSupabaseBrowserConfig()),
+  );
+  const [signingOut, setSigningOut] = useState(false);
   const accessToken = useSyncExternalStore(
     subscribeSupabaseAccessToken,
     readSupabaseAccessToken,
     () => null,
   );
+  const authNextHref =
+    pathname && pathname !== "/auth" ?
+      `/auth?next=${encodeURIComponent(pathname)}`
+    : "/auth";
+
+  /** Supabase persisted session을 복원하고 access token bridge를 최신 값으로 유지한다. */
+  useEffect(() => {
+    const supabase = getBrowserSupabaseClient();
+    if (!supabase) {
+      return;
+    }
+
+    let cancelled = false;
+    void supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (cancelled) return;
+        syncSupabaseSessionToAccessTokenBridge(data.session);
+        setAuthEmail(data.session?.user.email ?? null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        clearSupabaseAccessTokenBridge();
+        setAuthEmail(null);
+      })
+      .finally(() => {
+        if (!cancelled) setAuthLoading(false);
+      });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      syncSupabaseSessionToAccessTokenBridge(session);
+      setAuthEmail(session?.user.email ?? null);
+      setAuthLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  async function signOut() {
+    setSigningOut(true);
+    try {
+      await getBrowserSupabaseClient()?.auth.signOut();
+    } finally {
+      clearSupabaseAccessTokenBridge();
+      setAuthEmail(null);
+      setHistory([]);
+      setHistoryError(null);
+      setHistoryLoading(false);
+      setSigningOut(false);
+    }
+  }
 
   /**
    * 히스토리 목록을 서버에서 다시 가져온다.
@@ -55,7 +122,11 @@ export function AppShell({ children }: AppShellProps) {
 
     if (!accessToken) return;
 
-    void authenticatedFetch("/api/trees", {}, { contentType: null })
+    void Promise.resolve()
+      .then(() => {
+        if (!cancelled) setHistoryLoading(true);
+        return authenticatedFetch("/api/trees", {}, { contentType: null });
+      })
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -191,9 +262,35 @@ export function AppShell({ children }: AppShellProps) {
           >
             RootMap
           </Link>
+          <div className="ml-auto flex min-w-0 items-center gap-1.5">
+            {authEmail ?
+              <>
+                <span className="hidden min-w-0 max-w-48 items-center gap-1.5 truncate rounded-lg px-2 py-1.5 text-sm text-zinc-600 dark:text-zinc-300 sm:inline-flex">
+                  <UserCircle size={15} aria-hidden="true" />
+                  <span className="truncate">{authEmail}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void signOut()}
+                  disabled={signingOut}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-60 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                >
+                  <LogOut size={15} aria-hidden="true" />
+                  {signingOut ? "로그아웃 중" : "로그아웃"}
+                </button>
+              </>
+            : <Link
+                href={authNextHref}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              >
+                <LogIn size={15} aria-hidden="true" />
+                {authLoading ? "확인 중" : "로그인"}
+              </Link>
+            }
+          </div>
           <Link
             href="/settings/llm-provider"
-            className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900"
+            className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900"
           >
             <Settings size={15} aria-hidden="true" />
             LLM 설정

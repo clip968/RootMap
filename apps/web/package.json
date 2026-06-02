@@ -60,6 +60,7 @@
   },
   "dependencies": {
     "@esbuild/linux-x64": "^0.28.0",
+    "@supabase/supabase-js": "^2.106.2",
     "@xyflow/react": "^12.10.2",
     "drizzle-orm": "^0.45.2",
     "framer-motion": "^12.39.0",

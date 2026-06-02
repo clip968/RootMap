@@ -214,6 +214,129 @@ async function runUnitTests(filter: Set<string>): Promise<void> {
     console.info("[phase6:unit] fsrs-lite tests passed");
   }
 
+  if (wants(filter, ["auth", "browser-auth"])) {
+    const previousWindow = globalThis.window;
+    const previousFetch = globalThis.fetch;
+    const previousSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const previousSupabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    const storage = new Map<string, string>();
+    const listeners = new Map<string, Set<EventListener>>();
+    const fakeWindow = {
+      localStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => storage.set(key, value),
+        removeItem: (key: string) => storage.delete(key),
+      },
+      addEventListener: (type: string, listener: EventListener) => {
+        const next = listeners.get(type) ?? new Set<EventListener>();
+        next.add(listener);
+        listeners.set(type, next);
+      },
+      removeEventListener: (type: string, listener: EventListener) => {
+        listeners.get(type)?.delete(listener);
+      },
+      dispatchEvent: (event: Event) => {
+        for (const listener of listeners.get(event.type) ?? []) listener(event);
+        return true;
+      },
+    } as unknown as Window & typeof globalThis;
+
+    try {
+      globalThis.window = fakeWindow;
+      delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+      delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+      const {
+        SUPABASE_AUTH_SESSION_STORAGE_KEY,
+        getSupabaseBrowserConfig,
+      } = await import("../src/lib/auth/supabase-browser-client");
+      assertEqual(
+        SUPABASE_AUTH_SESSION_STORAGE_KEY,
+        "rootmap_supabase_auth_session",
+        "Supabase session storage key should be RootMap-specific",
+      );
+      assertEqual(
+        getSupabaseBrowserConfig(),
+        null,
+        "missing public Supabase env should return no browser config",
+      );
+
+      const {
+        SUPABASE_ACCESS_TOKEN_EVENT,
+        SUPABASE_ACCESS_TOKEN_STORAGE_KEY,
+        authenticatedFetch,
+        clearSupabaseAccessTokenBridge,
+        readSupabaseAccessToken,
+        subscribeSupabaseAccessToken,
+        syncSupabaseSessionToAccessTokenBridge,
+      } = await import("../src/lib/auth/browser-auth");
+
+      let tokenChangeEvents = 0;
+      const unsubscribe = subscribeSupabaseAccessToken(() => {
+        tokenChangeEvents += 1;
+      });
+
+      syncSupabaseSessionToAccessTokenBridge({ access_token: "access-a" });
+      assertEqual(
+        storage.get(SUPABASE_ACCESS_TOKEN_STORAGE_KEY),
+        "access-a",
+        "signed-in Supabase session should populate the legacy access-token bridge",
+      );
+      assertEqual(readSupabaseAccessToken(), "access-a", "bridge reader should return signed-in access token");
+
+      syncSupabaseSessionToAccessTokenBridge({ access_token: "access-b" });
+      assertEqual(
+        readSupabaseAccessToken(),
+        "access-b",
+        "refreshed Supabase session should replace the bridge token",
+      );
+
+      let fetchAuthorization: string | null = null;
+      let fetchContentType: string | null = null;
+      globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const headers = new Headers(init?.headers);
+        fetchAuthorization = headers.get("Authorization");
+        fetchContentType = headers.get("Content-Type");
+        return new Response("{}", { status: 200 });
+      }) as typeof fetch;
+
+      await authenticatedFetch("/api/trees", {}, { contentType: null });
+      assertEqual(
+        fetchAuthorization,
+        "Bearer access-b",
+        "authenticatedFetch should attach the latest bridge access token",
+      );
+      assertEqual(
+        fetchContentType,
+        null,
+        "authenticatedFetch should preserve contentType null for GET-like requests",
+      );
+
+      clearSupabaseAccessTokenBridge();
+      assertEqual(readSupabaseAccessToken(), null, "sign-out should remove the bridge token");
+      unsubscribe();
+      assert(
+        tokenChangeEvents >= 3,
+        `${SUPABASE_ACCESS_TOKEN_EVENT} should fire for sign-in, refresh, and sign-out`,
+      );
+      console.info("[phase6:unit] auth tests passed");
+    } finally {
+      globalThis.window = previousWindow;
+      globalThis.fetch = previousFetch;
+      if (previousSupabaseUrl === undefined) {
+        delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+      } else {
+        process.env.NEXT_PUBLIC_SUPABASE_URL = previousSupabaseUrl;
+      }
+      if (previousSupabaseAnonKey === undefined) {
+        delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      } else {
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = previousSupabaseAnonKey;
+      }
+    }
+  }
+
   if (wants(filter, ["explainable-recommendations"])) {
     const { recommendPersonalizedNodes } = await import("../src/lib/recommendation/personalized");
     const now = new Date("2026-05-21T00:00:00.000Z");

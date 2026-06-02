@@ -4,6 +4,10 @@ export const SUPABASE_ACCESS_TOKEN_STORAGE_KEY = "rootmap_supabase_access_token"
 export const SUPABASE_ACCESS_TOKEN_EVENT = "rootmap-phase4-auth-token-changed";
 export const LOGIN_REQUIRED_MESSAGE = "로그인 후 다시 시도해 주세요.";
 
+export interface SupabaseSessionTokenSource {
+  access_token?: string | null;
+}
+
 export class MissingAuthTokenError extends Error {
   code = "AUTH_TOKEN_REQUIRED" as const;
 
@@ -16,6 +20,37 @@ export class MissingAuthTokenError extends Error {
 export function readSupabaseAccessToken(): string | null {
   if (typeof window === "undefined") return null;
   return window.localStorage.getItem(SUPABASE_ACCESS_TOKEN_STORAGE_KEY)?.trim() || null;
+}
+
+function dispatchSupabaseAccessTokenChanged(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(SUPABASE_ACCESS_TOKEN_EVENT));
+}
+
+function writeSupabaseAccessTokenBridge(token: string | null): string | null {
+  if (typeof window === "undefined") return null;
+
+  const previous = readSupabaseAccessToken();
+  const next = token?.trim() || null;
+  if (next) {
+    window.localStorage.setItem(SUPABASE_ACCESS_TOKEN_STORAGE_KEY, next);
+  } else {
+    window.localStorage.removeItem(SUPABASE_ACCESS_TOKEN_STORAGE_KEY);
+  }
+
+  // React `useSyncExternalStore` 구독자는 같은 탭의 localStorage 변경을 storage 이벤트로 받지 못한다.
+  if (previous !== next) dispatchSupabaseAccessTokenChanged();
+  return next;
+}
+
+export function syncSupabaseSessionToAccessTokenBridge(
+  session: SupabaseSessionTokenSource | null,
+): string | null {
+  return writeSupabaseAccessTokenBridge(session?.access_token ?? null);
+}
+
+export function clearSupabaseAccessTokenBridge(): void {
+  writeSupabaseAccessTokenBridge(null);
 }
 
 export function subscribeSupabaseAccessToken(callback: () => void): () => void {
@@ -63,11 +98,13 @@ export async function authenticatedFetch(
 ): Promise<Response> {
   const token = readSupabaseAccessToken();
   if (!token) throw new MissingAuthTokenError();
+  const contentType =
+    "contentType" in options ? options.contentType : "application/json";
 
   // App API requests need the bearer token. Storage signed URL uploads are not
   // routed through this helper, so Supabase object upload auth never leaks here.
   return fetch(input, {
     ...init,
-    headers: mergeAuthHeaders(token, init.headers, options.contentType ?? "application/json"),
+    headers: mergeAuthHeaders(token, init.headers, contentType),
   });
 }
