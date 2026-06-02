@@ -1,4 +1,5 @@
 import { jsonError } from "@/lib/api-errors";
+import { requireSupabaseAuthUserId } from "@/lib/auth/supabase-auth";
 import { createChatCompletion } from "@/lib/llm/chat";
 import {
   getLlmProviderTimeoutMs,
@@ -33,22 +34,25 @@ async function readOptionalBody(req: Request): Promise<Record<string, unknown>> 
   }
 }
 
-async function configFromBody(body: Record<string, unknown>): Promise<ResolvedLlmProviderConfig | null> {
+async function configFromBody(
+  userId: string,
+  body: Record<string, unknown>,
+): Promise<ResolvedLlmProviderConfig | null> {
   const providerType = normalizeProviderType(body.providerType);
   if (!providerType) return null;
 
-  const existing = await getActiveLlmProviderSetting();
+  const existing = await getActiveLlmProviderSetting(userId);
   const apiKey =
     typeof body.apiKey === "string" && body.apiKey.trim() ?
       body.apiKey.trim()
     : existing ? decryptLlmApiKey(existing)
-    : process.env.OPENROUTER_API_KEY?.trim() ?? "";
+    : "";
   if (!apiKey) {
     throw new Error("연결 테스트에 사용할 API key가 없습니다.");
   }
 
   return {
-    source: existing ? "database" : "env",
+    source: "database",
     providerType,
     name: providerDisplayName(providerType),
     baseUrl: normalizeLlmBaseUrl(
@@ -64,10 +68,15 @@ async function configFromBody(body: Record<string, unknown>): Promise<ResolvedLl
 }
 
 export async function POST(req: Request) {
+  const auth = await requireSupabaseAuthUserId(req);
+  if (!auth.ok) {
+    return jsonError(auth.code, auth.message, auth.status);
+  }
+
   let config: ResolvedLlmProviderConfig;
   try {
     const body = await readOptionalBody(req);
-    config = (await configFromBody(body)) ?? (await resolveLlmProviderConfig());
+    config = (await configFromBody(auth.userId, body)) ?? (await resolveLlmProviderConfig(auth.userId));
   } catch (err) {
     return jsonError(
       "INVALID_REQUEST",

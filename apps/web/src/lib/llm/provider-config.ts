@@ -22,10 +22,10 @@ export interface ResolvedLlmProviderConfig {
 }
 
 export interface LlmProviderStatus {
-  source: "database" | "env";
-  providerType: LlmProviderType;
+  source: "database" | "env" | "none";
+  providerType: LlmProviderType | null;
   name: string;
-  baseUrl: string;
+  baseUrl: string | null;
   model: string | null;
   jsonMode: LlmJsonMode;
   isActive: boolean;
@@ -148,13 +148,27 @@ export function getEnvLlmProviderStatus(): LlmProviderStatus {
   };
 }
 
-export async function getLlmProviderStatus(): Promise<LlmProviderStatus> {
-  const row = await getActiveLlmProviderSetting();
-  return row ? statusFromRow(row) : getEnvLlmProviderStatus();
+export function getEmptyLlmProviderStatus(): LlmProviderStatus {
+  return {
+    source: "none",
+    providerType: null,
+    name: "No provider configured",
+    baseUrl: null,
+    model: null,
+    jsonMode: "auto",
+    isActive: false,
+    hasApiKey: false,
+    apiKeyHint: null,
+  };
 }
 
-export async function resolveLlmProviderConfig(): Promise<ResolvedLlmProviderConfig> {
-  const row = await getActiveLlmProviderSetting();
+export async function getLlmProviderStatus(userId: string): Promise<LlmProviderStatus> {
+  const row = await getActiveLlmProviderSetting(userId);
+  return row ? statusFromRow(row) : getEmptyLlmProviderStatus();
+}
+
+export async function resolveLlmProviderConfig(userId?: string): Promise<ResolvedLlmProviderConfig> {
+  const row = userId ? await getActiveLlmProviderSetting(userId) : null;
   if (row) {
     return {
       source: "database",
@@ -167,6 +181,10 @@ export async function resolveLlmProviderConfig(): Promise<ResolvedLlmProviderCon
       apiKeyHint: row.apiKeyHint,
       timeoutMs: getLlmProviderTimeoutMs(),
     };
+  }
+
+  if (userId) {
+    throw new Error("먼저 계정의 LLM API key를 설정해 주세요.");
   }
 
   const apiKey = process.env.OPENROUTER_API_KEY?.trim();

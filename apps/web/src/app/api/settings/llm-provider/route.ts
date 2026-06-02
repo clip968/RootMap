@@ -1,6 +1,6 @@
 import { jsonError } from "@/lib/api-errors";
+import { requireSupabaseAuthUserId } from "@/lib/auth/supabase-auth";
 import {
-  getEnvLlmProviderStatus,
   getLlmProviderStatus,
   normalizeLlmBaseUrl,
   normalizeProviderType,
@@ -31,15 +31,25 @@ function safeMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback;
 }
 
-async function statusBody() {
-  return getLlmProviderStatus();
+async function statusBody(userId: string) {
+  return getLlmProviderStatus(userId);
 }
 
-export async function GET() {
-  return NextResponse.json(await statusBody());
+export async function GET(req: Request) {
+  const auth = await requireSupabaseAuthUserId(req);
+  if (!auth.ok) {
+    return jsonError(auth.code, auth.message, auth.status);
+  }
+
+  return NextResponse.json(await statusBody(auth.userId));
 }
 
 export async function PUT(req: Request) {
+  const auth = await requireSupabaseAuthUserId(req);
+  if (!auth.ok) {
+    return jsonError(auth.code, auth.message, auth.status);
+  }
+
   let body: Record<string, unknown>;
   try {
     const parsed = await req.json();
@@ -60,7 +70,7 @@ export async function PUT(req: Request) {
     typeof body.apiKey === "string" ? body.apiKey.trim()
     : typeof body.api_key === "string" ? body.api_key.trim()
     : "";
-  const existing = await getActiveLlmProviderSetting();
+  const existing = await getActiveLlmProviderSetting(auth.userId);
   if (!apiKey && !existing?.apiKeyEncrypted) {
     return jsonError("INVALID_REQUEST", "API key를 입력해 주세요.", 400);
   }
@@ -87,6 +97,7 @@ export async function PUT(req: Request) {
 
   try {
     const row = await saveActiveLlmProviderSetting({
+      userId: auth.userId,
       providerType,
       name: providerDisplayName(providerType),
       baseUrl,
@@ -116,7 +127,12 @@ export async function PUT(req: Request) {
   }
 }
 
-export async function DELETE() {
-  await deleteActiveLlmProviderSetting();
-  return NextResponse.json(getEnvLlmProviderStatus());
+export async function DELETE(req: Request) {
+  const auth = await requireSupabaseAuthUserId(req);
+  if (!auth.ok) {
+    return jsonError(auth.code, auth.message, auth.status);
+  }
+
+  await deleteActiveLlmProviderSetting(auth.userId);
+  return NextResponse.json(await statusBody(auth.userId));
 }

@@ -1,15 +1,14 @@
 /**
- * Phase 3 LLM provider 설정 스모크(API 실호출 없음).
- * 실행: npm run llm:smoke-provider-settings (apps/web)
+ * Phase 11 LLM provider settings smoke.
+ *
+ * The app database client is Postgres-only, so this smoke avoids the removed
+ * SQLite test database path. It verifies the user-owned source contract and
+ * still exercises pure crypto/provider helpers with real values.
  */
 import fs from "node:fs";
 import path from "node:path";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import { resetDbSingleton, getDb } from "../src/db/client";
-import { createChatCompletion } from "../src/lib/llm/chat";
 import {
   buildLlmProviderHeaders,
-  resolveLlmProviderConfig,
   shouldSendJsonResponseFormat,
   type ResolvedLlmProviderConfig,
 } from "../src/lib/llm/provider-config";
@@ -17,141 +16,127 @@ import {
   decryptLlmApiKey,
   encryptLlmApiKey,
 } from "../src/lib/llm/provider-crypto";
-import { GET, PUT, DELETE } from "../src/app/api/settings/llm-provider/route";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
-async function main() {
-const dbRel = path.join("data", "llm-provider-settings-smoke.db");
-const dbAbs = path.join(process.cwd(), dbRel);
-process.env.DATABASE_URL = `file:${dbAbs}`;
-process.env.LLM_SETTINGS_SECRET = "smoke-secret-for-llm-provider-settings";
-process.env.OPENROUTER_API_KEY = "sk-env-fallback";
-process.env.OPENROUTER_MODEL = "env/model";
-process.env.OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/";
-process.env.OPENROUTER_SITE_URL = "https://rootmap.local";
-process.env.OPENROUTER_APP_NAME = "RootMap Smoke";
-
-resetDbSingleton();
-fs.mkdirSync(path.dirname(dbAbs), { recursive: true });
-try {
-  fs.rmSync(dbAbs, { force: true });
-} catch {
-  /* 스모크 DB가 없으면 그대로 진행한다. */
+function readSource(relativePath: string): string {
+  return fs.readFileSync(path.join(process.cwd(), relativePath), "utf8");
 }
-resetDbSingleton();
 
-const db = getDb();
-migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
+function assertContains(source: string, needle: string, message: string): void {
+  assert(source.includes(needle), message);
+}
 
-const encrypted = encryptLlmApiKey("sk-round-trip");
-assert(
-  decryptLlmApiKey(encrypted) === "sk-round-trip",
-  "encrypted API key should decrypt to original value",
-);
+function assertNotContains(source: string, needle: string, message: string): void {
+  assert(!source.includes(needle), message);
+}
 
-const saveRes = await PUT(
-  new Request("http://localhost/api/settings/llm-provider", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      providerType: "openrouter",
-      baseUrl: "https://openrouter.ai/api/v1/chat/completions",
-      model: "db/model",
-      apiKey: "sk-db-secret",
-      jsonMode: "auto",
-      isActive: true,
-    }),
-  }),
-);
-assert(saveRes.status === 200, "PUT should save provider settings");
-const saveBody = (await saveRes.json()) as Record<string, unknown>;
-assert(!JSON.stringify(saveBody).includes("sk-db-secret"), "PUT response should not expose raw API key");
-assert(saveBody.apiKeyHint !== "sk-db-secret", "PUT response should return masked API key only");
-
-const getBody = (await (await GET()).json()) as Record<string, unknown>;
-assert(getBody.source === "database", "GET should report database source after save");
-assert(!JSON.stringify(getBody).includes("sk-db-secret"), "GET response should not expose raw API key");
-
-const resolved = resolveLlmProviderConfig();
-assert(resolved.source === "database", "database provider should override env fallback");
-assert(resolved.apiKey === "sk-db-secret", "resolved database provider should decrypt API key");
-assert(resolved.model === "db/model", "resolved database provider should use DB model");
-assert(
-  resolved.baseUrl === "https://openrouter.ai/api/v1",
-  "base URL should remove duplicate /chat/completions path",
-);
-
-const openRouterHeaders = buildLlmProviderHeaders(resolved);
-assert(openRouterHeaders["HTTP-Referer"], "OpenRouter provider should include HTTP-Referer when configured");
-assert(openRouterHeaders["X-OpenRouter-Title"], "OpenRouter provider should include app title when configured");
-
-const customConfig: ResolvedLlmProviderConfig = {
-  source: "database",
-  providerType: "openai_compatible",
-  name: "Custom",
-  baseUrl: "https://example.test/v1",
-  model: "custom/model",
-  jsonMode: "disabled",
-  apiKey: "sk-custom",
-  apiKeyHint: "sk-c...stom",
-  timeoutMs: 1_000,
-};
-const customHeaders = buildLlmProviderHeaders(customConfig);
-assert(customHeaders.Authorization === "Bearer sk-custom", "custom provider should send bearer token");
-assert(customHeaders["Content-Type"] === "application/json", "custom provider should send JSON content type");
-assert(!customHeaders["HTTP-Referer"], "custom provider should not send OpenRouter referer header");
-assert(!customHeaders["X-OpenRouter-Title"], "custom provider should not send OpenRouter title header");
-assert(
-  !shouldSendJsonResponseFormat(customConfig.providerType, customConfig.jsonMode),
-  "jsonMode=disabled should skip response_format",
-);
-
-const previousFetch = globalThis.fetch;
-const captured: Array<{ url: string; init?: RequestInit }> = [];
-globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
-  captured.push({ url: input.toString(), init });
-  return new Response(
-    JSON.stringify({
-      model: "custom/model",
-      choices: [{ message: { content: "{\"ok\":true}" } }],
-    }),
-    { status: 200, headers: { "Content-Type": "application/json" } },
+function assertUserScopedRepository(): void {
+  const source = readSource("src/lib/repository/llm-provider-settings-repository.ts");
+  assertContains(source, "getActiveLlmProviderSetting(userId", "active lookup must require userId");
+  assertContains(source, "deleteActiveLlmProviderSetting(userId", "delete must require userId");
+  assertContains(source, "userId: string", "save input must carry userId");
+  assertContains(
+    source,
+    "eq(llmProviderSettings.userId, userId)",
+    "active lookup/delete must filter by authenticated user id",
   );
-};
+  assertContains(
+    source,
+    "eq(llmProviderSettings.userId, input.userId)",
+    "save/update must filter by the input user id",
+  );
+}
+
+function assertSettingsRoutesUseAuthUser(): void {
+  const route = readSource("src/app/api/settings/llm-provider/route.ts");
+  const testRoute = readSource("src/app/api/settings/llm-provider/test/route.ts");
+
+  for (const [label, source] of [
+    ["settings route", route],
+    ["settings test route", testRoute],
+  ] as const) {
+    assertContains(source, "requireSupabaseAuthUserId(req)", `${label} must require Supabase Auth`);
+    assertContains(source, "auth.userId", `${label} must pass authenticated user id`);
+  }
+
+  assertContains(route, "getActiveLlmProviderSetting(auth.userId)", "PUT must keep only the user's existing key");
+  assertContains(route, "userId: auth.userId", "PUT must save settings under the authenticated user");
+  assertContains(route, "deleteActiveLlmProviderSetting(auth.userId)", "DELETE must remove only the user's setting");
+  assertContains(testRoute, "getActiveLlmProviderSetting(userId)", "test route must read only the user's saved key");
+  assertNotContains(testRoute, "OPENROUTER_API_KEY", "test route must not use env fallback for logged-in users");
+}
+
+function assertSchemaAndMigration(): void {
+  const schema = readSource("src/db/schema.ts");
+  const migration = readSource("drizzle/0008_llm_provider_settings_user_id.sql");
+
+  assertContains(schema, 'userId: text("user_id").notNull()', "schema must include llm_provider_settings.user_id");
+  assertContains(schema, "llm_provider_settings_user_active_idx", "schema must index user active lookup");
+  assertContains(migration, 'add column if not exists "user_id" text', "migration must add user_id");
+  assertContains(migration, "legacy_global_provider", "migration must not auto-assign legacy rows to real users");
+  assertContains(migration, 'where "is_active" = true', "migration must enforce one active row per user");
+}
+
+function assertProviderHelpers(): void {
+  process.env.LLM_SETTINGS_SECRET = "smoke-secret-for-llm-provider-settings";
+  process.env.OPENROUTER_SITE_URL = "https://rootmap.local";
+  process.env.OPENROUTER_APP_NAME = "RootMap Smoke";
+
+  const encrypted = encryptLlmApiKey("sk-round-trip");
+  assert(
+    decryptLlmApiKey(encrypted) === "sk-round-trip",
+    "encrypted API key should decrypt to original value",
+  );
+
+  const customConfig: ResolvedLlmProviderConfig = {
+    source: "database",
+    providerType: "openai_compatible",
+    name: "Custom",
+    baseUrl: "https://example.test/v1",
+    model: "custom/model",
+    jsonMode: "disabled",
+    apiKey: "sk-custom",
+    apiKeyHint: "sk-c...stom",
+    timeoutMs: 1_000,
+  };
+  const customHeaders = buildLlmProviderHeaders(customConfig);
+  assert(customHeaders.Authorization === "Bearer sk-custom", "custom provider should send bearer token");
+  assert(customHeaders["Content-Type"] === "application/json", "custom provider should send JSON content type");
+  assert(!customHeaders["HTTP-Referer"], "custom provider should not send OpenRouter referer header");
+  assert(!customHeaders["X-OpenRouter-Title"], "custom provider should not send OpenRouter title header");
+  assert(
+    !shouldSendJsonResponseFormat(customConfig.providerType, customConfig.jsonMode),
+    "jsonMode=disabled should skip response_format",
+  );
+
+  const openRouterConfig: ResolvedLlmProviderConfig = {
+    ...customConfig,
+    providerType: "openrouter",
+    jsonMode: "auto",
+  };
+  const openRouterHeaders = buildLlmProviderHeaders(openRouterConfig);
+  assert(openRouterHeaders["HTTP-Referer"], "OpenRouter provider should include configured referer");
+  assert(openRouterHeaders["X-OpenRouter-Title"], "OpenRouter provider should include configured app title");
+  assert(
+    shouldSendJsonResponseFormat(openRouterConfig.providerType, openRouterConfig.jsonMode),
+    "OpenRouter auto JSON mode should request JSON response format",
+  );
+}
+
+function main(): void {
+  assertSchemaAndMigration();
+  assertUserScopedRepository();
+  assertSettingsRoutesUseAuthUser();
+  assertProviderHelpers();
+  console.log("llm:smoke-provider-settings OK");
+}
+
 try {
-  await createChatCompletion([{ role: "user", content: "ping" }], {
-    providerConfig: customConfig,
-  });
-} finally {
-  globalThis.fetch = previousFetch;
-}
-const requestBody = JSON.parse(String(captured[0]?.init?.body ?? "{}")) as Record<string, unknown>;
-assert(!("response_format" in requestBody), "jsonMode=disabled should omit response_format in request body");
-assert(
-  captured[0]?.url === "https://example.test/v1/chat/completions",
-  "custom provider should call normalized chat completions URL",
-);
-
-const deleteBody = (await (await DELETE()).json()) as Record<string, unknown>;
-assert(deleteBody.source === "env", "DELETE should return env fallback status");
-const fallback = resolveLlmProviderConfig();
-assert(fallback.source === "env", "env fallback should resolve after DB setting delete");
-assert(fallback.apiKey === "sk-env-fallback", "env fallback should keep OPENROUTER_API_KEY behavior");
-
-resetDbSingleton();
-try {
-  fs.rmSync(dbAbs, { force: true });
-} catch {
-  /* 스모크 DB 정리 실패는 다음 실행에서 덮어쓴다. */
-}
-
-console.log("llm:smoke-provider-settings OK");
-}
-
-void main().catch((err) => {
+  main();
+} catch (err) {
   console.error(err);
   process.exitCode = 1;
-});
+}

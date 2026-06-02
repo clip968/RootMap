@@ -39,6 +39,7 @@ export const llmProviderSettings = pgTable(
       .primaryKey()
       .notNull()
       .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id").notNull(),
     providerType: text("provider_type").notNull(),
     name: text("name").notNull(),
     baseUrl: text("base_url").notNull(),
@@ -59,6 +60,7 @@ export const llmProviderSettings = pgTable(
       .$defaultFn(() => new Date().toISOString()),
   },
   (t) => [
+    index("llm_provider_settings_user_active_idx").on(t.userId, t.isActive),
     index("llm_provider_settings_active_idx").on(t.isActive),
     index("llm_provider_settings_provider_type_idx").on(t.providerType),
   ],
