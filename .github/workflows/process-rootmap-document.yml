@@ -10,7 +10,7 @@ on:
       chunk_batch_size:
         description: "Number of pending chunks to process in one CLI run"
         required: true
-        default: "1"
+        default: "3"
         type: string
       max_attempts:
         description: "Maximum repeated CLI runs before the workflow stops"

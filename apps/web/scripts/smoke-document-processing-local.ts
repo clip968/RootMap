@@ -4,6 +4,7 @@
  * 실제 Supabase DB나 LLM provider를 호출하지 않고, CLI parsing과 dry-run/tree-only
  * 실행 계약을 순수 helper와 주입 dependency로 검증한다.
  */
+import fs from "node:fs";
 import {
   formatLocalRunnerErrorLog,
   parseEnvFileContent,
@@ -21,7 +22,29 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
+function readSource(relativePath: string): string {
+  return fs.readFileSync(relativePath, "utf8");
+}
+
 async function main(): Promise<void> {
+  const startTopicFormSource = readSource("src/components/start-topic-form.tsx");
+  assert(
+    !startTopicFormSource.includes("/api/documents/${uploaded.document_id}/process"),
+    "document upload UI must stop after complete-upload and must not start processing",
+  );
+  assert(
+    !startTopicFormSource.includes("fetch(`/api/documents/${"),
+    "document upload UI must not call document status/result APIs after complete-upload",
+  );
+  assert(
+    startTopicFormSource.includes("documentStatus.document_id"),
+    "document upload UI should render the uploaded document_id",
+  );
+  assert(
+    startTopicFormSource.includes("업로드 완료"),
+    "document upload UI should show an upload-complete state",
+  );
+
   const parsedEnv = parseEnvFileContent([
     "DATABASE_URL='postgres://user:pass@localhost:5432/rootmap'",
     'SUPABASE_URL="https://rootmap.supabase.co"',

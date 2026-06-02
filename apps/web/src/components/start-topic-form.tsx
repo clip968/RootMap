@@ -2,18 +2,14 @@
  * 홈(`/`)에서 쓰는 시작 화면.
  *
  * Phase 1/2 흐름: 주제 입력 → `/api/trees/generate` → `/tree/[id]`
- * Phase 3 task 8 흐름: 문서 업로드 → `/api/documents/:id/process` → 분석 결과 → `/tree/[id]`
+ * 문서 흐름: 문서 업로드 → document_id 확인. 이후 청킹/트리 생성은 GitHub Actions에서 수동 실행한다.
  */
 "use client";
 
 import type { ApiTreeResponse } from "@/lib/tree/bundle-to-api";
-import type {
-  DocumentConceptType,
-  DocumentSourceType,
-} from "@/types/learning";
 import { GenerationLoadingPanel } from "@/components/generation-loading-panel";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 /** 빠른 시연용 클릭 가능한 예시 문구들 */
 const EXAMPLE_TOPICS = [
@@ -26,8 +22,6 @@ const EXAMPLE_TOPICS = [
 
 const MAX_DOCUMENT_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 const ALLOWED_DOCUMENT_EXTENSIONS = new Set(["pdf", "txt", "md"]);
-const DOCUMENT_PROCESS_POLL_INTERVAL_MS = 2_000;
-const DOCUMENT_PROCESS_TIMEOUT_MS = 10 * 60 * 1_000;
 
 type HomeMode = "topic" | "document";
 type DocumentProcessingStatus =
@@ -67,26 +61,6 @@ interface DocumentStatusResponse {
   updated_at: string;
 }
 
-export interface DocumentConceptSummary {
-  document_concept_id: string;
-  concept_id: string | null;
-  concept_title: string;
-  concept_type: DocumentConceptType;
-  importance: number;
-  difficulty: number;
-  source_type: DocumentSourceType;
-  evidence_count: number;
-}
-
-interface DocumentConceptsResponse {
-  document_id: string;
-  concepts: DocumentConceptSummary[];
-}
-
-interface DocumentTreeResponse extends ApiTreeResponse {
-  document_id: string;
-}
-
 /**
  * 생성이 오래 걸릴 때 단조롭지 않게 단계 메시지를 바꾼다(실제 파이프라인 단계와 1:1 대응은 아님).
  * 경과 시간만 보여주는 것보다 사용자에게 진행 중임을 알려 주는 용도.
@@ -115,7 +89,7 @@ export function formatDocumentFileSize(bytes: number): string {
 /** DB 처리 상태값을 사용자에게 보일 단계 문구로 변환한다. */
 export function documentProcessingStage(status: DocumentProcessingStatus): string {
   const messages: Record<DocumentProcessingStatus, string> = {
-    uploaded: "파일 업로드 완료",
+    uploaded: "업로드 완료",
     text_extracted: "문서 구조 분석 중",
     chunked: "개념 추출 중",
     concepts_extracted: "학습 트리 생성 중",
@@ -123,34 +97,6 @@ export function documentProcessingStage(status: DocumentProcessingStatus): strin
     failed: "처리 실패",
   };
   return messages[status];
-}
-
-/** 문서 분석 결과에서 “문서 핵심 개념”과 “선수지식”을 나눠 보여 주기 위한 그룹핑. */
-export function splitDocumentConcepts(concepts: DocumentConceptSummary[]): {
-  coreConcepts: DocumentConceptSummary[];
-  prerequisiteConcepts: DocumentConceptSummary[];
-} {
-  const prerequisiteConcepts = concepts.filter(
-    (concept) =>
-      concept.concept_type === "prerequisite" ||
-      concept.source_type === "inferred",
-  );
-  const prerequisiteIds = new Set(
-    prerequisiteConcepts.map((concept) => concept.document_concept_id),
-  );
-
-  return {
-    coreConcepts: concepts.filter(
-      (concept) => !prerequisiteIds.has(concept.document_concept_id),
-    ),
-    prerequisiteConcepts,
-  };
-}
-
-function sourceTypeLabel(sourceType: DocumentSourceType): string {
-  if (sourceType === "explicit") return "문서에 직접 등장";
-  if (sourceType === "inferred") return "이해를 위해 추론";
-  return "생성된 학습 항목";
 }
 
 function apiErrorMessage(data: unknown, fallback: string): string {
@@ -172,11 +118,6 @@ export function StartTopicForm() {
   const router = useRouter();
   const [mode, setMode] = useState<HomeMode>("topic");
   const [topic, setTopic] = useState("");
-  /**
-   * true: Phase 2 Concept 스토어와 매칭해 기존 개념을 재사용(중복 완화, 약간 더 느릴 수 있음).
-   * API 본문 필드명은 스네이크 케이스 `reuse_concepts`.
-   */
-  const [reuseConcepts, setReuseConcepts] = useState(true);
   const [loading, setLoading] = useState(false);
   /** 생성 시작 후 경과 초 — 로딩 메시지와 타이머 표시에 사용 */
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -186,16 +127,9 @@ export function StartTopicForm() {
   const [documentError, setDocumentError] = useState<string | null>(null);
   const [documentElapsedSeconds, setDocumentElapsedSeconds] = useState(0);
   const [documentUploading, setDocumentUploading] = useState(false);
-  const [documentProcessing, setDocumentProcessing] = useState(false);
   const [draggingDocument, setDraggingDocument] = useState(false);
   const [documentStatus, setDocumentStatus] =
     useState<DocumentStatusResponse | null>(null);
-  const [documentTree, setDocumentTree] = useState<DocumentTreeResponse | null>(
-    null,
-  );
-  const [documentConcepts, setDocumentConcepts] = useState<
-    DocumentConceptSummary[]
-  >([]);
 
   /** loading 동안 1초마다 경과 시간만 갱신(서버 진행률과는 무관한 클라이언트 표시용). */
   useEffect(() => {
@@ -207,20 +141,15 @@ export function StartTopicForm() {
     return () => window.clearInterval(timer);
   }, [loading]);
 
-  /** 문서 처리 중에도 같은 방식으로 경과 시간을 보여 주어 장시간 LLM 처리에서 멈춘 화면처럼 보이지 않게 한다. */
+  /** 문서 업로드 중에는 경과 시간을 보여 주어 저장소 업로드가 멈춘 것처럼 보이지 않게 한다. */
   useEffect(() => {
-    if (!documentUploading && !documentProcessing) return;
+    if (!documentUploading) return;
     const startedAt = Date.now();
     const timer = window.setInterval(() => {
       setDocumentElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [documentUploading, documentProcessing]);
-
-  const { coreConcepts, prerequisiteConcepts } = useMemo(
-    () => splitDocumentConcepts(documentConcepts),
-    [documentConcepts],
-  );
+  }, [documentUploading]);
 
   const submit = async () => {
     const t = topic.trim();
@@ -235,7 +164,7 @@ export function StartTopicForm() {
       const res = await fetch("/api/trees/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: t, reuse_concepts: reuseConcepts }),
+        body: JSON.stringify({ topic: t, reuse_concepts: false }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -257,8 +186,6 @@ export function StartTopicForm() {
 
   const selectDocumentFile = (file: File | null) => {
     setDocumentError(null);
-    setDocumentTree(null);
-    setDocumentConcepts([]);
     setDocumentStatus(null);
 
     if (!file) {
@@ -278,66 +205,7 @@ export function StartTopicForm() {
     setDocumentFile(file);
   };
 
-  const loadDocumentStatus = async (nextDocumentId: string) => {
-    const res = await fetch(`/api/documents/${nextDocumentId}`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(apiErrorMessage(data, "문서 상태를 불러오지 못했습니다."));
-    }
-    const status = data as DocumentStatusResponse;
-    setDocumentStatus(status);
-    return status;
-  };
-
-  const loadDocumentResult = async (nextDocumentId: string) => {
-    const [treeRes, conceptsRes] = await Promise.all([
-      fetch(`/api/documents/${nextDocumentId}/tree`),
-      fetch(`/api/documents/${nextDocumentId}/concepts`),
-    ]);
-    const treeData = await treeRes.json().catch(() => ({}));
-    const conceptsData = await conceptsRes.json().catch(() => ({}));
-
-    if (!treeRes.ok) {
-      throw new Error(
-        apiErrorMessage(treeData, "문서 기반 학습 트리를 불러오지 못했습니다."),
-      );
-    }
-    if (!conceptsRes.ok) {
-      throw new Error(
-        apiErrorMessage(conceptsData, "문서 개념 목록을 불러오지 못했습니다."),
-      );
-    }
-
-    setDocumentTree(treeData as DocumentTreeResponse);
-    setDocumentConcepts(
-      ((conceptsData as DocumentConceptsResponse).concepts ?? []).slice(0, 12),
-    );
-  };
-
-  const waitForDocumentProcessingComplete = async (nextDocumentId: string) => {
-    const deadline = Date.now() + DOCUMENT_PROCESS_TIMEOUT_MS;
-
-    while (true) {
-      const latest = await loadDocumentStatus(nextDocumentId);
-      if (latest.processing_status === "tree_generated") return latest;
-      if (latest.processing_status === "failed") {
-        throw new Error(
-          latest.processing_error ??
-            "문서 처리 중 오류가 발생했습니다. 파일 내용을 확인한 뒤 다시 시도해 주세요.",
-        );
-      }
-      if (Date.now() >= deadline) {
-        throw new Error(
-          "문서 처리가 예상보다 오래 걸리고 있습니다. 잠시 후 히스토리에서 다시 확인해 주세요.",
-        );
-      }
-      await new Promise((resolve) =>
-        window.setTimeout(resolve, DOCUMENT_PROCESS_POLL_INTERVAL_MS),
-      );
-    }
-  };
-
-  const uploadAndProcessDocument = async () => {
+  const uploadDocument = async () => {
     if (!documentFile) {
       setDocumentError("업로드할 문서를 선택해 주세요.");
       return;
@@ -346,9 +214,7 @@ export function StartTopicForm() {
     setDocumentError(null);
     setDocumentElapsedSeconds(0);
     setDocumentUploading(true);
-    setDocumentProcessing(false);
-    setDocumentTree(null);
-    setDocumentConcepts([]);
+    setDocumentStatus(null);
 
     try {
       const uploadUrlRes = await fetch("/api/documents/upload-url", {
@@ -404,28 +270,18 @@ export function StartTopicForm() {
       }
 
       const uploaded = completeData as DocumentUploadResponse;
-      setDocumentUploading(false);
-      setDocumentProcessing(true);
-
-      await loadDocumentStatus(uploaded.document_id);
-      const processRes = await fetch(
-        `/api/documents/${uploaded.document_id}/process`,
-        { method: "POST" },
-      );
-      const processData = await processRes.json().catch(() => ({}));
-
-      if (!processRes.ok) {
-        setDocumentError(
-          apiErrorMessage(
-            processData,
-            "문서 처리 중 오류가 발생했습니다. 파일 내용을 확인한 뒤 다시 시도해 주세요.",
-          ),
-        );
-        return;
-      }
-
-      await waitForDocumentProcessingComplete(uploaded.document_id);
-      await loadDocumentResult(uploaded.document_id);
+      /* complete-upload 응답의 document_id가 GitHub Actions 수동 실행에 필요한 최종 산출물이다. */
+      setDocumentStatus({
+        document_id: uploaded.document_id,
+        title: uploadTicket.original_filename || uploaded.filename,
+        original_filename: uploadTicket.original_filename || uploaded.filename,
+        file_type: uploadTicket.file_type,
+        page_count: null,
+        processing_status: uploaded.processing_status,
+        processing_error: null,
+        created_at: "",
+        updated_at: "",
+      });
     } catch (err) {
       setDocumentError(
         err instanceof Error ?
@@ -434,15 +290,12 @@ export function StartTopicForm() {
       );
     } finally {
       setDocumentUploading(false);
-      setDocumentProcessing(false);
     }
   };
 
-  const documentBusy = documentUploading || documentProcessing;
+  const documentBusy = documentUploading;
   const documentStage =
     documentUploading ? "업로드 중"
-    : documentProcessing && documentStatus?.processing_status === "uploaded" ?
-      "텍스트 추출 중"
     : documentStatus ? documentProcessingStage(documentStatus.processing_status)
     : "문서 대기 중";
 
@@ -523,7 +376,6 @@ export function StartTopicForm() {
                     title="생성 중"
                     elapsedSeconds={elapsedSeconds}
                     stageMessage={generationStageMessage(elapsedSeconds)}
-                    reuseConcepts={reuseConcepts}
                   />
                 ) : null}
                 {error ? (
@@ -531,23 +383,6 @@ export function StartTopicForm() {
                     {error}
                   </p>
                 ) : null}
-                <label className="flex cursor-pointer items-start gap-3 rounded-xl px-2 py-2 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900/60">
-                  <input
-                    type="checkbox"
-                    checked={reuseConcepts}
-                    onChange={(e) => setReuseConcepts(e.target.checked)}
-                    disabled={loading}
-                    className="mt-1 h-4 w-4 rounded border-zinc-400 text-emerald-700 disabled:opacity-60"
-                  />
-                  <span className="text-sm text-zinc-700 dark:text-zinc-300">
-                    <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                      저장된 개념 재사용
-                    </span>
-                    <span className="mt-0.5 block text-xs text-zinc-500">
-                      이전에 만든 Concept과 연결해 중복을 줄입니다.
-                    </span>
-                  </span>
-                </label>
               </div>
 
               <button
@@ -652,6 +487,19 @@ export function StartTopicForm() {
                         {documentStage}
                         {documentBusy ? ` · ${documentElapsedSeconds}초 경과` : ""}
                       </p>
+                      {documentStatus ? (
+                        <div className="mt-2 rounded-xl border border-emerald-200 bg-white/70 px-3 py-2 dark:border-emerald-900 dark:bg-zinc-950/40">
+                          <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-200">
+                            document_id
+                          </p>
+                          <code className="mt-1 block break-all font-mono text-xs text-emerald-950 dark:text-emerald-100">
+                            {documentStatus.document_id}
+                          </code>
+                          <p className="mt-2 text-xs text-emerald-800/80 dark:text-emerald-200/80">
+                            GitHub Actions 수동 실행 시 이 값을 입력하면 됩니다.
+                          </p>
+                        </div>
+                      ) : null}
                       {documentStatus?.page_count != null ? (
                         <p className="mt-1 text-xs">
                           추출된 페이지: {documentStatus.page_count}쪽
@@ -672,92 +520,15 @@ export function StartTopicForm() {
 
                 <button
                   type="button"
-                  onClick={() => void uploadAndProcessDocument()}
+                  onClick={() => void uploadDocument()}
                   disabled={!documentFile || documentBusy}
                   className="rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60 dark:bg-emerald-600 dark:hover:bg-emerald-500"
                 >
-                  {documentBusy ? "처리 중" : "업로드하고 분석 시작"}
+                  {documentBusy ? "업로드 중" : "문서 업로드"}
                 </button>
               </div>
             </div>
           </section>
-
-          {documentTree ? (
-            <section className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-              <div className="flex flex-col gap-3 border-b border-zinc-100 pb-4 dark:border-zinc-800 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
-                    분석 완료
-                  </p>
-                  <h2 className="mt-1 text-2xl font-semibold text-zinc-950 dark:text-zinc-50">
-                    {documentStatus?.title ?? documentTree.topic}
-                  </h2>
-                  <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                    핵심 주제: {documentTree.topic}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => router.push(`/tree/${documentTree.tree_id}`)}
-                  className="rounded-2xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
-                >
-                  학습 트리로 이동
-                </button>
-              </div>
-
-              <p className="mt-4 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-                {documentTree.summary || "문서 요약이 비어 있습니다."}
-              </p>
-
-              <div className="mt-5 grid gap-5 lg:grid-cols-2">
-                <section>
-                  <h3 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                    문서 핵심 개념
-                  </h3>
-                  <ul className="mt-3 space-y-2">
-                    {coreConcepts.length > 0 ?
-                      coreConcepts.map((concept) => (
-                        <li
-                          key={concept.document_concept_id}
-                          className="rounded-xl border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800"
-                        >
-                          <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                            {concept.concept_title}
-                          </span>
-                          <span className="mt-1 block text-xs text-zinc-500">
-                            {sourceTypeLabel(concept.source_type)} · 근거 {concept.evidence_count}개
-                          </span>
-                        </li>
-                      ))
-                    : <li className="text-sm text-zinc-500">표시할 핵심 개념이 없습니다.</li>}
-                  </ul>
-                </section>
-
-                <section>
-                  <h3 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                    필요한 선수지식
-                  </h3>
-                  <ul className="mt-3 space-y-2">
-                    {prerequisiteConcepts.length > 0 ?
-                      prerequisiteConcepts.map((concept) => (
-                        <li
-                          key={concept.document_concept_id}
-                          className="rounded-xl border border-blue-200 bg-blue-50/70 px-3 py-2 text-sm dark:border-blue-900 dark:bg-blue-950/25"
-                        >
-                          <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                            {concept.concept_title}
-                          </span>
-                          <span className="mt-1 block text-xs text-blue-900/70 dark:text-blue-200/80">
-                            {sourceTypeLabel(concept.source_type)}
-                          </span>
-                        </li>
-                      ))
-                    : <li className="text-sm text-zinc-500">표시할 선수지식이 없습니다.</li>}
-                  </ul>
-                </section>
-              </div>
-            </section>
-          ) : null}
         </div>
       )}
     </div>

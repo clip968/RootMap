@@ -656,7 +656,6 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   const [regenLoading, setRegenLoading] = useState(false);
   const [regenElapsedSeconds, setRegenElapsedSeconds] = useState(0);
   const [regenError, setRegenError] = useState<string | null>(null);
-  const [reuseConcepts, setReuseConcepts] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("path");
   const [focusMode, setFocusMode] = useState<FocusMode>("all");
   const [enabledTypes, setEnabledTypes] = useState<NodeType[]>(SECTION_ORDER);
@@ -1259,7 +1258,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           topic: tree.topic,
-          reuse_concepts: reuseConcepts,
+          reuse_concepts: false,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -1290,7 +1289,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           topic,
-          reuse_concepts: true,
+          reuse_concepts: false,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -1546,16 +1545,6 @@ export function TreePageClient({ treeId }: { treeId: string }) {
               </label>
 
               <div className="flex flex-wrap gap-2">
-                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-200">
-                  <input
-                    type="checkbox"
-                    checked={reuseConcepts}
-                    onChange={(event) => setReuseConcepts(event.target.checked)}
-                    disabled={regenLoading}
-                    className="rounded border-zinc-600 accent-emerald-700 disabled:opacity-60"
-                  />
-                  개념 재사용
-                </label>
                 <button
                   type="button"
                   onClick={() => void onRegenerate()}
@@ -1580,7 +1569,6 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                   title="재생성 중"
                   elapsedSeconds={regenElapsedSeconds}
                   stageMessage={generationStageMessage(regenElapsedSeconds)}
-                  reuseConcepts={reuseConcepts}
                   compact
                 />
               ) : null}

@@ -2,7 +2,6 @@ interface GenerationLoadingPanelProps {
   title: string;
   elapsedSeconds: number;
   stageMessage: string;
-  reuseConcepts?: boolean;
   compact?: boolean;
 }
 
@@ -17,7 +16,6 @@ export function GenerationLoadingPanel({
   title,
   elapsedSeconds,
   stageMessage,
-  reuseConcepts = false,
   compact = false,
 }: GenerationLoadingPanelProps) {
   return (
@@ -42,11 +40,6 @@ export function GenerationLoadingPanel({
       </div>
 
       <p className="generation-loading-hint">{waitHint(elapsedSeconds)}</p>
-      {reuseConcepts ? (
-        <p className="generation-loading-subhint">
-          저장된 Concept과 비교해 중복을 줄이는 중이라 조금 더 걸릴 수 있습니다.
-        </p>
-      ) : null}
     </div>
   );
 }
