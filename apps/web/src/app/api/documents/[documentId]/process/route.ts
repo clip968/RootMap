@@ -1,5 +1,5 @@
-import { DEFAULT_USER_ID } from "@/db/constants";
 import { jsonError } from "@/lib/api-errors";
+import { requireSupabaseAuthUserId } from "@/lib/auth/supabase-auth";
 import { startDocumentProcessingJob } from "@/lib/document/processing-jobs";
 import { enqueueDocumentProcessingWakeTask } from "@/lib/gcp/cloud-tasks";
 import {
@@ -13,17 +13,22 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ documentId: string }> },
 ) {
+  const auth = await requireSupabaseAuthUserId(req);
+  if (!auth.ok) {
+    return jsonError(auth.code, auth.message, auth.status);
+  }
+
   const { documentId } = await params;
-  const document = await getDocumentForUser(documentId, DEFAULT_USER_ID);
+  const document = await getDocumentForUser(documentId, auth.userId);
   if (!document) {
     return jsonError("NOT_FOUND", "문서를 찾을 수 없습니다.", 404);
   }
 
   if (document.processingStatus === "tree_generated") {
-    const bundle = await getDocumentLearningTreeForUser(documentId, DEFAULT_USER_ID);
+    const bundle = await getDocumentLearningTreeForUser(documentId, auth.userId);
     return NextResponse.json({
       document_id: documentId,
       processing_status: document.processingStatus,
@@ -38,7 +43,7 @@ export async function POST(
 
   const job = await startDocumentProcessingJob({
     documentId,
-    userId: DEFAULT_USER_ID,
+    userId: auth.userId,
   });
   if (job.status !== "queued") {
     return jsonError(
@@ -54,7 +59,7 @@ export async function POST(
     // Supabase Queue가 실제 작업 source of truth이고, Cloud Tasks는 Cloud Run worker를 즉시 깨우는 신호다.
     wakeTask = await enqueueDocumentProcessingWakeTask({
       documentId,
-      userId: DEFAULT_USER_ID,
+      userId: auth.userId,
       jobId: job.jobId,
       messageId: job.messageId,
     });

@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
-import { DEFAULT_USER_ID } from "@/db/constants";
 import { jsonError } from "@/lib/api-errors";
+import { requireSupabaseAuthUserId } from "@/lib/auth/supabase-auth";
 import {
   documentTitleFromFilename,
   extensionOf,
@@ -33,6 +33,11 @@ async function saveUploadedFile(
 }
 
 export async function POST(req: Request) {
+  const auth = await requireSupabaseAuthUserId(req);
+  if (!auth.ok) {
+    return jsonError(auth.code, auth.message, auth.status);
+  }
+
   let form: FormData;
   try {
     form = await req.formData();
@@ -63,7 +68,7 @@ export async function POST(req: Request) {
 
   let storage: SupabaseDocumentStorageRef;
   try {
-    storage = await saveUploadedFile(DEFAULT_USER_ID, ext, fileValue);
+    storage = await saveUploadedFile(auth.userId, ext, fileValue);
   } catch {
     return jsonError(
       "DOCUMENT_UPLOAD_FAILED",
@@ -75,7 +80,7 @@ export async function POST(req: Request) {
   let documentId: string;
   try {
     documentId = await createDocument({
-      userId: DEFAULT_USER_ID,
+      userId: auth.userId,
       title: documentTitleFromFilename(originalFilename),
       originalFilename,
       fileType: ext,

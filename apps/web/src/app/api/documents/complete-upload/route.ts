@@ -1,5 +1,5 @@
-import { DEFAULT_USER_ID } from "@/db/constants";
 import { jsonError } from "@/lib/api-errors";
+import { requireSupabaseAuthUserId } from "@/lib/auth/supabase-auth";
 import {
   documentTitleFromFilename,
   validateDocumentUpload,
@@ -25,7 +25,16 @@ interface CompleteUploadRequest {
   content_type?: unknown;
 }
 
+function isUserDocumentStorageKey(key: string, userId: string): boolean {
+  return key.startsWith(`documents/${userId}/`);
+}
+
 export async function POST(req: Request) {
+  const auth = await requireSupabaseAuthUserId(req);
+  if (!auth.ok) {
+    return jsonError(auth.code, auth.message, auth.status);
+  }
+
   let body: CompleteUploadRequest;
   try {
     body = (await req.json()) as CompleteUploadRequest;
@@ -53,6 +62,13 @@ export async function POST(req: Request) {
   });
   if (!validation.ok) {
     return jsonError(validation.code, validation.message, validation.status);
+  }
+  if (!isUserDocumentStorageKey(body.key, auth.userId)) {
+    return jsonError(
+      "FORBIDDEN",
+      "현재 사용자에게 발급된 문서 업로드 key가 아닙니다.",
+      403,
+    );
   }
 
   const storage: SupabaseDocumentStorageRef = {
@@ -83,7 +99,7 @@ export async function POST(req: Request) {
   let documentId: string;
   try {
     documentId = await createDocument({
-      userId: DEFAULT_USER_ID,
+      userId: auth.userId,
       title: documentTitleFromFilename(body.original_filename),
       originalFilename: body.original_filename,
       fileType: body.file_type,

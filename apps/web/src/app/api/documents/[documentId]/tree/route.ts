@@ -1,5 +1,5 @@
-import { DEFAULT_USER_ID } from "@/db/constants";
 import { jsonError } from "@/lib/api-errors";
+import { requireSupabaseAuthUserId } from "@/lib/auth/supabase-auth";
 import {
   getDocumentForUser,
   getDocumentLearningTreeForUser,
@@ -12,9 +12,14 @@ export const runtime = "nodejs";
 
 type Ctx = { params: Promise<{ documentId: string }> };
 
-export async function GET(_req: Request, ctx: Ctx) {
+export async function GET(req: Request, ctx: Ctx) {
+  const auth = await requireSupabaseAuthUserId(req);
+  if (!auth.ok) {
+    return jsonError(auth.code, auth.message, auth.status);
+  }
+
   const { documentId } = await ctx.params;
-  const document = await getDocumentForUser(documentId, DEFAULT_USER_ID);
+  const document = await getDocumentForUser(documentId, auth.userId);
   if (!document) {
     return jsonError("NOT_FOUND", "문서를 찾을 수 없습니다.", 404);
   }
@@ -26,14 +31,14 @@ export async function GET(_req: Request, ctx: Ctx) {
     );
   }
 
-  const bundle = await getDocumentLearningTreeForUser(documentId, DEFAULT_USER_ID);
+  const bundle = await getDocumentLearningTreeForUser(documentId, auth.userId);
   if (!bundle) {
     return jsonError("NOT_FOUND", "문서 기반 학습 트리를 찾을 수 없습니다.", 404);
   }
 
   const documentContext = await getDocumentTreeContextForUser(
     bundle.tree.id,
-    DEFAULT_USER_ID,
+    auth.userId,
   );
 
   return NextResponse.json({

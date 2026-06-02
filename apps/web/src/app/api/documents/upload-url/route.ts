@@ -1,5 +1,5 @@
-import { DEFAULT_USER_ID } from "@/db/constants";
 import { jsonError } from "@/lib/api-errors";
+import { requireSupabaseAuthUserId } from "@/lib/auth/supabase-auth";
 import {
   extensionOf,
   normalizeOriginalFilename,
@@ -20,6 +20,11 @@ interface UploadUrlRequest {
 }
 
 export async function POST(req: Request) {
+  const auth = await requireSupabaseAuthUserId(req);
+  if (!auth.ok) {
+    return jsonError(auth.code, auth.message, auth.status);
+  }
+
   let body: UploadUrlRequest;
   try {
     body = (await req.json()) as UploadUrlRequest;
@@ -48,7 +53,7 @@ export async function POST(req: Request) {
   }
 
   const ext = extensionOf(originalFilename);
-  const { key, filename } = makeDocumentStorageKey(DEFAULT_USER_ID, ext);
+  const { key, filename } = makeDocumentStorageKey(auth.userId, ext);
 
   try {
     const signed = await createSignedDocumentUpload({
