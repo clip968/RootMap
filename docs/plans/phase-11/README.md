@@ -40,8 +40,8 @@ Phase 11의 핵심은 기존 기능을 새로 늘리는 것이 아니라, 이미
 - [x] 04. [04-user-owned-llm-provider-settings.md](./04-user-owned-llm-provider-settings.md) - user-owned LLM provider settings
 - [x] 05. [05-llm-generation-provider-boundary.md](./05-llm-generation-provider-boundary.md) - LLM generation user provider boundary
 - [x] 06. [06-node-detail-job-ownership.md](./06-node-detail-job-ownership.md) - node detail job ownership 검증
-- [ ] 07. [07-rls-migrations-and-negative-smoke.md](./07-rls-migrations-and-negative-smoke.md) - RLS migration과 A/B negative smoke 확장
-- [ ] 08. [08-quality-gate-docs-and-rollout.md](./08-quality-gate-docs-and-rollout.md) - quality gate, docs, rollout 정리
+- [x] 07. [07-rls-migrations-and-negative-smoke.md](./07-rls-migrations-and-negative-smoke.md) - RLS migration과 A/B negative smoke 확장
+- [x] 08. [08-quality-gate-docs-and-rollout.md](./08-quality-gate-docs-and-rollout.md) - quality gate, docs, rollout 정리
 
 ## 범위 요약
 

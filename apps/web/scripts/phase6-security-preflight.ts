@@ -2,7 +2,9 @@ import {
   assertAllChecks,
   assertNoSqliteDatabaseUrl,
   assertPhase4MigrationSecurityShape,
+  assertPhase11OwnerRlsMigrationShape,
   getCombinedPhase4MigrationSql,
+  getPhase11OwnerRlsMigrationSql,
   getSecurityConfig,
   hasLiveSupabaseAuthConfig,
   printChecks,
@@ -15,6 +17,9 @@ async function main(): Promise<void> {
   const checks = [
     assertNoSqliteDatabaseUrl(config),
     ...assertPhase4MigrationSecurityShape(getCombinedPhase4MigrationSql()),
+    // Phase 11 keeps legacy owner columns as text, so the preflight checks the
+    // exact auth.uid()::text policy shape before any live RLS smoke is trusted.
+    ...assertPhase11OwnerRlsMigrationShape(getPhase11OwnerRlsMigrationSql()),
     {
       label: "supabase-auth-env",
       ok: hasLiveSupabaseAuthConfig(config),

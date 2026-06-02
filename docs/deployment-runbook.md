@@ -33,6 +33,20 @@ npm run phase6:graph-quality-smoke
 npm run phase6:quality
 ```
 
+## Phase 11 Security Rollout Gates
+
+Before rollout, apply `apps/web/drizzle/0009_phase11_legacy_owner_rls.sql` after `0008`, then reload PostgREST schema. Run from `apps/web`:
+
+```bash
+npm run phase6:user-id-audit
+npm run phase6:security-preflight
+npm run phase6:rls-negative-smoke
+npm run llm:smoke-provider-settings
+npm run check
+```
+
+Use staging first. Production RLS smoke creates temporary Auth users and rows, so it requires explicit production-test approval and cleanup confirmation.
+
 ## Phase 09 Local Document Processing Runner
 
 Phase 09에서는 GCP worker 경로를 다시 켜기 전에 문서 처리 파이프라인을 로컬 CLI에서 검증한다. 이 단계에서는 `rootmap-document-processing` Cloud Tasks queue를 pause 상태로 유지하고, Cloud Tasks pending task가 0개인지 확인하며, Cloud Run `rootmap-pdf-worker`는 `min instances = 0` 상태로 둔다. Billing, queue resume, Cloud Run 설정 변경은 로컬 runner 검증 이후에도 별도 사용자 승인 없이는 수행하지 않는다.

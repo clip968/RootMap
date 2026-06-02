@@ -11,7 +11,16 @@ export const PHASE4_OWNER_TABLES = [
   "learning_reports",
 ] as const;
 
+export const PHASE11_TEXT_OWNER_TABLES = [
+  "learning_trees",
+  "documents",
+  "user_node_progress",
+  "user_concept_progress",
+  "llm_provider_settings",
+] as const;
+
 export type Phase4OwnerTable = (typeof PHASE4_OWNER_TABLES)[number];
+export type Phase11TextOwnerTable = (typeof PHASE11_TEXT_OWNER_TABLES)[number];
 export type SecurityTarget = "local" | "staging" | "production";
 
 export interface SecurityConfig {
@@ -153,6 +162,10 @@ export function getCombinedPhase4MigrationSql(): string {
     .join("\n");
 }
 
+export function getPhase11OwnerRlsMigrationSql(): string {
+  return readText("drizzle/0009_phase11_legacy_owner_rls.sql");
+}
+
 export function assertPhase4MigrationSecurityShape(sql: string): CheckResult[] {
   const checks: CheckResult[] = [];
   for (const table of PHASE4_OWNER_TABLES) {
@@ -173,6 +186,27 @@ export function assertPhase4MigrationSecurityShape(sql: string): CheckResult[] {
       label: `${table}:user-index`,
       ok: sql.includes(`"${table}`) && sql.includes(`"user_id"`),
       detail: "Table must carry user_id so route filters and RLS compare the same owner column.",
+    });
+  }
+  return checks;
+}
+
+export function assertPhase11OwnerRlsMigrationShape(sql: string): CheckResult[] {
+  const checks: CheckResult[] = [];
+  for (const table of PHASE11_TEXT_OWNER_TABLES) {
+    const policyShape = new RegExp(
+      `create\\s+policy\\s+"${table}_owner_all"\\s+on\\s+"${table}"[\\s\\S]*?for\\s+all\\s+to\\s+authenticated[\\s\\S]*?using\\s*\\(\\s*\\(\\s*select\\s+auth\\.uid\\(\\)\\s*\\)::text\\s*=\\s*user_id\\s*\\)[\\s\\S]*?with\\s+check\\s*\\(\\s*\\(\\s*select\\s+auth\\.uid\\(\\)\\s*\\)::text\\s*=\\s*user_id\\s*\\)`,
+      "i",
+    );
+    checks.push({
+      label: `${table}:phase11-rls`,
+      ok: sql.includes(`alter table "${table}" enable row level security`),
+      detail: "Phase 11 owner migration must explicitly enable RLS on the table.",
+    });
+    checks.push({
+      label: `${table}:phase11-owner-policy`,
+      ok: policyShape.test(sql),
+      detail: "Owner policy must use auth.uid()::text = user_id for both USING and WITH CHECK.",
     });
   }
   return checks;
