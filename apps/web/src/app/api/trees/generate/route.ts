@@ -23,6 +23,10 @@ import {
   generateAndPersistTree,
   TreePersistError,
 } from "@/lib/services/learning-tree-generate";
+import {
+  LlmProviderRequiredError,
+  LLM_PROVIDER_REQUIRED_MESSAGE,
+} from "@/lib/llm/provider-config";
 import { NextResponse } from "next/server";
 
 /** Edge/Serverless가 아닌 Node 런타임: better-sqlite3 등 동기 DB 드라이버 사용 */
@@ -171,6 +175,20 @@ export async function POST(req: Request) {
         "TREE_SAVE_FAILED",
         "생성 결과를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.",
         500,
+      );
+    }
+    if (e instanceof LlmProviderRequiredError) {
+      logGenerateRoute("failure", {
+        requestId,
+        reuseConcepts,
+        durationMs,
+        status: 400,
+        errorClass: e.name,
+      });
+      return jsonError(
+        "LLM_PROVIDER_REQUIRED",
+        LLM_PROVIDER_REQUIRED_MESSAGE,
+        400,
       );
     }
     /** 위 분기에 안 잡힌 예외는 원인 숨기고 502 */

@@ -8,6 +8,11 @@ import {
 import { gradeForQuizResult, scheduleFsrsLiteReview } from "@/lib/learning/fsrs-lite";
 import { toIsoString } from "@/lib/learning/session-events";
 import { LlmParseError, LlmTransportError, LlmValidationError } from "@/lib/llm";
+import {
+  LlmProviderRequiredError,
+  LLM_PROVIDER_REQUIRED_MESSAGE,
+  resolveLlmProviderConfig,
+} from "@/lib/llm/provider-config";
 import { getConceptById } from "@/lib/repository/concept-repository";
 import {
   appendLearningEvent,
@@ -111,13 +116,22 @@ export async function POST(req: Request) {
 
   let evaluation;
   try {
+    const providerConfig = await resolveLlmProviderConfig(auth.userId);
     evaluation = await evaluateQuizAnswerWithLlm({
+      providerConfig,
       conceptTitle: concept.title,
       question: parsed.data.question,
       expectedAnswer: parsed.data.expected_answer,
       userAnswer: parsed.data.user_answer,
     });
   } catch (err) {
+    if (err instanceof LlmProviderRequiredError) {
+      return jsonError(
+        "LLM_PROVIDER_REQUIRED",
+        LLM_PROVIDER_REQUIRED_MESSAGE,
+        400,
+      );
+    }
     return llmErrorResponse(err);
   }
 

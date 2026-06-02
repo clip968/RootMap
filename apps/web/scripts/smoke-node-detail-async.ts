@@ -116,6 +116,9 @@ assert(runnerSource.includes("--loop"), "worker CLI should support --loop");
 assert(runnerSource.includes("--recover-stale"), "worker CLI should support stale recovery");
 
 const detailRouteSource = readSource("src/app/api/nodes/[nodeId]/detail/route.ts");
+assert(detailRouteSource.includes("requireSupabaseAuthUserId(req)"), "detail route should require Supabase Auth before enqueue");
+assert(detailRouteSource.includes("getLearningTree(treeId, auth.userId)"), "detail route should verify tree ownership before enqueue");
+assert(detailRouteSource.includes("auth.userId"), "detail route should pass authenticated user id into detail lookup");
 assert(detailRouteSource.includes("NODE_DETAIL_ASYNC_ENABLED"), "detail route should gate async behavior behind NODE_DETAIL_ASYNC_ENABLED");
 assert(detailRouteSource.includes('status: "ready"'), "detail route should return ready status in async mode");
 assert(detailRouteSource.includes('status: "queued"'), "detail route should return queued status in async mode");
@@ -123,6 +126,9 @@ assert(!detailRouteSource.includes("export async function GET"), "detail route m
 
 const jobRouteSource = readSource("src/app/api/node-detail-jobs/[jobId]/route.ts");
 assert(jobRouteSource.includes("export async function GET"), "job polling route should expose GET");
+assert(jobRouteSource.includes("requireSupabaseAuthUserId(req)"), "job polling route should require Supabase Auth");
+assert(jobRouteSource.includes("getLearningTree(job.treeId, auth.userId)"), "job polling route should verify job tree ownership");
+assert(jobRouteSource.includes("auth.userId"), "job polling route should pass authenticated user id into ready lookup");
 assert(jobRouteSource.includes('status: "ready"'), "job polling route should return ready status");
 assert(jobRouteSource.includes("detail:"), "job polling ready response should include detail");
 

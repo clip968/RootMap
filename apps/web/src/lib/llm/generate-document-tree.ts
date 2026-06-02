@@ -21,6 +21,7 @@ import {
 import {
   documentTreeQualityWarnings,
 } from "@/lib/llm/schemas";
+import type { ResolvedLlmProviderConfig } from "@/lib/llm/provider-config";
 import type { DocumentTreeResponse } from "@/types/learning";
 
 function shouldAbortRetries(err: unknown): boolean {
@@ -44,6 +45,7 @@ function logGenerate(
 }
 
 export interface GenerateDocumentTreeOptions {
+  providerConfig: ResolvedLlmProviderConfig;
   documentId: string;
   documentTitle: string;
   documentSummary: string;
@@ -103,7 +105,7 @@ export async function generateDocumentTree(
             matchedConceptsContext,
           }),
         },
-      ]);
+      ], { providerConfig: options.providerConfig });
       const completionDurationMs = Date.now() - completionStartedAt;
 
       const parseStartedAt = Date.now();

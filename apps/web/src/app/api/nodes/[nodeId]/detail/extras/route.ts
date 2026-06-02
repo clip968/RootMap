@@ -1,4 +1,5 @@
 import { jsonError } from "@/lib/api-errors";
+import { requireSupabaseAuthUserId } from "@/lib/auth/supabase-auth";
 import { getNodeDetailExtrasForRequest } from "@/lib/services/node-detail";
 import { NextResponse } from "next/server";
 import { z } from "zod/v3";
@@ -13,6 +14,11 @@ type Ctx = { params: Promise<{ nodeId: string }> };
 
 export async function GET(req: Request, ctx: Ctx) {
   const { nodeId } = await ctx.params;
+  const auth = await requireSupabaseAuthUserId(req);
+  if (!auth.ok) {
+    return jsonError(auth.code, auth.message, auth.status);
+  }
+
   const parsed = querySchema.safeParse({
     tree_id: new URL(req.url).searchParams.get("tree_id"),
   });
@@ -29,6 +35,7 @@ export async function GET(req: Request, ctx: Ctx) {
     const extras = await getNodeDetailExtrasForRequest(
       parsed.data.tree_id,
       nodeId,
+      auth.userId,
     );
     return NextResponse.json(extras);
   } catch (e) {

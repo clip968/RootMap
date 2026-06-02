@@ -13,6 +13,7 @@ import {
   LlmValidationError,
 } from "@/lib/llm/errors";
 import { parseDocumentConsolidationResponse } from "@/lib/llm/parse";
+import type { ResolvedLlmProviderConfig } from "@/lib/llm/provider-config";
 import {
   buildDocumentConsolidationUserMessage,
   DOCUMENT_CONSOLIDATION_SYSTEM_PROMPT,
@@ -43,6 +44,7 @@ function logGenerate(
 }
 
 export interface GenerateConsolidationOptions {
+  providerConfig: ResolvedLlmProviderConfig;
   documentTitle: string;
   conceptCandidatesJson: string;
   requestId?: string;
@@ -90,7 +92,7 @@ export async function generateDocumentConsolidation(
             conceptCandidatesJson,
           }),
         },
-      ]);
+      ], { providerConfig: options.providerConfig });
       const completionDurationMs = Date.now() - completionStartedAt;
 
       const parseStartedAt = Date.now();

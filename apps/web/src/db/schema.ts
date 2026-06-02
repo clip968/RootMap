@@ -557,7 +557,7 @@ export const learningSessions = pgTable(
   "learning_sessions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    /** Supabase Auth 사용자 ID. Phase 4 신규 데이터는 DEFAULT_USER_ID가 아니라 실제 사용자 UUID에 귀속한다. */
+    /** Supabase Auth 사용자 ID. Phase 4 신규 데이터는 개발용 seed 사용자가 아니라 실제 사용자 UUID에 귀속한다. */
     userId: uuid("user_id").notNull(),
     treeId: text("tree_id").references(() => learningTrees.id, {
       onDelete: "set null",

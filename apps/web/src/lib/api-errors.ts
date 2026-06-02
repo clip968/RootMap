@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 export type ApiErrorCode =
   | "UNAUTHORIZED"
   | "INVALID_TOPIC"
+  | "LLM_PROVIDER_REQUIRED"
   | "LLM_GENERATION_FAILED"
   | "INVALID_LLM_RESPONSE"
   | "TREE_SAVE_FAILED"

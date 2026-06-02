@@ -1,4 +1,3 @@
-export { DEFAULT_USER_ID } from "./constants";
 export {
   getDb,
   getSqlClient,

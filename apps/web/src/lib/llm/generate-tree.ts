@@ -32,6 +32,7 @@ import {
 import {
   learningTreeQualityWarnings,
 } from "@/lib/llm/schemas";
+import type { ResolvedLlmProviderConfig } from "@/lib/llm/provider-config";
 import { deriveLearningGraphView } from "@/lib/tree/concept-graph";
 import type {
   ConceptCandidate,
@@ -50,6 +51,7 @@ export interface GenerateLearningTreeResult {
 }
 
 export interface GenerateLearningTreeOptions {
+  providerConfig: ResolvedLlmProviderConfig;
   reuseConcepts?: boolean;
   /** `reuseConcepts`가 true일 때만 사용자 메시지에 포함 */
   storeContext?: string;
@@ -367,7 +369,11 @@ export async function generateLearningTreeWithCompletion(
  */
 export async function generateLearningTree(
   topic: string,
-  options?: GenerateLearningTreeOptions,
+  options: GenerateLearningTreeOptions,
 ): Promise<GenerateLearningTreeResult> {
-  return generateLearningTreeWithCompletion(topic, createChatCompletion, options);
+  return generateLearningTreeWithCompletion(
+    topic,
+    (messages) => createChatCompletion(messages, { providerConfig: options.providerConfig }),
+    options,
+  );
 }

@@ -12,11 +12,13 @@ import {
   LlmValidationError,
 } from "@/lib/llm/errors";
 import { parseDocumentNodeDetailResponse } from "@/lib/llm/parse";
+import type { ResolvedLlmProviderConfig } from "@/lib/llm/provider-config";
 import type { DocumentNodeDetailResponse } from "@/types/learning";
 
 const MAX_ATTEMPTS = 2;
 
 export interface GenerateNodeDetailOptions {
+  providerConfig: ResolvedLlmProviderConfig;
   documentTitle: string;
   documentSummary: string;
   nodeId: string;
@@ -121,7 +123,7 @@ export async function generateNodeDetail(
           role: "user",
           content: buildGenerateNodeDetailUserMessage(options),
         },
-      ]);
+      ], { providerConfig: options.providerConfig });
 
       const detail = parseDocumentNodeDetailResponse(rawText, nodeId);
 

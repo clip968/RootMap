@@ -6,6 +6,7 @@ import {
   LlmValidationError,
 } from "@/lib/llm/errors";
 import { parseNodeDetailResponse } from "@/lib/llm/parse";
+import type { ResolvedLlmProviderConfig } from "@/lib/llm/provider-config";
 import {
   buildNodeDetailUserMessage,
   NODE_DETAIL_SYSTEM_BASE,
@@ -20,6 +21,7 @@ function shouldAbortRetries(err: unknown): boolean {
 }
 
 export interface GenerateNodeDetailInput {
+  providerConfig: ResolvedLlmProviderConfig;
   topic: string;
   nodeId: string;
   nodeTitle: string;
@@ -50,7 +52,7 @@ export async function generateNodeDetail(
             prerequisitesContext: input.prerequisitesContext,
           }),
         },
-      ]);
+      ], { providerConfig: input.providerConfig });
       const detail = parseNodeDetailResponse(rawText, input.nodeId, input.nodeType);
       const qualityWarnings = nodeDetailQualityWarnings(detail);
       return { detail, qualityWarnings };

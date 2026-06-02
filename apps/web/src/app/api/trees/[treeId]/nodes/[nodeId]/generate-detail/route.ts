@@ -8,7 +8,7 @@
  * - 없으면 LLM으로 상세 설명 생성 후 저장
  */
 import { jsonError } from "@/lib/api-errors";
-import { DEFAULT_USER_ID } from "@/db/constants";
+import { requireSupabaseAuthUserId } from "@/lib/auth/supabase-auth";
 import { getLearningTree } from "@/lib/repository/learning-repository";
 import { getDocumentTreeContextForUser } from "@/lib/repository/document-repository";
 import { getOrCreateNodeDetailForRequest } from "@/lib/services/node-detail";
@@ -18,16 +18,21 @@ export const runtime = "nodejs";
 
 type Ctx = { params: Promise<{ treeId: string; nodeId: string }> };
 
-export async function POST(_req: Request, ctx: Ctx) {
+export async function POST(req: Request, ctx: Ctx) {
+  const auth = await requireSupabaseAuthUserId(req);
+  if (!auth.ok) {
+    return jsonError(auth.code, auth.message, auth.status);
+  }
+
   const { treeId, nodeId } = await ctx.params;
 
-  const bundle = await getLearningTree(treeId, DEFAULT_USER_ID);
+  const bundle = await getLearningTree(treeId, auth.userId);
   if (!bundle) {
     return jsonError("NOT_FOUND", "트리를 찾을 수 없습니다.", 404);
   }
 
   // 문서 기반 트리인지 확인 (documentLearningTrees 링크 존재 여부)
-  const documentContext = await getDocumentTreeContextForUser(treeId, DEFAULT_USER_ID);
+  const documentContext = await getDocumentTreeContextForUser(treeId, auth.userId);
   if (!documentContext) {
     return jsonError(
       "INVALID_OPERATION",
@@ -52,7 +57,11 @@ export async function POST(_req: Request, ctx: Ctx) {
   }
 
   try {
-    const detail = await getOrCreateNodeDetailForRequest(treeId, nodeId);
+    const detail = await getOrCreateNodeDetailForRequest(
+      treeId,
+      nodeId,
+      auth.userId,
+    );
     return NextResponse.json({ node_id: nodeId, detail, cached: false });
   } catch (e) {
     console.error("[generate-detail]", e);

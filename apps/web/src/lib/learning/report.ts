@@ -1,6 +1,7 @@
 import { createChatCompletion } from "@/lib/llm";
 import { LlmParseError, LlmValidationError } from "@/lib/llm/errors";
 import { sliceBalancedJsonObject, stripLlmFences } from "@/lib/llm/parse";
+import type { ResolvedLlmProviderConfig } from "@/lib/llm/provider-config";
 import { getLearningTree } from "@/lib/repository/learning-repository";
 import {
   createLearningReport,
@@ -417,11 +418,12 @@ export function parseSessionReportResponse(raw: string): SessionReportResult {
 
 export async function generateSessionReportWithLlm(
   input: SessionReportInput,
+  providerConfig: ResolvedLlmProviderConfig,
 ): Promise<SessionReportResult> {
   const completion = await createChatCompletion([
     { role: "system", content: SESSION_REPORT_SYSTEM_PROMPT },
     { role: "user", content: buildSessionReportUserMessage(input) },
-  ]);
+  ], { providerConfig });
   return parseSessionReportResponse(completion.rawText);
 }
 
@@ -606,6 +608,7 @@ async function collectSessionReportInput(input: {
 export async function createSessionLearningReport(input: {
   userId: string;
   sessionId: string;
+  providerConfig: ResolvedLlmProviderConfig;
 }): Promise<PersistedSessionReportResult> {
   const session = await getLearningSessionForUser(input);
   if (!session) throw new SessionReportNotFoundError();
@@ -615,7 +618,7 @@ export async function createSessionLearningReport(input: {
   let llmReport: SessionReportResult | null = null;
   let llmError: string | null = null;
   try {
-    llmReport = await generateSessionReportWithLlm(reportInput);
+    llmReport = await generateSessionReportWithLlm(reportInput, input.providerConfig);
   } catch (err) {
     llmError = err instanceof Error ? err.message : String(err);
   }

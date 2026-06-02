@@ -34,12 +34,12 @@ Phase 11의 핵심은 기존 기능을 새로 늘리는 것이 아니라, 이미
 > 작업을 완료할 때마다 해당 항목을 `[x]`로 바꿔 진행 상황을 추적한다.
 
 - [ ] 00. [00-auth-isolation-contract-and-audit.md](./00-auth-isolation-contract-and-audit.md) - Auth isolation 계약과 RED audit 고정
-- [ ] 01. [01-browser-authenticated-fetch-and-login-gates.md](./01-browser-authenticated-fetch-and-login-gates.md) - browser authenticated fetch와 로그인 요구 UI
-- [ ] 02. [02-tree-routes-progress-and-recommendations.md](./02-tree-routes-progress-and-recommendations.md) - tree/progress/recommendation route auth 전환
-- [ ] 03. [03-document-routes-and-processing-ownership.md](./03-document-routes-and-processing-ownership.md) - document route와 processing ownership 전환
-- [ ] 04. [04-user-owned-llm-provider-settings.md](./04-user-owned-llm-provider-settings.md) - user-owned LLM provider settings
-- [ ] 05. [05-llm-generation-provider-boundary.md](./05-llm-generation-provider-boundary.md) - LLM generation user provider boundary
-- [ ] 06. [06-node-detail-job-ownership.md](./06-node-detail-job-ownership.md) - node detail job ownership 검증
+- [x] 01. [01-browser-authenticated-fetch-and-login-gates.md](./01-browser-authenticated-fetch-and-login-gates.md) - browser authenticated fetch와 로그인 요구 UI
+- [x] 02. [02-tree-routes-progress-and-recommendations.md](./02-tree-routes-progress-and-recommendations.md) - tree/progress/recommendation route auth 전환
+- [x] 03. [03-document-routes-and-processing-ownership.md](./03-document-routes-and-processing-ownership.md) - document route와 processing ownership 전환
+- [x] 04. [04-user-owned-llm-provider-settings.md](./04-user-owned-llm-provider-settings.md) - user-owned LLM provider settings
+- [x] 05. [05-llm-generation-provider-boundary.md](./05-llm-generation-provider-boundary.md) - LLM generation user provider boundary
+- [x] 06. [06-node-detail-job-ownership.md](./06-node-detail-job-ownership.md) - node detail job ownership 검증
 - [ ] 07. [07-rls-migrations-and-negative-smoke.md](./07-rls-migrations-and-negative-smoke.md) - RLS migration과 A/B negative smoke 확장
 - [ ] 08. [08-quality-gate-docs-and-rollout.md](./08-quality-gate-docs-and-rollout.md) - quality gate, docs, rollout 정리
 

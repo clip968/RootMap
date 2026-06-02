@@ -7,6 +7,7 @@
  */
 import { InvalidTopicError } from "@/lib/llm/errors";
 import { generateLearningTree } from "@/lib/llm/generate-tree";
+import { resolveLlmProviderConfig } from "@/lib/llm/provider-config";
 import { MAX_TOPIC_LENGTH } from "@/lib/constants/limits";
 import { getDb } from "@/db/client";
 import {
@@ -53,7 +54,7 @@ export function validateTopicInput(topic: unknown): string {
 }
 
 export interface GenerateAndPersistOptions {
-  /** Supabase Auth 사용자 id. production 생성 경로는 개발용 DEFAULT_USER_ID를 쓰지 않는다. */
+  /** Supabase Auth 사용자 id. production 생성 경로는 개발용 seed 사용자로 fallback하지 않는다. */
   userId: string;
   /** 기본 true — 기존 Concept 재사용 */
   reuseConcepts?: boolean;
@@ -112,8 +113,10 @@ export async function generateAndPersistTree(
   }
 
   const llmStartedAt = Date.now();
+  const providerConfig = await resolveLlmProviderConfig(userId);
   /** `LearningTreeResponse` 형태의 노드/간선 + 품질 경고 문자열 */
   const { tree: llmTree, qualityWarnings } = await generateLearningTree(topic, {
+    providerConfig,
     reuseConcepts,
     storeContext,
     requestId,

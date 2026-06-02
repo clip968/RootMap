@@ -1,8 +1,8 @@
-import { DEFAULT_USER_ID } from "@/db/constants";
 import {
   ensureRequiredNodeDetailVisual,
   NODE_DETAIL_MISSING_REQUIRED_VISUAL,
 } from "@/lib/llm/generate-node-detail-visual";
+import { resolveLlmProviderConfig } from "@/lib/llm/provider-config";
 import {
   CURRENT_NODE_DETAIL_VERSION,
   claimQueuedNodeDetailJob,
@@ -12,7 +12,10 @@ import {
   requeueNodeDetailJob,
   type NodeDetailJobRow,
 } from "@/lib/repository/node-detail-job-repository";
-import { getLearningTree } from "@/lib/repository/learning-repository";
+import {
+  getLearningTree,
+  getLearningTreeOwnerId,
+} from "@/lib/repository/learning-repository";
 import { getOrCreateNodeDetail } from "@/lib/services/node-detail";
 import { buildPrerequisitePromptContext } from "@/lib/services/node-detail-context";
 import type { NodeDetailResponse } from "@/types/learning";
@@ -66,7 +69,11 @@ function hasWorkerReadyTextDetail(detail: NodeDetailResponse): boolean {
 async function processGenerationForJob(
   job: NodeDetailJobRow,
 ): Promise<NodeDetailResponse> {
-  const bundle = await getLearningTree(job.treeId, DEFAULT_USER_ID);
+  const userId = await getLearningTreeOwnerId(job.treeId);
+  if (!userId) throw new Error("TREE_NOT_FOUND");
+
+  const providerConfig = await resolveLlmProviderConfig(userId);
+  const bundle = await getLearningTree(job.treeId, userId);
   if (!bundle) throw new Error("TREE_NOT_FOUND");
 
   const nodeRow = bundle.nodes.find((node) => node.id === job.nodeId);
@@ -86,6 +93,7 @@ async function processGenerationForJob(
       nodeType: nodeRow.type,
       prerequisitesContext,
       detail,
+      providerConfig,
     });
 
   if (nodeRow.detailJson && hasWorkerReadyTextDetail(nodeRow.detailJson)) {
@@ -113,6 +121,8 @@ async function processGenerationForJob(
   await getOrCreateNodeDetail({
     treeId: job.treeId,
     nodeId: job.nodeId,
+    userId,
+    providerConfig,
     bundle: generationBundle,
     // worker는 품질을 낮추는 Concept fallback을 ready detail로 저장하지 않고 full generator를 실행한다.
     loadConcept: async () => null,

@@ -1,10 +1,15 @@
 import { jsonError } from "@/lib/api-errors";
+import { requireSupabaseAuthUserId } from "@/lib/auth/supabase-auth";
 import {
   LlmExhaustedRetriesError,
   LlmParseError,
   LlmTransportError,
   LlmValidationError,
 } from "@/lib/llm/errors";
+import {
+  LlmProviderRequiredError,
+  LLM_PROVIDER_REQUIRED_MESSAGE,
+} from "@/lib/llm/provider-config";
 import {
   getOrCreateNodeDetailForRequest,
   getReadyNodeDetailForRequest,
@@ -13,6 +18,7 @@ import {
   CURRENT_NODE_DETAIL_VERSION,
   enqueueNodeDetailJob,
 } from "@/lib/repository/node-detail-job-repository";
+import { getLearningTree } from "@/lib/repository/learning-repository";
 import { NextResponse } from "next/server";
 import { z } from "zod/v3";
 
@@ -30,6 +36,11 @@ function NODE_DETAIL_ASYNC_ENABLED(): boolean {
 
 export async function POST(req: Request, ctx: Ctx) {
   const { nodeId } = await ctx.params;
+  const auth = await requireSupabaseAuthUserId(req);
+  if (!auth.ok) {
+    return jsonError(auth.code, auth.message, auth.status);
+  }
+
   let body: unknown;
   try {
     body = await req.json();
@@ -53,8 +64,25 @@ export async function POST(req: Request, ctx: Ctx) {
   const { tree_id: treeId } = parsed.data;
 
   try {
+    const bundle = await getLearningTree(treeId, auth.userId);
+    if (!bundle) {
+      return jsonError(
+        "NOT_FOUND",
+        "노드 또는 트리를 찾을 수 없습니다.",
+        404,
+      );
+    }
+    const node = bundle.nodes.find((n) => n.id === nodeId);
+    if (!node || node.treeId !== treeId) {
+      return jsonError("NOT_FOUND", "노드가 트리에 속하지 않습니다.", 404);
+    }
+
     if (NODE_DETAIL_ASYNC_ENABLED()) {
-      const ready = await getReadyNodeDetailForRequest(treeId, nodeId);
+      const ready = await getReadyNodeDetailForRequest(
+        treeId,
+        nodeId,
+        auth.userId,
+      );
       if (ready.status === "ready") {
         return NextResponse.json(
           { status: "ready", detail: ready.detail },
@@ -79,7 +107,11 @@ export async function POST(req: Request, ctx: Ctx) {
       );
     }
 
-    const detail = await getOrCreateNodeDetailForRequest(treeId, nodeId);
+    const detail = await getOrCreateNodeDetailForRequest(
+      treeId,
+      nodeId,
+      auth.userId,
+    );
     return NextResponse.json(detail);
   } catch (e) {
     if (e instanceof Error && e.message === "NOT_FOUND") {
@@ -91,6 +123,13 @@ export async function POST(req: Request, ctx: Ctx) {
     }
     if (e instanceof Error && e.message === "NODE_NOT_IN_TREE") {
       return jsonError("NOT_FOUND", "노드가 트리에 속하지 않습니다.", 404);
+    }
+    if (e instanceof LlmProviderRequiredError) {
+      return jsonError(
+        "LLM_PROVIDER_REQUIRED",
+        LLM_PROVIDER_REQUIRED_MESSAGE,
+        400,
+      );
     }
     if (e instanceof LlmExhaustedRetriesError) {
       const c = e.cause;

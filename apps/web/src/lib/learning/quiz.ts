@@ -1,11 +1,13 @@
 import { LlmParseError, LlmValidationError } from "@/lib/llm/errors";
 import { createChatCompletion } from "@/lib/llm";
+import type { ResolvedLlmProviderConfig } from "@/lib/llm/provider-config";
 import { sliceBalancedJsonObject, stripLlmFences } from "@/lib/llm/parse";
 import { clampScore, convertScoreToStatus, shouldNeedReview } from "@/lib/learning/mastery";
 import type { ProgressStatus } from "@/types/learning";
 import { z } from "zod/v3";
 
 export interface QuizEvaluationInput {
+  providerConfig: ResolvedLlmProviderConfig;
   conceptTitle: string;
   question: string;
   expectedAnswer: string;
@@ -96,7 +98,7 @@ export async function evaluateQuizAnswerWithLlm(
   const completion = await createChatCompletion([
     { role: "system", content: QUIZ_EVALUATION_SYSTEM_PROMPT },
     { role: "user", content: buildQuizEvaluationUserMessage(input) },
-  ]);
+  ], { providerConfig: input.providerConfig });
   return parseQuizEvaluationResponse(completion.rawText);
 }
 

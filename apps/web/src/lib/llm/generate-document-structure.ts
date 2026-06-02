@@ -13,6 +13,7 @@ import {
   LlmValidationError,
 } from "@/lib/llm/errors";
 import { parseDocumentTreeStructureResponse } from "@/lib/llm/parse";
+import type { ResolvedLlmProviderConfig } from "@/lib/llm/provider-config";
 import {
   buildDocumentTreeStructureUserMessage,
   DOCUMENT_TREE_STRUCTURE_SYSTEM_PROMPT,
@@ -40,6 +41,7 @@ function logGenerate(
 }
 
 export interface GenerateDocumentTreeStructureOptions {
+  providerConfig: ResolvedLlmProviderConfig;
   documentId: string;
   documentTitle: string;
   documentSummary: string;
@@ -94,7 +96,7 @@ export async function generateDocumentTreeStructure(
             matchedConceptsContext,
           }),
         },
-      ]);
+      ], { providerConfig: options.providerConfig });
 
       const tree = parseDocumentTreeStructureResponse(rawText);
 

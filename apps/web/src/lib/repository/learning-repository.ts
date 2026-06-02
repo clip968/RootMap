@@ -1,6 +1,5 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { DEFAULT_USER_ID } from "@/db/constants";
 import {
   getConceptById,
   updateConceptPatch,
@@ -29,8 +28,6 @@ import type {
  * - Phase 2: 트랜잭션 안에서 `persistPhase2Concepts`로 concepts / edges / learning_tree_concepts 연결
  * - 읽기: `getLearningTree`가 트리 한 건에 필요한 조인 결과를 `LearningTreeBundle`로 묶음
  */
-
-export { DEFAULT_USER_ID } from "@/db/constants";
 
 export interface LearningTreeRow {
   id: string;
@@ -126,7 +123,7 @@ export async function getConceptTreeUsageCounts(
 }
 
 export async function listLearningTreeHistory(
-  userId: string = DEFAULT_USER_ID,
+  userId: string,
   limit: number = 50,
 ): Promise<LearningTreeHistoryRow[]> {
   const db = getDb();
@@ -160,7 +157,7 @@ export async function createLearningTree(
   topic: string,
   summary: string | null,
   treeJson: LearningTreeResponse,
-  userId: string = DEFAULT_USER_ID,
+  userId: string,
 ): Promise<string> {
   const db = getDb();
   const now = new Date().toISOString();
@@ -209,7 +206,7 @@ export async function createFullLearningTree(
   topic: string,
   summary: string | null,
   treeJson: LearningTreeResponse,
-  userId: string = DEFAULT_USER_ID,
+  userId: string,
   options?: FullTreeOptions,
 ): Promise<string> {
   const db = getDb();
@@ -389,7 +386,7 @@ export async function initializeNodeProgress(
  */
 export async function getLearningTree(
   treeId: string,
-  userId: string = DEFAULT_USER_ID,
+  userId: string,
 ): Promise<LearningTreeBundle | null> {
   const db = getDb();
   const treeRows = await db
@@ -418,6 +415,15 @@ export async function getLearningTree(
     progress,
     conceptTreeCounts: await getConceptTreeUsageCounts(cids),
   };
+}
+
+export async function getLearningTreeOwnerId(treeId: string): Promise<string | null> {
+  const rows = await getDb()
+    .select({ userId: learningTrees.userId })
+    .from(learningTrees)
+    .where(eq(learningTrees.id, treeId))
+    .limit(1);
+  return rows[0]?.userId ?? null;
 }
 
 export async function getNodeById(nodeId: string): Promise<LearningNodeRow | null> {

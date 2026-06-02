@@ -9,6 +9,7 @@ import {
   parseNodeDetailVisualResponse,
   type NodeDetailVisualResponse,
 } from "@/lib/llm/parse";
+import type { ResolvedLlmProviderConfig } from "@/lib/llm/provider-config";
 import {
   buildNodeDetailVisualUserMessage,
   NODE_DETAIL_VISUAL_SYSTEM_PROMPT,
@@ -31,6 +32,7 @@ function shouldAbortRetries(err: unknown): boolean {
 }
 
 export interface GenerateNodeDetailVisualInput {
+  providerConfig: ResolvedLlmProviderConfig;
   topic: string;
   nodeTitle: string;
   nodeType: NodeType;
@@ -54,7 +56,7 @@ export async function generateNodeDetailVisual(
           role: "user",
           content: buildNodeDetailVisualUserMessage(input),
         },
-      ]);
+      ], { providerConfig: input.providerConfig });
       const visual = parseNodeDetailVisualResponse(rawText);
       if (visual.visual_blocks.length !== REQUIRED_NODE_DETAIL_VISUAL_BLOCK_COUNT) {
         throw new LlmValidationError("visual_blocks.length !== 1");
@@ -83,6 +85,7 @@ export async function ensureRequiredNodeDetailVisual(input: {
   nodeType: NodeType;
   prerequisitesContext: string;
   detail: NodeDetailResponse;
+  providerConfig: ResolvedLlmProviderConfig;
   generateVisual?: NodeDetailVisualGenerator;
 }): Promise<NodeDetailResponse> {
   if (hasRequiredNodeDetailVisual(input.detail)) {
@@ -100,6 +103,7 @@ export async function ensureRequiredNodeDetailVisual(input: {
   const generateVisual = input.generateVisual ?? generateNodeDetailVisual;
   const visual = await generateVisual({
     topic: input.topic,
+    providerConfig: input.providerConfig,
     nodeTitle: input.nodeTitle,
     nodeType: input.nodeType,
     prerequisitesContext: input.prerequisitesContext,

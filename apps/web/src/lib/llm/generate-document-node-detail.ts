@@ -20,6 +20,7 @@ import {
 import {
   documentNodeDetailQualityWarnings,
 } from "@/lib/llm/schemas";
+import type { ResolvedLlmProviderConfig } from "@/lib/llm/provider-config";
 import type {
   DocumentNodeDetailResponse,
   DocumentSourceType,
@@ -39,6 +40,7 @@ function logGenerate(
 }
 
 export interface GenerateDocumentNodeDetailInput {
+  providerConfig: ResolvedLlmProviderConfig;
   documentTitle: string;
   nodeId: string;
   conceptTitle: string;
@@ -102,7 +104,7 @@ export async function generateDocumentNodeDetail(
             prerequisites,
           }),
         },
-      ]);
+      ], { providerConfig: input.providerConfig });
       const completionDurationMs = Date.now() - completionStartedAt;
 
       const parseStartedAt = Date.now();

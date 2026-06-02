@@ -4,7 +4,6 @@ import {
   buildLlmProviderHeaders,
   getLlmProviderMaxAttempts,
   getLlmProviderTimeoutMs,
-  resolveLlmProviderConfig,
   shouldSendJsonResponseFormat,
   type ResolvedLlmProviderConfig,
 } from "@/lib/llm/provider-config";
@@ -35,26 +34,17 @@ export function getOpenRouterMaxAttempts(): number {
 }
 
 /**
- * OpenAI-compatible Chat Completions. 서버 전용(DB 또는 환경 변수의 API key 사용).
- *
- * provider 설정이 있으면 DB 값을 우선 사용하고, 없으면 기존 OpenRouter 환경 변수 fallback을 유지한다.
+ * OpenAI-compatible Chat Completions. production 호출자는 반드시 사용자별 providerConfig를 넘긴다.
  */
 export async function createChatCompletion(
   messages: ChatMessage[],
-  options: { providerConfig?: ResolvedLlmProviderConfig } = {},
+  options: { providerConfig: ResolvedLlmProviderConfig },
 ): Promise<{
   rawText: string;
   status: number;
   model: string | null;
 }> {
-  let config: ResolvedLlmProviderConfig;
-  try {
-    config = options.providerConfig ?? (await resolveLlmProviderConfig());
-  } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "LLM provider 설정을 확인해 주세요.";
-    throw new LlmTransportError(message, 0);
-  }
+  const config = options.providerConfig;
 
   const body: Record<string, unknown> = {
     messages,

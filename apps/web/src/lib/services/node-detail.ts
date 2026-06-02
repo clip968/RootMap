@@ -24,7 +24,6 @@ import {
   type DocumentTreeContext,
   type DocumentTreeNodeContext,
 } from "@/lib/repository/document-repository";
-import { DEFAULT_USER_ID } from "@/db/constants";
 import {
   getConceptById,
   getConceptsByIds,
@@ -34,6 +33,7 @@ import {
 } from "@/lib/repository/concept-repository";
 import { buildPrerequisitePromptContext } from "@/lib/services/node-detail-context";
 import type { NodeDetailResponse, NodeType } from "@/types/learning";
+import { resolveLlmProviderConfig } from "@/lib/llm/provider-config";
 import {
   DEFAULT_VISUAL_DECISION,
   hasRequiredNodeDetailVisual,
@@ -42,6 +42,7 @@ import {
   type VisualBlock,
   type VisualDecision,
 } from "@/lib/visualization/visual-block-schema";
+import type { ResolvedLlmProviderConfig } from "@/lib/llm/provider-config";
 
 type GenericNodeDetailGenerator = (
   input: GenerateNodeDetailInput,
@@ -414,6 +415,8 @@ async function responseFromStoredConceptFallback(
 export async function getOrCreateNodeDetail(params: {
   treeId: string;
   nodeId: string;
+  userId: string;
+  providerConfig: ResolvedLlmProviderConfig;
   bundle: LearningTreeBundle;
   generateGenericNodeDetail?: GenericNodeDetailGenerator;
   generateDocumentDetail?: DocumentNodeDetailGenerator;
@@ -424,7 +427,7 @@ export async function getOrCreateNodeDetail(params: {
   loadPanelGraph?: LoadPanelGraph;
   persistNodeDetail?: PersistNodeDetail;
 }): Promise<ApiNodeDetailResponse> {
-  const { treeId, nodeId, bundle } = params;
+  const { treeId, nodeId, userId, providerConfig, bundle } = params;
   const loadDocumentTreeContext =
     params.loadDocumentTreeContext ?? getDocumentTreeContextForUser;
   const loadConcept =
@@ -444,7 +447,7 @@ export async function getOrCreateNodeDetail(params: {
       nodeKey: nodeRow.nodeKey,
       conceptId: nodeRow.conceptId,
     },
-    () => loadDocumentTreeContext(treeId, DEFAULT_USER_ID),
+    () => loadDocumentTreeContext(treeId, userId),
   );
   const documentNodeContext = findDocumentContextForNode(
     documentTreeContext,
@@ -486,6 +489,7 @@ export async function getOrCreateNodeDetail(params: {
         nodeType: nodeRow.type,
         prerequisitesContext: prereqContext,
         detail,
+        providerConfig,
         generateVisual: params.generateVisualDetail,
       }),
     );
@@ -563,6 +567,7 @@ export async function getOrCreateNodeDetail(params: {
           evidenceText: formatDocumentEvidenceForPrompt(documentNodeContext),
           prerequisites: nodeRow.prerequisites.join(", ") || "없음",
           requestId: `doc-node-${treeId}-${nodeRow.nodeKey}`,
+          providerConfig,
         }),
       );
       const genericDetail: NodeDetailResponse = {
@@ -616,6 +621,7 @@ export async function getOrCreateNodeDetail(params: {
     nodeTitle: nodeRow.title,
     nodeType: nodeRow.type,
     prerequisitesContext: prereqContext,
+    providerConfig,
   };
 
   try {
@@ -659,11 +665,12 @@ export async function getOrCreateNodeDetail(params: {
 export async function getReadyNodeDetail(params: {
   treeId: string;
   nodeId: string;
+  userId: string;
   bundle: LearningTreeBundle;
   loadDocumentTreeContext?: LoadDocumentTreeContext;
   loadConcept?: LoadConcept;
 }): Promise<ReadyNodeDetailLookupResult> {
-  const { treeId, nodeId, bundle } = params;
+  const { treeId, nodeId, userId, bundle } = params;
   const loadDocumentTreeContext =
     params.loadDocumentTreeContext ?? getDocumentTreeContextForUser;
   const loadConcept =
@@ -681,7 +688,7 @@ export async function getReadyNodeDetail(params: {
       nodeKey: nodeRow.nodeKey,
       conceptId: nodeRow.conceptId,
     },
-    () => loadDocumentTreeContext(treeId, DEFAULT_USER_ID),
+    () => loadDocumentTreeContext(treeId, userId),
   );
   const documentNodeContext = findDocumentContextForNode(
     documentTreeContext,
@@ -754,11 +761,12 @@ export async function getReadyNodeDetail(params: {
 export async function getNodeDetailExtras(params: {
   treeId: string;
   nodeId: string;
+  userId: string;
   bundle: LearningTreeBundle;
   loadDocumentTreeContext?: LoadDocumentTreeContext;
   loadPanelGraph?: LoadPanelGraph;
 }): Promise<ApiNodeDetailExtrasResponse> {
-  const { treeId, nodeId, bundle } = params;
+  const { treeId, nodeId, userId, bundle } = params;
   const loadDocumentTreeContext =
     params.loadDocumentTreeContext ?? getDocumentTreeContextForUser;
   const loadPanelGraph = params.loadPanelGraph ?? buildPanelGraph;
@@ -775,7 +783,7 @@ export async function getNodeDetailExtras(params: {
       nodeKey: nodeRow.nodeKey,
       conceptId: nodeRow.conceptId,
     },
-    () => loadDocumentTreeContext(treeId, DEFAULT_USER_ID),
+    () => loadDocumentTreeContext(treeId, userId),
   );
   const documentNodeContext = findDocumentContextForNode(
     documentTreeContext,
@@ -820,6 +828,7 @@ export async function getNodeDetailExtras(params: {
 export async function getOrCreateNodeDetailForRequest(
   treeId: string,
   nodeId: string,
+  userId: string,
 ): Promise<ApiNodeDetailResponse> {
   const requestLogContext: DetailLogContext = {
     treeId,
@@ -827,8 +836,9 @@ export async function getOrCreateNodeDetailForRequest(
     nodeKey: null,
     conceptId: null,
   };
+  const providerConfig = await resolveLlmProviderConfig(userId);
   const bundle = await withDetailDuration("tree_load", requestLogContext, () =>
-    getLearningTree(treeId, DEFAULT_USER_ID),
+    getLearningTree(treeId, userId),
   );
   if (!bundle) {
     throw new Error("NOT_FOUND");
@@ -848,6 +858,8 @@ export async function getOrCreateNodeDetailForRequest(
     () => getOrCreateNodeDetail({
       treeId,
       nodeId,
+      userId,
+      providerConfig,
       bundle,
       requireVisualDetail: true,
     }),
@@ -857,6 +869,7 @@ export async function getOrCreateNodeDetailForRequest(
 export async function getReadyNodeDetailForRequest(
   treeId: string,
   nodeId: string,
+  userId: string,
 ): Promise<ReadyNodeDetailLookupResult> {
   const requestLogContext: DetailLogContext = {
     treeId,
@@ -865,7 +878,7 @@ export async function getReadyNodeDetailForRequest(
     conceptId: null,
   };
   const bundle = await withDetailDuration("tree_load", requestLogContext, () =>
-    getLearningTree(treeId, DEFAULT_USER_ID),
+    getLearningTree(treeId, userId),
   );
   if (!bundle) {
     throw new Error("NOT_FOUND");
@@ -882,13 +895,14 @@ export async function getReadyNodeDetailForRequest(
       nodeKey: nodeRow.nodeKey,
       conceptId: nodeRow.conceptId,
     },
-    () => getReadyNodeDetail({ treeId, nodeId, bundle }),
+    () => getReadyNodeDetail({ treeId, nodeId, userId, bundle }),
   );
 }
 
 export async function getNodeDetailExtrasForRequest(
   treeId: string,
   nodeId: string,
+  userId: string,
 ): Promise<ApiNodeDetailExtrasResponse> {
   const requestLogContext: DetailLogContext = {
     treeId,
@@ -897,7 +911,7 @@ export async function getNodeDetailExtrasForRequest(
     conceptId: null,
   };
   const bundle = await withDetailDuration("tree_load", requestLogContext, () =>
-    getLearningTree(treeId, DEFAULT_USER_ID),
+    getLearningTree(treeId, userId),
   );
   if (!bundle) {
     throw new Error("NOT_FOUND");
@@ -914,6 +928,6 @@ export async function getNodeDetailExtrasForRequest(
       nodeKey: nodeRow.nodeKey,
       conceptId: nodeRow.conceptId,
     },
-    () => getNodeDetailExtras({ treeId, nodeId, bundle }),
+    () => getNodeDetailExtras({ treeId, nodeId, userId, bundle }),
   );
 }

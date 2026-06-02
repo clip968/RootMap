@@ -35,6 +35,15 @@ export interface LlmProviderStatus {
 
 const DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 export const DEFAULT_CROFAI_BASE_URL = "https://crof.ai/v1";
+export const LLM_PROVIDER_REQUIRED_MESSAGE =
+  "먼저 계정의 LLM API key를 설정해 주세요.";
+
+export class LlmProviderRequiredError extends Error {
+  constructor(message = LLM_PROVIDER_REQUIRED_MESSAGE) {
+    super(message);
+    this.name = "LlmProviderRequiredError";
+  }
+}
 
 export function providerDisplayName(providerType: LlmProviderType): string {
   if (providerType === "openrouter") return "OpenRouter";
@@ -167,8 +176,8 @@ export async function getLlmProviderStatus(userId: string): Promise<LlmProviderS
   return row ? statusFromRow(row) : getEmptyLlmProviderStatus();
 }
 
-export async function resolveLlmProviderConfig(userId?: string): Promise<ResolvedLlmProviderConfig> {
-  const row = userId ? await getActiveLlmProviderSetting(userId) : null;
+export async function resolveLlmProviderConfig(userId: string): Promise<ResolvedLlmProviderConfig> {
+  const row = await getActiveLlmProviderSetting(userId);
   if (row) {
     return {
       source: "database",
@@ -183,17 +192,24 @@ export async function resolveLlmProviderConfig(userId?: string): Promise<Resolve
     };
   }
 
-  if (userId) {
-    throw new Error("먼저 계정의 LLM API key를 설정해 주세요.");
-  }
+  throw new LlmProviderRequiredError();
+}
 
+export async function resolveEnvLlmProviderConfigForSmoke(): Promise<ResolvedLlmProviderConfig> {
   const apiKey = process.env.OPENROUTER_API_KEY?.trim();
   if (!apiKey) {
     throw new Error("OPENROUTER_API_KEY 또는 저장된 LLM provider API key가 필요합니다.");
   }
+  const envStatus = getEnvLlmProviderStatus();
   return {
-    ...getEnvLlmProviderStatus(),
+    source: "env",
+    providerType: "openrouter",
+    name: envStatus.name,
+    baseUrl: envStatus.baseUrl ?? DEFAULT_OPENROUTER_BASE_URL,
+    model: envStatus.model,
+    jsonMode: envStatus.jsonMode,
     apiKey,
+    apiKeyHint: envStatus.apiKeyHint,
     timeoutMs: getLlmProviderTimeoutMs(),
   };
 }

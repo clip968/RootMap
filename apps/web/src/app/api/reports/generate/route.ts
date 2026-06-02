@@ -4,6 +4,11 @@ import {
   createSessionLearningReport,
   SessionReportNotFoundError,
 } from "@/lib/learning/report";
+import {
+  LlmProviderRequiredError,
+  LLM_PROVIDER_REQUIRED_MESSAGE,
+  resolveLlmProviderConfig,
+} from "@/lib/llm/provider-config";
 import { NextResponse } from "next/server";
 import { z } from "zod/v3";
 
@@ -47,10 +52,12 @@ export async function POST(req: Request) {
   }
 
   try {
+    const providerConfig = await resolveLlmProviderConfig(auth.userId);
     /** 리포트 생성은 저장까지 포함하는 서비스로 위임해 세션 종료 route와 같은 정책을 사용한다. */
     const report = await createSessionLearningReport({
       userId: auth.userId,
       sessionId: parsed.data.session_id,
+      providerConfig,
     });
     return NextResponse.json({
       report_id: report.reportId,
@@ -63,6 +70,13 @@ export async function POST(req: Request) {
   } catch (err) {
     if (err instanceof SessionReportNotFoundError) {
       return jsonError("NOT_FOUND", err.message, 404);
+    }
+    if (err instanceof LlmProviderRequiredError) {
+      return jsonError(
+        "LLM_PROVIDER_REQUIRED",
+        LLM_PROVIDER_REQUIRED_MESSAGE,
+        400,
+      );
     }
     return jsonError("PROCESSING_FAILED", "학습 리포트 생성에 실패했습니다.", 500);
   }

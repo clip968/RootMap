@@ -35,6 +35,10 @@ import { generateChunkConcepts } from "@/lib/llm/generate-document-chunk-concept
 import { generateDocumentConsolidation } from "@/lib/llm/generate-document-consolidation";
 import { generateDocumentTreeStructure } from "@/lib/llm/generate-document-structure";
 import { LlmExhaustedRetriesError } from "@/lib/llm/errors";
+import {
+  resolveLlmProviderConfig,
+  type ResolvedLlmProviderConfig,
+} from "@/lib/llm/provider-config";
 import { getDb } from "@/db/client";
 import { learningTrees, learningNodes, userNodeProgress } from "@/db/schema";
 import { getLearningTree } from "@/lib/repository/learning-repository";
@@ -318,6 +322,7 @@ async function extractConceptsFromChunks(
   documentId: string,
   documentTitle: string,
   chunks: DocumentChunkRow[],
+  providerConfig: ResolvedLlmProviderConfig,
   options: { chunkBatchSize?: number } = {},
 ): Promise<ExtractConceptsFromChunksResult> {
   console.info("[document-processor]", {
@@ -356,6 +361,7 @@ async function extractConceptsFromChunks(
       const sectionTitle = chunk.sectionTitle ?? "";
       try {
         const { extraction } = await generateChunkConcepts({
+          providerConfig,
           documentTitle,
           chunkId: chunk.id,
           sectionTitle,
@@ -456,6 +462,7 @@ async function consolidateConcepts(
   documentId: string,
   documentTitle: string,
   allCandidatesJson: string,
+  providerConfig: ResolvedLlmProviderConfig,
 ): Promise<{
   consolidatedJson: string;
   consolidatedConcepts: ConsolidatedConcept[];
@@ -469,6 +476,7 @@ async function consolidateConcepts(
   });
 
   const { consolidation, qualityWarnings } = await generateDocumentConsolidation({
+    providerConfig,
     documentTitle,
     conceptCandidatesJson: allCandidatesJson,
     requestId: `doc-${documentId}-consolidation`,
@@ -637,6 +645,7 @@ async function generateDocumentLearningTree(
   summary: string,
   consolidatedConceptsJson: string,
   matchedConceptsContext: string,
+  providerConfig: ResolvedLlmProviderConfig,
 ): Promise<LearningTreeResponse> {
   console.info("[document-processor]", {
     stage: "tree_generation_start",
@@ -644,6 +653,7 @@ async function generateDocumentLearningTree(
   });
 
   const treeStructure = await generateDocumentTreeStructure({
+    providerConfig,
     documentId,
     documentTitle,
     documentSummary: summary,
@@ -778,6 +788,7 @@ export async function processDocument(
     throw new DocumentProcessorError("NOT_FOUND", "문서를 찾을 수 없습니다.");
   }
 
+  const providerConfig = await resolveLlmProviderConfig(userId);
   let currentStatus = doc.processingStatus as DocumentProcessingStatus;
   let documentMetadata = asRecord(doc.metadata);
   const documentTitle = doc.title || doc.originalFilename;
@@ -982,6 +993,7 @@ export async function processDocument(
         documentId,
         documentTitle,
         chunks,
+        providerConfig,
         { chunkBatchSize: options.chunkBatchSize },
       );
     } catch (err) {
@@ -1015,6 +1027,7 @@ export async function processDocument(
         documentId,
         documentTitle,
         extractionResult.candidatesJson,
+        providerConfig,
       );
     } catch (err) {
       if (err instanceof DocumentProcessorError) {
@@ -1080,6 +1093,7 @@ export async function processDocument(
       treeSummary,
       treeConsolidatedJson,
       formatMatchedConceptsForPrompt(documentConceptRows),
+      providerConfig,
     );
   } catch (err) {
     const msg = err instanceof LlmExhaustedRetriesError

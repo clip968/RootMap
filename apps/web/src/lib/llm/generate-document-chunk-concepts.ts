@@ -13,6 +13,7 @@ import {
   LlmValidationError,
 } from "@/lib/llm/errors";
 import { parseChunkConceptExtractionResponse } from "@/lib/llm/parse";
+import type { ResolvedLlmProviderConfig } from "@/lib/llm/provider-config";
 import {
   buildDocumentChunkConceptUserMessage,
   DOCUMENT_CHUNK_CONCEPT_SYSTEM_PROMPT,
@@ -40,6 +41,7 @@ function logGenerate(
 }
 
 export interface GenerateChunkConceptsOptions {
+  providerConfig: ResolvedLlmProviderConfig;
   documentTitle: string;
   chunkId: string;
   sectionTitle: string;
@@ -93,7 +95,7 @@ export async function generateChunkConcepts(
             chunkMetadata,
           }),
         },
-      ]);
+      ], { providerConfig: options.providerConfig });
       const completionDurationMs = Date.now() - completionStartedAt;
 
       const parseStartedAt = Date.now();
