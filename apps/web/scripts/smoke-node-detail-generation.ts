@@ -7,6 +7,10 @@
 import { DEFAULT_USER_ID } from "../src/db/constants";
 import type { ConceptRow } from "../src/lib/repository/concept-repository";
 import type {
+  DocumentTreeContext,
+  DocumentTreeNodeContext,
+} from "../src/lib/repository/document-repository";
+import type {
   LearningNodeRow,
   LearningTreeBundle,
   LearningTreeRow,
@@ -283,6 +287,67 @@ async function runShortDescriptionGenerationCase(): Promise<void> {
   assert(result.check_questions.length > 0, "generated detail should include check questions");
 }
 
+async function runDocumentPlaceholderFallbackDoesNotMaskGenerationFailureCase(): Promise<void> {
+  let failedAsExpected = false;
+  const documentNodeContext: DocumentTreeNodeContext = {
+    document_id: "doc-1",
+    document_title: "fast26-wang",
+    document_concept_id: "document-concept-1",
+    concept_id: "concept-doc-placeholder",
+    concept_title: "PLog (Persistent Log)",
+    concept_type: "document_core",
+    source_type: "explicit",
+    evidence_count: 1,
+    evidence: [
+      {
+        page_start: 5,
+        page_end: 5,
+        section_title: null,
+        snippet: "3.1 Persistent Log (PLog)",
+      },
+    ],
+  };
+  const documentContext: DocumentTreeContext = {
+    document_id: "doc-1",
+    document_title: "fast26-wang",
+    by_concept_id: new Map([["concept-doc-placeholder", documentNodeContext]]),
+    by_normalized_title: new Map(),
+  };
+
+  try {
+    await getOrCreateNodeDetail({
+      treeId: "tree-1",
+      nodeId: "node-1",
+      bundle: bundle("concept-doc-placeholder"),
+      loadDocumentTreeContext: async () => documentContext,
+      loadConcept: async () =>
+        concept(
+          "concept-doc-placeholder",
+          null,
+          "PLog (Persistent Log) 문서 기반 추출 개념",
+        ),
+      persistNodeDetail: async () => {
+        throw new Error("failed document detail should not persist placeholder fallback");
+      },
+      generateDocumentDetail: async () => {
+        throw new Error("document detail generation failed");
+      },
+      generateGenericNodeDetail: async () => {
+        throw new Error("document context should use document generator first");
+      },
+    });
+  } catch (error) {
+    failedAsExpected =
+      error instanceof Error &&
+      error.message === "document detail generation failed";
+  }
+
+  assert(
+    failedAsExpected,
+    "document placeholder Concept fallback should not mask detail generation failure",
+  );
+}
+
 async function runRequiredVisualRepairForCachedDetailCase(): Promise<void> {
   let generatedVisual = false;
   let persistedDetail: NodeDetailResponse | null = null;
@@ -448,6 +513,7 @@ async function main(): Promise<void> {
   const logs = await captureServiceLogs(async () => {
     await runCacheHitSkipsPanelGraphCase();
     await runShortDescriptionGenerationCase();
+    await runDocumentPlaceholderFallbackDoesNotMaskGenerationFailureCase();
     await runRequiredVisualRepairForCachedDetailCase();
     await runRequiredVisualForNewDetailCase();
     await runRequiredVisualRegeneratesIncompleteCachedDetailCase();

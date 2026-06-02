@@ -554,9 +554,9 @@ function buildDocumentEvidence(
     return {
       documentId,
       chunkId: e.chunk_id,
-      pageStart: e.page_start,
-      pageEnd: e.page_end,
-      sectionTitle: e.section_title,
+      pageStart: e.page_start ?? chunk?.pageStart ?? null,
+      pageEnd: e.page_end ?? chunk?.pageEnd ?? null,
+      sectionTitle: e.section_title?.trim() ? e.section_title : chunk?.sectionTitle ?? null,
       snippet: snippetFromChunk(chunk),
     };
   });

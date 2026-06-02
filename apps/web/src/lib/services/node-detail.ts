@@ -398,7 +398,8 @@ async function responseFromStoredConceptFallback(
 ): Promise<ApiNodeDetailResponse | null> {
   if (!conceptId) return null;
   const c = await loadConcept(conceptId);
-  if (!c || !(c.explanation?.trim() || c.shortDescription?.trim())) return null;
+  // LLM 실패를 Concept Store의 짧은 placeholder로 가리면 사용자가 상세 지식이 생성됐다고 오해한다.
+  if (!c || !hasUsableConceptExplanation(c)) return null;
   return responseFromStoredConcept(
     dbId,
     nodeKey,

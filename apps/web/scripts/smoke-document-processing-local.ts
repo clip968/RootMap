@@ -28,6 +28,7 @@ function readSource(relativePath: string): string {
 
 async function main(): Promise<void> {
   const startTopicFormSource = readSource("src/components/start-topic-form.tsx");
+  const documentProcessorSource = readSource("src/lib/document/processor.ts");
   assert(
     !startTopicFormSource.includes("/api/documents/${uploaded.document_id}/process"),
     "document upload UI must stop after complete-upload and must not start processing",
@@ -43,6 +44,14 @@ async function main(): Promise<void> {
   assert(
     startTopicFormSource.includes("업로드 완료"),
     "document upload UI should show an upload-complete state",
+  );
+  assert(
+    documentProcessorSource.includes("pageStart: e.page_start ?? chunk?.pageStart ?? null"),
+    "document evidence should fall back to chunk page_start when LLM evidence omits page info",
+  );
+  assert(
+    documentProcessorSource.includes("pageEnd: e.page_end ?? chunk?.pageEnd ?? null"),
+    "document evidence should fall back to chunk page_end when LLM evidence omits page info",
   );
 
   const parsedEnv = parseEnvFileContent([
