@@ -11,6 +11,7 @@
  * 4. `learning-repository.createFullLearningTree` — DB 트랜잭션
  */
 import { jsonError } from "@/lib/api-errors";
+import { requireSupabaseAuthUserId } from "@/lib/auth/supabase-auth";
 import {
   InvalidTopicError,
   LlmExhaustedRetriesError,
@@ -40,6 +41,11 @@ function logGenerateRoute(
 }
 
 export async function POST(req: Request) {
+  const auth = await requireSupabaseAuthUserId(req);
+  if (!auth.ok) {
+    return jsonError(auth.code, auth.message, auth.status);
+  }
+
   let body: unknown;
   try {
     body = await req.json();
@@ -80,7 +86,7 @@ export async function POST(req: Request) {
     /** 본문의 타입 검증은 서비스(`validateTopicInput`)에서 한 번 더 함 */
     const data = await generateAndPersistTree(
       (body as { topic: unknown }).topic,
-      { reuseConcepts, requestId },
+      { userId: auth.userId, reuseConcepts, requestId },
     );
     logGenerateRoute("success", {
       requestId,

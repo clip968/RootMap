@@ -1,5 +1,5 @@
 import { jsonError } from "@/lib/api-errors";
-import { DEFAULT_USER_ID } from "@/db/constants";
+import { requireSupabaseAuthUserId } from "@/lib/auth/supabase-auth";
 import {
   getLearningTree,
   getNodeById,
@@ -18,6 +18,11 @@ const bodySchema = z.object({
 type Ctx = { params: Promise<{ nodeId: string }> };
 
 export async function PATCH(req: Request, ctx: Ctx) {
+  const auth = await requireSupabaseAuthUserId(req);
+  if (!auth.ok) {
+    return jsonError(auth.code, auth.message, auth.status);
+  }
+
   const { nodeId } = await ctx.params;
 
   let body: unknown;
@@ -45,7 +50,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     return jsonError("NOT_FOUND", "노드를 찾을 수 없습니다.", 404);
   }
 
-  const bundle = await getLearningTree(node.treeId, DEFAULT_USER_ID);
+  const bundle = await getLearningTree(node.treeId, auth.userId);
   if (!bundle) {
     return jsonError(
       "FORBIDDEN",
@@ -55,14 +60,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 
   await upsertNodeProgress(
-    DEFAULT_USER_ID,
+    auth.userId,
     node.treeId,
     nodeId,
     parsed.data.status,
   );
   if (node.conceptId) {
     await upsertUserConceptProgress(
-      DEFAULT_USER_ID,
+      auth.userId,
       node.conceptId,
       parsed.data.status,
     );

@@ -14,7 +14,6 @@ import {
   searchConceptsForPromptContext,
 } from "@/lib/repository/concept-repository";
 import {
-  DEFAULT_USER_ID,
   createFullLearningTree,
   getLearningTree,
 } from "@/lib/repository/learning-repository";
@@ -54,6 +53,8 @@ export function validateTopicInput(topic: unknown): string {
 }
 
 export interface GenerateAndPersistOptions {
+  /** Supabase Auth 사용자 id. production 생성 경로는 개발용 DEFAULT_USER_ID를 쓰지 않는다. */
+  userId: string;
   /** 기본 true — 기존 Concept 재사용 */
   reuseConcepts?: boolean;
   /** 있으면 각 단계마다 구조화 로그 출력 */
@@ -68,10 +69,11 @@ export interface GenerateAndPersistOptions {
  */
 export async function generateAndPersistTree(
   rawTopic: unknown,
-  options?: GenerateAndPersistOptions,
+  options: GenerateAndPersistOptions,
 ): Promise<
   ReturnType<typeof bundleToApiTreeResponse> & { quality_warnings: string[] }
 > {
+  const userId = options.userId;
   const requestId = options?.requestId;
   const totalStartedAt = Date.now();
   const validationStartedAt = Date.now();
@@ -134,7 +136,7 @@ export async function generateAndPersistTree(
       topic,
       llmTree.summary ?? null,
       llmTree,
-      DEFAULT_USER_ID,
+      userId,
       { reuseConcepts, requestId },
     );
   } catch {
@@ -153,7 +155,7 @@ export async function generateAndPersistTree(
 
   const loadStartedAt = Date.now();
   /** 저장 직후 UI에 줄 필드를 한 번에 모은 번들(노드 행, 진행률, concept 사용 횟수 등) */
-  const bundle = await getLearningTree(treeId, DEFAULT_USER_ID);
+  const bundle = await getLearningTree(treeId, userId);
   if (requestId) {
     logGenerateService("get_learning_tree_complete", {
       requestId,

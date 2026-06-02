@@ -1,5 +1,5 @@
 import { jsonError } from "@/lib/api-errors";
-import { DEFAULT_USER_ID } from "@/db/constants";
+import { requireSupabaseAuthUserId } from "@/lib/auth/supabase-auth";
 import { getLearningTree } from "@/lib/repository/learning-repository";
 import { getDocumentTreeContextForUser } from "@/lib/repository/document-repository";
 import { bundleToApiTreeResponse } from "@/lib/tree/bundle-to-api";
@@ -9,9 +9,14 @@ export const runtime = "nodejs";
 
 type Ctx = { params: Promise<{ treeId: string }> };
 
-export async function GET(_req: Request, ctx: Ctx) {
+export async function GET(req: Request, ctx: Ctx) {
+  const auth = await requireSupabaseAuthUserId(req);
+  if (!auth.ok) {
+    return jsonError(auth.code, auth.message, auth.status);
+  }
+
   const { treeId } = await ctx.params;
-  const bundle = await getLearningTree(treeId, DEFAULT_USER_ID);
+  const bundle = await getLearningTree(treeId, auth.userId);
   if (!bundle) {
     return jsonError(
       "NOT_FOUND",
@@ -19,6 +24,6 @@ export async function GET(_req: Request, ctx: Ctx) {
       404,
     );
   }
-  const documentContext = await getDocumentTreeContextForUser(treeId, DEFAULT_USER_ID);
+  const documentContext = await getDocumentTreeContextForUser(treeId, auth.userId);
   return NextResponse.json(bundleToApiTreeResponse(bundle, { documentContext }));
 }

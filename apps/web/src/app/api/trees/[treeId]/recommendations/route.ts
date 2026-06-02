@@ -1,5 +1,5 @@
 import { jsonError } from "@/lib/api-errors";
-import { DEFAULT_USER_ID } from "@/db/constants";
+import { requireSupabaseAuthUserId } from "@/lib/auth/supabase-auth";
 import { recommendNextNodes } from "@/lib/recommendation/recommend-next";
 import {
   findDocumentContextForNode,
@@ -16,9 +16,14 @@ export const runtime = "nodejs";
 
 type Ctx = { params: Promise<{ treeId: string }> };
 
-export async function GET(_req: Request, ctx: Ctx) {
+export async function GET(req: Request, ctx: Ctx) {
+  const auth = await requireSupabaseAuthUserId(req);
+  if (!auth.ok) {
+    return jsonError(auth.code, auth.message, auth.status);
+  }
+
   const { treeId } = await ctx.params;
-  const bundle = await getLearningTree(treeId, DEFAULT_USER_ID);
+  const bundle = await getLearningTree(treeId, auth.userId);
   if (!bundle) {
     return jsonError(
       "NOT_FOUND",
@@ -27,7 +32,7 @@ export async function GET(_req: Request, ctx: Ctx) {
     );
   }
 
-  const documentContext = await getDocumentTreeContextForUser(treeId, DEFAULT_USER_ID);
+  const documentContext = await getDocumentTreeContextForUser(treeId, auth.userId);
   const recommendedOrderIndex = new Map(
     bundle.tree.treeJson.recommended_order.map((nodeKey, index) => [
       nodeKey,
@@ -74,7 +79,7 @@ export async function GET(_req: Request, ctx: Ctx) {
         .filter((n) => n.conceptId != null)
         .map((n) => [n.id, n.conceptId!]),
     ),
-    conceptProgress: await getConceptProgressMapForUser(DEFAULT_USER_ID),
+    conceptProgress: await getConceptProgressMapForUser(auth.userId),
   });
   return NextResponse.json({ recommended_nodes });
 }
