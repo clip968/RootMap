@@ -630,25 +630,14 @@ function RootMapFlowNode({ data }: NodeProps<Node<RootMapNodeData>>) {
 
 const nodeTypes = { rootmap: RootMapFlowNode };
 
-export function TreePageClient({
-  treeId,
-  initialTree = null,
-}: {
-  treeId: string;
-  initialTree?: ApiTreeResponse | null;
-}) {
+export function TreePageClient({ treeId }: { treeId: string }) {
   const router = useRouter();
-  const initialTreeMatchesRoute = initialTree?.tree_id === treeId;
-  const [tree, setTree] = useState<ApiTreeResponse | null>(() =>
-    initialTreeMatchesRoute ? initialTree : null,
-  );
+  const [tree, setTree] = useState<ApiTreeResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [recommendations, setRecommendations] = useState<ApiRecommendationItem[]>([]);
   const [recoError, setRecoError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(() =>
-    initialTreeMatchesRoute && initialTree ? initialSelectedId(initialTree) : null,
-  );
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [detail, setDetail] = useState<ApiNodeDetailResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -776,11 +765,8 @@ export function TreePageClient({
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // 서버에서 받은 초기 트리가 있으면 첫 화면을 지우지 않고 부가 데이터만 보강한다.
-      if (!initialTreeMatchesRoute) {
-        const ok = await loadTree();
-        if (cancelled || !ok) return;
-      }
+      const ok = await loadTree();
+      if (cancelled || !ok) return;
       if (cancelled) return;
       await loadRecommendations();
       if (cancelled) return;
@@ -789,13 +775,7 @@ export function TreePageClient({
     return () => {
       cancelled = true;
     };
-  }, [
-    initialTreeMatchesRoute,
-    treeId,
-    loadTree,
-    loadRecommendations,
-    loadPhase4Data,
-  ]);
+  }, [treeId, loadTree, loadRecommendations, loadPhase4Data]);
 
   const selectedNode = useMemo(() => {
     if (!tree || !selectedId) return null;

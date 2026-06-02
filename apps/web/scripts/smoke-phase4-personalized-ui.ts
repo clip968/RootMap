@@ -19,6 +19,7 @@ function readSource(relativePath: string): string {
 
 async function main(): Promise<void> {
   const treeClientSource = readSource("src/components/tree-page-client.tsx");
+  const treePageSource = readSource("src/app/tree/[treeId]/page.tsx");
   const typesSource = readSource("src/types/learning.ts");
 
   assert(typesSource.includes("ApiPersonalizedNode"), "types must expose personalized node response");
@@ -46,6 +47,18 @@ async function main(): Promise<void> {
   assert(treeClientSource.includes("latestReport"), "tree UI must render generated report state");
   assert(treeClientSource.includes("confidence_score"), "tree UI must display confidence_score data");
   assert(treeClientSource.includes("recommendation_score"), "tree UI must display recommendation score data");
+  assert(
+    !treePageSource.includes("getLearningTree"),
+    "tree page initial render must not block on learning tree repository lookup",
+  );
+  assert(
+    !treePageSource.includes("getDocumentTreeContextForUser"),
+    "tree page initial render must not block on document context repository lookup",
+  );
+  assert(
+    !treePageSource.includes("bundleToApiTreeResponse"),
+    "tree page initial render must not serialize the full API tree through RSC",
+  );
 
   console.log("Phase 4 task 09 personalized UI smoke passed.");
 }
