@@ -8,8 +8,13 @@
 
 import type { ApiTreeResponse } from "@/lib/tree/bundle-to-api";
 import { GenerationLoadingPanel } from "@/components/generation-loading-panel";
+import {
+  authenticatedFetch,
+  readSupabaseAccessToken,
+  subscribeSupabaseAccessToken,
+} from "@/lib/auth/browser-auth";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 /** 빠른 시연용 클릭 가능한 예시 문구들 */
 const EXAMPLE_TOPICS = [
@@ -116,6 +121,11 @@ function apiErrorMessage(data: unknown, fallback: string): string {
 
 export function StartTopicForm() {
   const router = useRouter();
+  const accessToken = useSyncExternalStore(
+    subscribeSupabaseAccessToken,
+    readSupabaseAccessToken,
+    () => null,
+  );
   const [mode, setMode] = useState<HomeMode>("topic");
   const [topic, setTopic] = useState("");
   const [loading, setLoading] = useState(false);
@@ -153,6 +163,10 @@ export function StartTopicForm() {
 
   const submit = async () => {
     const t = topic.trim();
+    if (!accessToken) {
+      setError("로그인 후 Tree를 생성할 수 있습니다.");
+      return;
+    }
     if (!t) {
       setError("주제를 입력해 주세요.");
       return;
@@ -161,9 +175,8 @@ export function StartTopicForm() {
     setElapsedSeconds(0);
     setLoading(true);
     try {
-      const res = await fetch("/api/trees/generate", {
+      const res = await authenticatedFetch("/api/trees/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ topic: t, reuse_concepts: false }),
       });
       const data = await res.json().catch(() => ({}));
@@ -206,6 +219,10 @@ export function StartTopicForm() {
   };
 
   const uploadDocument = async () => {
+    if (!accessToken) {
+      setDocumentError("로그인 후 문서를 업로드할 수 있습니다.");
+      return;
+    }
     if (!documentFile) {
       setDocumentError("업로드할 문서를 선택해 주세요.");
       return;
@@ -217,9 +234,8 @@ export function StartTopicForm() {
     setDocumentStatus(null);
 
     try {
-      const uploadUrlRes = await fetch("/api/documents/upload-url", {
+      const uploadUrlRes = await authenticatedFetch("/api/documents/upload-url", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           filename: documentFile.name,
           content_type: documentFile.type,
@@ -253,9 +269,8 @@ export function StartTopicForm() {
         return;
       }
 
-      const completeRes = await fetch("/api/documents/complete-upload", {
+      const completeRes = await authenticatedFetch("/api/documents/complete-upload", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(uploadTicket),
       });
       const completeData = await completeRes.json().catch(() => ({}));
@@ -383,15 +398,20 @@ export function StartTopicForm() {
                     {error}
                   </p>
                 ) : null}
+                {!accessToken ? (
+                  <p className="px-2 text-sm text-zinc-500">
+                    로그인 후 Tree를 생성할 수 있습니다.
+                  </p>
+                ) : null}
               </div>
 
               <button
                 type="button"
                 onClick={() => void submit()}
-                disabled={loading}
+                disabled={loading || !accessToken}
                 className="rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60 dark:bg-emerald-600 dark:hover:bg-emerald-500"
               >
-                {loading ? `생성 중 · ${elapsedSeconds}초` : "트리 생성"}
+                {loading ? `생성 중 · ${elapsedSeconds}초` : accessToken ? "트리 생성" : "로그인 필요"}
               </button>
             </div>
           </div>
@@ -444,7 +464,7 @@ export function StartTopicForm() {
                 <input
                   type="file"
                   accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown"
-                  disabled={documentBusy}
+                  disabled={documentBusy || !accessToken}
                   onChange={(e) => selectDocumentFile(e.target.files?.item(0) ?? null)}
                   className="sr-only"
                 />
@@ -516,15 +536,20 @@ export function StartTopicForm() {
                       </p>
                     </div>
                   ) : null}
+                  {!accessToken ? (
+                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-3 py-3 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300">
+                      로그인 후 문서를 업로드할 수 있습니다.
+                    </div>
+                  ) : null}
                 </div>
 
                 <button
                   type="button"
                   onClick={() => void uploadDocument()}
-                  disabled={!documentFile || documentBusy}
+                  disabled={!accessToken || !documentFile || documentBusy}
                   className="rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60 dark:bg-emerald-600 dark:hover:bg-emerald-500"
                 >
-                  {documentBusy ? "업로드 중" : "문서 업로드"}
+                  {documentBusy ? "업로드 중" : accessToken ? "문서 업로드" : "로그인 필요"}
                 </button>
               </div>
             </div>

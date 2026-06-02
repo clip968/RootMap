@@ -13,6 +13,13 @@ import type { ApiTreeResponse } from "@/lib/tree/bundle-to-api";
 import { DetailLearningBlocks } from "@/components/detail-learning-blocks";
 import { GenerationLoadingPanel } from "@/components/generation-loading-panel";
 import { VisualBlockRenderer } from "@/components/visual-blocks/visual-block-renderer";
+import {
+  LOGIN_REQUIRED_MESSAGE,
+  authHeaders,
+  authenticatedFetch,
+  readSupabaseAccessToken,
+  subscribeSupabaseAccessToken,
+} from "@/lib/auth/browser-auth";
 import { buildDeepDiveGenerationTopic } from "@/lib/tree/deep-dive";
 import type {
   ApiNodeDetailExtrasResponse,
@@ -141,8 +148,6 @@ type DetailJobPayload =
   | { status: "failed"; job_id: string; error_message?: string };
 const FLOW_COMMUNITY_NODE_GAP = 210;
 const FLOW_COMMUNITY_DEPTH_OFFSET = 28;
-const PHASE4_AUTH_TOKEN_STORAGE_KEY = "rootmap_supabase_access_token";
-const PHASE4_AUTH_TOKEN_EVENT = "rootmap-phase4-auth-token-changed";
 
 type FocusMode = (typeof FOCUS_OPTIONS)[number]["id"];
 type ViewMode = (typeof VIEW_OPTIONS)[number]["id"];
@@ -175,20 +180,6 @@ interface UiRecommendationItem {
   recommendation_log_id?: string;
 }
 
-function readPhase4AuthToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(PHASE4_AUTH_TOKEN_STORAGE_KEY)?.trim() || null;
-}
-
-function subscribePhase4AuthToken(callback: () => void): () => void {
-  window.addEventListener("storage", callback);
-  window.addEventListener(PHASE4_AUTH_TOKEN_EVENT, callback);
-  return () => {
-    window.removeEventListener("storage", callback);
-    window.removeEventListener(PHASE4_AUTH_TOKEN_EVENT, callback);
-  };
-}
-
 function subscribeClientReady(callback: () => void): () => void {
   if (typeof window === "undefined") return () => {};
   const frame = window.requestAnimationFrame(callback);
@@ -201,13 +192,6 @@ function readClientReady(): boolean {
 
 function readServerClientReady(): boolean {
   return false;
-}
-
-function phase4AuthHeaders(token: string): HeadersInit {
-  return {
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",
-  };
 }
 
 function recommendationReason(item: ApiPersonalizedRecommendationItem): string {
@@ -661,8 +645,8 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   const [enabledTypes, setEnabledTypes] = useState<NodeType[]>(SECTION_ORDER);
   const [progressBusy, setProgressBusy] = useState<string | null>(null);
   const phase4AuthToken = useSyncExternalStore(
-    subscribePhase4AuthToken,
-    readPhase4AuthToken,
+    subscribeSupabaseAccessToken,
+    readSupabaseAccessToken,
     () => null,
   );
   const [personalizedNodes, setPersonalizedNodes] = useState<ApiPersonalizedNode[]>([]);
@@ -684,35 +668,50 @@ export function TreePageClient({ treeId }: { treeId: string }) {
 
   const loadTree = useCallback(async (): Promise<boolean> => {
     setLoadError(null);
-    const res = await fetch(`/api/trees/${treeId}`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setLoadError(data?.error?.message ?? "트리를 불러오지 못했습니다.");
+    try {
+      const res = await authenticatedFetch(`/api/trees/${treeId}`, {}, { contentType: null });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setLoadError(data?.error?.message ?? "트리를 불러오지 못했습니다.");
+        setTree(null);
+        return false;
+      }
+      const nextTree = data as ApiTreeResponse;
+      setTree(nextTree);
+      setSelectedId((current) =>
+        current && nextTree.nodes.some((node) => node.id === current)
+          ? current
+          : initialSelectedId(nextTree),
+      );
+      return true;
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : LOGIN_REQUIRED_MESSAGE);
       setTree(null);
       return false;
     }
-    const nextTree = data as ApiTreeResponse;
-    setTree(nextTree);
-    setSelectedId((current) =>
-      current && nextTree.nodes.some((node) => node.id === current)
-        ? current
-        : initialSelectedId(nextTree),
-    );
-    return true;
   }, [treeId]);
 
   const loadRecommendations = useCallback(async () => {
     setRecoError(null);
-    const res = await fetch(`/api/trees/${treeId}/recommendations`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setRecoError(data?.error?.message ?? "추천을 불러오지 못했습니다.");
+    try {
+      const res = await authenticatedFetch(
+        `/api/trees/${treeId}/recommendations`,
+        {},
+        { contentType: null },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setRecoError(data?.error?.message ?? "추천을 불러오지 못했습니다.");
+        setRecommendations([]);
+        return;
+      }
+      setRecommendations(
+        (data as { recommended_nodes: ApiRecommendationItem[] }).recommended_nodes ?? [],
+      );
+    } catch (error) {
+      setRecoError(error instanceof Error ? error.message : LOGIN_REQUIRED_MESSAGE);
       setRecommendations([]);
-      return;
     }
-    setRecommendations(
-      (data as { recommended_nodes: ApiRecommendationItem[] }).recommended_nodes ?? [],
-    );
   }, [treeId]);
 
   const loadPhase4Data = useCallback(async () => {
@@ -724,7 +723,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
       return;
     }
 
-    const headers = phase4AuthHeaders(phase4AuthToken);
+    const headers = authHeaders(phase4AuthToken);
     setPhase4Error(null);
     const [personalizedRes, recommendationsRes, reviewRes] = await Promise.all([
       fetch(`/api/trees/${treeId}/personalized`, { headers }),
@@ -774,7 +773,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [treeId, loadTree, loadRecommendations, loadPhase4Data]);
+  }, [treeId, phase4AuthToken, loadTree, loadRecommendations, loadPhase4Data]);
 
   const selectedNode = useMemo(() => {
     if (!tree || !selectedId) return null;
@@ -883,9 +882,8 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     async (nodeId: string, status: ProgressStatus) => {
       setProgressBusy(nodeId);
       try {
-        const res = await fetch(`/api/nodes/${nodeId}/progress`, {
+        const res = await authenticatedFetch(`/api/nodes/${nodeId}/progress`, {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ status }),
         });
         const data = await res.json().catch(() => ({}));
@@ -905,7 +903,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
           /** Phase 4 mastery API는 Supabase Auth 사용자 기준이므로 토큰이 있을 때만 자기 평가를 함께 기록한다. */
           const masteryRes = await fetch(`/api/concepts/${changedNode.concept_id}/mastery`, {
             method: "PATCH",
-            headers: phase4AuthHeaders(phase4AuthToken),
+            headers: authHeaders(phase4AuthToken),
             body: JSON.stringify({
               status,
               source: "self_assessment",
@@ -919,6 +917,10 @@ export function TreePageClient({ treeId }: { treeId: string }) {
         }
         await loadRecommendations();
         await loadPhase4Data();
+      } catch (error) {
+        setPhase4Error(
+          error instanceof Error ? error.message : "이해 정도를 저장하지 못했습니다.",
+        );
       } finally {
         setProgressBusy(null);
       }
@@ -978,9 +980,10 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     setDetailExtrasLoading(true);
     setDetailExtrasError(null);
     try {
-      const res = await fetch(
+      const res = await authenticatedFetch(
         `/api/nodes/${nodeId}/detail/extras?tree_id=${encodeURIComponent(treeId)}`,
         { signal: controller.signal },
+        { contentType: null },
       );
       const data = await res.json().catch(() => ({}));
       if (controller.signal.aborted || detailRequestSeqRef.current !== requestSeq) return;
@@ -1046,10 +1049,10 @@ export function TreePageClient({ treeId }: { treeId: string }) {
       const controller = new AbortController();
       detailJobAbortControllerRef.current = controller;
       try {
-        const res = await fetch(`/api/node-detail-jobs/${jobId}`, {
+        const res = await authenticatedFetch(`/api/node-detail-jobs/${jobId}`, {
           signal: controller.signal,
           headers: { "Cache-Control": "no-store" },
-        });
+        }, { contentType: null });
         const data = await res.json().catch(() => ({})) as Partial<DetailJobPayload>;
         if (controller.signal.aborted || detailRequestSeqRef.current !== requestSeq) return;
         if (!res.ok) {
@@ -1117,10 +1120,9 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     setDetailJobTimedOut(false);
     setDetail(null);
     try {
-      const res = await fetch(`/api/nodes/${nodeId}/detail`, {
+      const res = await authenticatedFetch(`/api/nodes/${nodeId}/detail`, {
         method: "POST",
         signal: controller.signal,
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tree_id: treeId }),
       });
       const data = await res.json().catch(() => ({}));
@@ -1162,7 +1164,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
       if (!phase4AuthToken || !activeSessionId) return;
       const res = await fetch("/api/events", {
         method: "POST",
-        headers: phase4AuthHeaders(phase4AuthToken),
+        headers: authHeaders(phase4AuthToken),
         body: JSON.stringify({
           session_id: activeSessionId,
           tree_id: treeId,
@@ -1202,7 +1204,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
       if (phase4AuthToken && item.recommendation_log_id) {
         const res = await fetch("/api/recommendations/click", {
           method: "POST",
-          headers: phase4AuthHeaders(phase4AuthToken),
+          headers: authHeaders(phase4AuthToken),
           body: JSON.stringify({
             recommendation_log_id: item.recommendation_log_id,
           }),
@@ -1253,9 +1255,8 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     setRegenLoading(true);
     setRegenError(null);
     try {
-      const res = await fetch("/api/trees/generate", {
+      const res = await authenticatedFetch("/api/trees/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           topic: tree.topic,
           reuse_concepts: false,
@@ -1268,6 +1269,8 @@ export function TreePageClient({ treeId }: { treeId: string }) {
       }
       const nextId = (data as { tree_id?: string }).tree_id;
       if (nextId) router.push(`/tree/${nextId}`);
+    } catch (error) {
+      setRegenError(error instanceof Error ? error.message : LOGIN_REQUIRED_MESSAGE);
     } finally {
       setRegenLoading(false);
     }
@@ -1284,9 +1287,8 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     setRegenLoading(true);
     setRegenError(null);
     try {
-      const res = await fetch("/api/trees/generate", {
+      const res = await authenticatedFetch("/api/trees/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           topic,
           reuse_concepts: false,
@@ -1299,6 +1301,8 @@ export function TreePageClient({ treeId }: { treeId: string }) {
       }
       const nextId = (data as { tree_id?: string }).tree_id;
       if (nextId) router.push(`/tree/${nextId}`);
+    } catch (error) {
+      setRegenError(error instanceof Error ? error.message : LOGIN_REQUIRED_MESSAGE);
     } finally {
       setRegenLoading(false);
     }
@@ -1312,7 +1316,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     try {
       const res = await fetch("/api/sessions/start", {
         method: "POST",
-        headers: phase4AuthHeaders(phase4AuthToken),
+        headers: authHeaders(phase4AuthToken),
         body: JSON.stringify({
           tree_id: tree.tree_id,
           document_id: tree.document_id ?? null,
@@ -1337,7 +1341,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     try {
       const res = await fetch("/api/reports/generate", {
         method: "POST",
-        headers: phase4AuthHeaders(phase4AuthToken),
+        headers: authHeaders(phase4AuthToken),
         body: JSON.stringify({
           report_type: "session",
           session_id: activeSessionId,
@@ -1361,7 +1365,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
     try {
       const res = await fetch(`/api/sessions/${activeSessionId}/end`, {
         method: "POST",
-        headers: phase4AuthHeaders(phase4AuthToken),
+        headers: authHeaders(phase4AuthToken),
         body: JSON.stringify({ generate_report: false }),
       });
       const data = await res.json().catch(() => ({}));

@@ -4,11 +4,16 @@
  */
 "use client";
 
+import {
+  authenticatedFetch,
+  readSupabaseAccessToken,
+  subscribeSupabaseAccessToken,
+} from "@/lib/auth/browser-auth";
 import type { ApiTreeHistoryItem } from "@/types/learning";
 import { Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 interface AppShellProps {
   /** `layout.tsx`에서 넘기는 자식 — 보통 각 경로의 `page.tsx` 전체 */
@@ -34,6 +39,11 @@ export function AppShell({ children }: AppShellProps) {
   const [history, setHistory] = useState<ApiTreeHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const accessToken = useSyncExternalStore(
+    subscribeSupabaseAccessToken,
+    readSupabaseAccessToken,
+    () => null,
+  );
 
   /**
    * 히스토리 목록을 서버에서 다시 가져온다.
@@ -43,7 +53,9 @@ export function AppShell({ children }: AppShellProps) {
   useEffect(() => {
     let cancelled = false;
 
-    void fetch("/api/trees")
+    if (!accessToken) return;
+
+    void authenticatedFetch("/api/trees", {}, { contentType: null })
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -72,7 +84,7 @@ export function AppShell({ children }: AppShellProps) {
     return () => {
       cancelled = true;
     };
-  }, [pathname]);
+  }, [accessToken, pathname]);
 
   return (
     <div className="flex min-h-dvh bg-zinc-50 text-zinc-950 dark:bg-black dark:text-zinc-50">
@@ -116,7 +128,11 @@ export function AppShell({ children }: AppShellProps) {
             <p className="px-2 pb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
               History
             </p>
-            {historyLoading ? (
+            {!accessToken ? (
+              <p className="px-2 py-3 text-sm leading-relaxed text-zinc-500">
+                로그인 후 생성한 Tree를 볼 수 있습니다.
+              </p>
+            ) : historyLoading ? (
               <p className="px-2 py-3 text-sm text-zinc-500">불러오는 중…</p>
             ) : historyError ? (
               <p className="px-2 py-3 text-sm text-red-600 dark:text-red-400">

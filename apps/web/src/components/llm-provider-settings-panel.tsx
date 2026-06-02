@@ -1,23 +1,28 @@
 "use client";
 
 import {
+  authenticatedFetch,
+  readSupabaseAccessToken,
+  subscribeSupabaseAccessToken,
+} from "@/lib/auth/browser-auth";
+import {
   PlugZap,
   RefreshCcw,
   Save,
   Settings,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { FormEvent } from "react";
 
 type ProviderType = "openrouter" | "openai_compatible" | "crofai";
 type JsonMode = "auto" | "enabled" | "disabled";
 
 interface ProviderStatus {
-  source: "database" | "env";
-  providerType: ProviderType;
+  source: "database" | "env" | "none";
+  providerType: ProviderType | null;
   name: string;
-  baseUrl: string;
+  baseUrl: string | null;
   model: string | null;
   jsonMode: JsonMode;
   isActive: boolean;
@@ -68,7 +73,11 @@ function providerLabel(type: ProviderType): string {
 }
 
 async function fetchProviderStatus(): Promise<ProviderStatus> {
-  const res = await fetch("/api/settings/llm-provider");
+  const res = await authenticatedFetch(
+    "/api/settings/llm-provider",
+    {},
+    { contentType: null },
+  );
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(apiErrorMessage(data, "LLM provider 설정을 불러오지 못했습니다."));
@@ -77,6 +86,11 @@ async function fetchProviderStatus(): Promise<ProviderStatus> {
 }
 
 export function LlmProviderSettingsPanel() {
+  const accessToken = useSyncExternalStore(
+    subscribeSupabaseAccessToken,
+    readSupabaseAccessToken,
+    () => null,
+  );
   const [status, setStatus] = useState<ProviderStatus | null>(null);
   const [providerType, setProviderType] = useState<ProviderType>("openrouter");
   const [baseUrl, setBaseUrl] = useState("https://openrouter.ai/api/v1");
@@ -104,8 +118,8 @@ export function LlmProviderSettingsPanel() {
     try {
       const next = await fetchProviderStatus();
       setStatus(next);
-      setProviderType(next.providerType);
-      setBaseUrl(next.baseUrl);
+      setProviderType(next.providerType ?? "openrouter");
+      setBaseUrl(next.baseUrl ?? "https://openrouter.ai/api/v1");
       setModel(next.model ?? "");
       setJsonMode(next.jsonMode);
       setApiKey("");
@@ -121,12 +135,13 @@ export function LlmProviderSettingsPanel() {
 
   useEffect(() => {
     let cancelled = false;
+    if (!accessToken) return;
     fetchProviderStatus()
       .then((next) => {
         if (cancelled) return;
         setStatus(next);
-        setProviderType(next.providerType);
-        setBaseUrl(next.baseUrl);
+        setProviderType(next.providerType ?? "openrouter");
+        setBaseUrl(next.baseUrl ?? "https://openrouter.ai/api/v1");
         setModel(next.model ?? "");
         setJsonMode(next.jsonMode);
         setApiKey("");
@@ -144,7 +159,24 @@ export function LlmProviderSettingsPanel() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [accessToken]);
+
+  if (!accessToken) {
+    return (
+      <section className="w-full max-w-4xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-6">
+        <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+          <Settings size={16} aria-hidden="true" />
+          <span>LLM Provider</span>
+        </div>
+        <h2 className="mt-2 text-2xl font-semibold text-zinc-950 dark:text-zinc-50">
+          Provider 설정
+        </h2>
+        <p className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300">
+          로그인 후 계정의 LLM API key를 설정할 수 있습니다.
+        </p>
+      </section>
+    );
+  }
 
   function selectProvider(nextType: ProviderType) {
     const nextProvider = PROVIDERS.find((item) => item.type === nextType);
@@ -162,9 +194,8 @@ export function LlmProviderSettingsPanel() {
     setMessage(null);
     setTestResult(null);
     try {
-      const res = await fetch("/api/settings/llm-provider", {
+      const res = await authenticatedFetch("/api/settings/llm-provider", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           providerType,
           baseUrl,
@@ -180,8 +211,8 @@ export function LlmProviderSettingsPanel() {
       }
       const next = data as ProviderStatus;
       setStatus(next);
-      setProviderType(next.providerType);
-      setBaseUrl(next.baseUrl);
+      setProviderType(next.providerType ?? "openrouter");
+      setBaseUrl(next.baseUrl ?? "https://openrouter.ai/api/v1");
       setModel(next.model ?? "");
       setJsonMode(next.jsonMode);
       setApiKey("");
@@ -202,9 +233,8 @@ export function LlmProviderSettingsPanel() {
     setMessage(null);
     setTestResult(null);
     try {
-      const res = await fetch("/api/settings/llm-provider/test", {
+      const res = await authenticatedFetch("/api/settings/llm-provider/test", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           providerType,
           baseUrl,
@@ -240,20 +270,24 @@ export function LlmProviderSettingsPanel() {
     setMessage(null);
     setTestResult(null);
     try {
-      const res = await fetch("/api/settings/llm-provider", { method: "DELETE" });
+      const res = await authenticatedFetch(
+        "/api/settings/llm-provider",
+        { method: "DELETE" },
+        { contentType: null },
+      );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(apiErrorMessage(data, "저장된 설정을 삭제하지 못했습니다."));
       }
       const next = data as ProviderStatus;
       setStatus(next);
-      setProviderType(next.providerType);
-      setBaseUrl(next.baseUrl);
+      setProviderType(next.providerType ?? "openrouter");
+      setBaseUrl(next.baseUrl ?? "https://openrouter.ai/api/v1");
       setModel(next.model ?? "");
       setJsonMode(next.jsonMode);
       setApiKey("");
       setReplaceApiKey(false);
-      setMessage("env fallback으로 전환되었습니다.");
+      setMessage("저장된 설정이 삭제되었습니다.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "저장된 설정을 삭제하지 못했습니다.");
     } finally {
@@ -402,7 +436,13 @@ export function LlmProviderSettingsPanel() {
               Active source
             </p>
             <p className="mt-2 text-lg font-semibold text-zinc-950 dark:text-zinc-50">
-              {loading ? "확인 중" : status?.source === "database" ? "DB 설정" : "env fallback"}
+              {loading
+                ? "확인 중"
+                : status?.source === "database"
+                  ? "DB 설정"
+                  : status?.source === "none"
+                    ? "미설정"
+                    : "env fallback"}
             </p>
             <dl className="mt-4 space-y-3 text-sm">
               <div>
