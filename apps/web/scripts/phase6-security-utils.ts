@@ -12,6 +12,22 @@ export const PHASE4_OWNER_TABLES = [
 ] as const;
 
 export type Phase4OwnerTable = (typeof PHASE4_OWNER_TABLES)[number];
+
+/**
+ * Phase 11 task 07: legacy user-owned tables that store user_id as text.
+ * These predate Supabase Auth UUID columns, so their owner policy casts
+ * auth.uid() to text. llm_provider_settings gained its user_id in 0008.
+ */
+export const PHASE11_LEGACY_OWNER_TABLES = [
+  "learning_trees",
+  "documents",
+  "user_node_progress",
+  "user_concept_progress",
+  "llm_provider_settings",
+] as const;
+
+export type Phase11LegacyOwnerTable = (typeof PHASE11_LEGACY_OWNER_TABLES)[number];
+
 export type SecurityTarget = "local" | "staging" | "production";
 
 export interface SecurityConfig {
@@ -173,6 +189,41 @@ export function assertPhase4MigrationSecurityShape(sql: string): CheckResult[] {
       label: `${table}:user-index`,
       ok: sql.includes(`"${table}`) && sql.includes(`"user_id"`),
       detail: "Table must carry user_id so route filters and RLS compare the same owner column.",
+    });
+  }
+  return checks;
+}
+
+export function getCombinedPhase11LegacyRlsSql(): string {
+  return [
+    "drizzle/0008_llm_provider_settings_user_id.sql",
+    "drizzle/0009_phase11_legacy_owner_rls.sql",
+  ]
+    .map(readText)
+    .join("\n");
+}
+
+/**
+ * Phase 11 task 07: legacy owner policies must target the authenticated role and
+ * compare auth.uid() cast to text against the text user_id column. The (select ...)
+ * wrapper is allowed (and preferred) so Postgres evaluates auth.uid() once.
+ */
+export function assertPhase11LegacyOwnerRlsShape(sql: string): CheckResult[] {
+  const checks: CheckResult[] = [];
+  for (const table of PHASE11_LEGACY_OWNER_TABLES) {
+    checks.push({
+      label: `${table}:rls`,
+      ok: sql.includes(`alter table "${table}" enable row level security`),
+      detail: "RLS must be enabled for the legacy user-owned table.",
+    });
+    checks.push({
+      label: `${table}:owner-policy`,
+      ok:
+        sql.includes(`"${table}_owner_all"`) &&
+        sql.includes("for all to authenticated") &&
+        /using\s*\(\s*\(\s*select\s+auth\.uid\(\)\s*\)\s*::text\s*=\s*user_id\s*\)/i.test(sql) &&
+        /with check\s*\(\s*\(\s*select\s+auth\.uid\(\)\s*\)\s*::text\s*=\s*user_id\s*\)/i.test(sql),
+      detail: "Owner policy must restrict authenticated users via auth.uid()::text = user_id.",
     });
   }
   return checks;

@@ -1,7 +1,9 @@
 import {
   assertAllChecks,
   assertNoSqliteDatabaseUrl,
+  assertPhase11LegacyOwnerRlsShape,
   assertPhase4MigrationSecurityShape,
+  getCombinedPhase11LegacyRlsSql,
   getCombinedPhase4MigrationSql,
   getSecurityConfig,
   hasLiveSupabaseAuthConfig,
@@ -15,6 +17,7 @@ async function main(): Promise<void> {
   const checks = [
     assertNoSqliteDatabaseUrl(config),
     ...assertPhase4MigrationSecurityShape(getCombinedPhase4MigrationSql()),
+    ...assertPhase11LegacyOwnerRlsShape(getCombinedPhase11LegacyRlsSql()),
     {
       label: "supabase-auth-env",
       ok: hasLiveSupabaseAuthConfig(config),
@@ -33,7 +36,7 @@ async function main(): Promise<void> {
     console.info("[phase6:security-preflight] Live Supabase checks are not executed in this environment.");
   }
 
-  console.info("Phase 6 task 00 local/staging security preflight passed.");
+  console.info("Phase 6 task 00 + Phase 11 task 07 local/staging security preflight passed.");
 }
 
 void main().catch((error) => {
