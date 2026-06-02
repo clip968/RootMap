@@ -1,10 +1,10 @@
 import {
   assertAllChecks,
   assertNoSqliteDatabaseUrl,
+  assertPhase11LegacyOwnerRlsShape,
   assertPhase4MigrationSecurityShape,
-  assertPhase11OwnerRlsMigrationShape,
+  getCombinedPhase11LegacyRlsSql,
   getCombinedPhase4MigrationSql,
-  getPhase11OwnerRlsMigrationSql,
   getSecurityConfig,
   hasLiveSupabaseAuthConfig,
   printChecks,
@@ -17,9 +17,7 @@ async function main(): Promise<void> {
   const checks = [
     assertNoSqliteDatabaseUrl(config),
     ...assertPhase4MigrationSecurityShape(getCombinedPhase4MigrationSql()),
-    // Phase 11 keeps legacy owner columns as text, so the preflight checks the
-    // exact auth.uid()::text policy shape before any live RLS smoke is trusted.
-    ...assertPhase11OwnerRlsMigrationShape(getPhase11OwnerRlsMigrationSql()),
+    ...assertPhase11LegacyOwnerRlsShape(getCombinedPhase11LegacyRlsSql()),
     {
       label: "supabase-auth-env",
       ok: hasLiveSupabaseAuthConfig(config),
@@ -38,7 +36,7 @@ async function main(): Promise<void> {
     console.info("[phase6:security-preflight] Live Supabase checks are not executed in this environment.");
   }
 
-  console.info("Phase 6 task 00 local/staging security preflight passed.");
+  console.info("Phase 6 task 00 + Phase 11 task 07 local/staging security preflight passed.");
 }
 
 void main().catch((error) => {

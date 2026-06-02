@@ -3,11 +3,18 @@ import {
   auditPostgresRole,
   getSecurityConfig,
   hasLiveSupabaseAuthConfig,
-  type Phase11TextOwnerTable,
   supabaseFetchJson,
+  type Phase11LegacyOwnerTable,
   type Phase4OwnerTable,
   type SecurityConfig,
 } from "./phase6-security-utils";
+
+/** Tables seeded only to satisfy foreign keys; never part of owner A/B checks. */
+type SupportTable = "concepts" | "learning_nodes";
+/** Every table this smoke can insert into. */
+type SeedTable = Phase4OwnerTable | Phase11LegacyOwnerTable | SupportTable;
+/** Tables whose rows we run cross-user read/update checks against. */
+type OwnerCheckTable = Phase4OwnerTable | Phase11LegacyOwnerTable;
 
 interface CreatedUser {
   id: string;
@@ -15,28 +22,27 @@ interface CreatedUser {
   password: string;
 }
 
-type OwnerTable = Phase4OwnerTable | Phase11TextOwnerTable;
-type SeedTable = OwnerTable | "concepts" | "learning_nodes";
-
 interface InsertedRow {
   table: SeedTable;
   id: string;
+  /** True for user-owned rows that must block cross-user access. */
+  ownerCheck: boolean;
   patch: Record<string, unknown>;
-  checkOwner: boolean;
 }
 
-const PATCH_BY_TABLE: Record<OwnerTable, Record<string, unknown>> = {
+const PATCH_BY_TABLE: Record<OwnerCheckTable, Record<string, unknown>> = {
   learning_sessions: { summary: { phase6_mutation_attempt: true } },
   learning_events: { event_payload: { phase6_mutation_attempt: true } },
   user_concept_mastery: { confidence_score: 0.99 },
   quiz_attempts: { feedback: "phase6 forbidden update attempt" },
   recommendation_logs: { clicked: true },
   learning_reports: { title: "phase6 forbidden update attempt" },
-  learning_trees: { summary: "phase6 forbidden update attempt" },
-  documents: { processing_status: "phase6_forbidden_update_attempt" },
-  user_node_progress: { status: "completed" },
-  user_concept_progress: { status: "learning" },
-  llm_provider_settings: { name: "phase6 forbidden update attempt" },
+  // Phase 11 legacy text user_id tables.
+  learning_trees: { summary: "phase11 forbidden update attempt" },
+  documents: { title: "phase11 forbidden update attempt" },
+  user_node_progress: { status: "mastered" },
+  user_concept_progress: { status: "mastered" },
+  llm_provider_settings: { name: "phase11 forbidden update attempt" },
 };
 
 function requireLiveConfig(config: SecurityConfig): void {
@@ -75,11 +81,14 @@ async function signIn(config: SecurityConfig, user: CreatedUser): Promise<string
   return res.data.access_token;
 }
 
+function isOwnerCheckTable(table: SeedTable): table is OwnerCheckTable {
+  return table !== "concepts" && table !== "learning_nodes";
+}
+
 async function insertRow(
   config: SecurityConfig,
   table: SeedTable,
   body: Record<string, unknown>,
-  checkOwner = true,
 ): Promise<InsertedRow> {
   assert(config.serviceRoleKey, "service role key missing");
   const res = await supabaseFetchJson<Array<{ id: string }>>(config, `/rest/v1/${table}`, {
@@ -89,12 +98,8 @@ async function insertRow(
     body: JSON.stringify(body),
   });
   assert(res.ok && Array.isArray(res.data) && res.data[0]?.id, `failed to seed ${table}: ${res.status} ${res.text}`);
-  return {
-    table,
-    id: res.data[0].id,
-    patch: checkOwner ? PATCH_BY_TABLE[table as OwnerTable] : {},
-    checkOwner,
-  };
+  const ownerCheck = isOwnerCheckTable(table);
+  return { table, id: res.data[0].id, ownerCheck, patch: ownerCheck ? PATCH_BY_TABLE[table] : {} };
 }
 
 async function seedRowsForUserB(
@@ -115,7 +120,7 @@ async function seedRowsForUserB(
     metadata: { phase6_run_id: runId },
     created_at: now,
     updated_at: now,
-  }, false);
+  });
   rows.push(concept);
   rows.push(await insertRow(config, "learning_sessions", { user_id: userB.id, summary: { phase6_run_id: runId } }));
   rows.push(await insertRow(config, "learning_events", { user_id: userB.id, event_type: "phase6_rls_seed", event_payload: { phase6_run_id: runId } }));
@@ -124,35 +129,36 @@ async function seedRowsForUserB(
   rows.push(await insertRow(config, "recommendation_logs", { user_id: userB.id, score: 1, reasons: [{ phase6_run_id: runId }] }));
   rows.push(await insertRow(config, "learning_reports", { user_id: userB.id, report_type: "session", title: `phase6 ${runId}`, report_json: { phase6_run_id: runId } }));
 
-  // Legacy tables use text user_id values, so the seed mirrors the production
-  // Phase 11 contract by storing the Supabase Auth UUID string directly.
+  // Phase 11 task 07: legacy text user_id owner tables.
+  // learning_trees is both an owner-checked row and the FK parent for the
+  // learning_node / user_node_progress rows seeded below.
   const tree = await insertRow(config, "learning_trees", {
     user_id: userB.id,
-    topic: `phase6 ${runId}`,
-    summary: `phase6 ${runId}`,
-    tree_json: { topic: `phase6 ${runId}`, nodes: [] },
+    topic: `phase11 ${runId}`,
+    tree_json: { phase11_run_id: runId, nodes: [] },
     created_at: now,
     updated_at: now,
   });
   rows.push(tree);
+  // Support row (no user_id, not owner-checked); satisfies user_node_progress.node_id.
   const node = await insertRow(config, "learning_nodes", {
     tree_id: tree.id,
-    node_key: `phase6-${runId}-node`,
-    title: `Phase6 ${runId} Node`,
+    node_key: `phase11-${runId}-root`,
+    title: `Phase11 ${runId} node`,
     type: "concept",
     prerequisites: [],
     children: [],
     created_at: now,
     updated_at: now,
-  }, false);
+  });
   rows.push(node);
   rows.push(await insertRow(config, "documents", {
     user_id: userB.id,
-    title: `phase6 ${runId}`,
-    original_filename: `phase6-${runId}.pdf`,
-    file_type: "application/pdf",
+    original_filename: `phase11-${runId}.pdf`,
+    file_type: "pdf",
     file_size_bytes: 1,
-    metadata: { phase6_run_id: runId },
+    processing_status: "uploaded",
+    metadata: { phase11_run_id: runId },
     created_at: now,
     updated_at: now,
   }));
@@ -171,22 +177,21 @@ async function seedRowsForUserB(
   }));
   rows.push(await insertRow(config, "llm_provider_settings", {
     user_id: userB.id,
-    provider_type: "openai_compatible",
-    name: `phase6 ${runId}`,
-    base_url: "https://example.invalid/v1",
-    model: "phase6-smoke",
+    provider_type: "openai",
+    name: `phase11 ${runId}`,
+    base_url: "https://example.invalid",
     json_mode: "auto",
-    api_key_encrypted: "phase6-encrypted",
-    api_key_iv: "phase6-iv",
-    api_key_tag: "phase6-tag",
-    api_key_hint: "phase6",
-    is_active: true,
+    api_key_encrypted: "phase11-seed",
+    api_key_iv: "phase11-seed",
+    api_key_tag: "phase11-seed",
+    api_key_hint: "se...ed",
+    is_active: false,
     created_at: now,
     updated_at: now,
   }));
 }
 
-async function selectWithUserToken(config: SecurityConfig, table: OwnerTable, id: string, token: string): Promise<unknown[]> {
+async function selectWithUserToken(config: SecurityConfig, table: SeedTable, id: string, token: string): Promise<unknown[]> {
   assert(config.anonKey, "anon key missing");
   const res = await supabaseFetchJson<unknown[]>(config, `/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`, {
     method: "GET",
@@ -199,7 +204,7 @@ async function selectWithUserToken(config: SecurityConfig, table: OwnerTable, id
 }
 
 async function updateWithUserToken(config: SecurityConfig, row: InsertedRow, token: string): Promise<unknown[]> {
-  assert(row.checkOwner, `${row.table} rows are not part of owner RLS negative checks`);
+  assert(row.ownerCheck, "support rows are not part of owner RLS negative checks");
   assert(config.anonKey, "anon key missing");
   const res = await supabaseFetchJson<unknown[]>(config, `/rest/v1/${row.table}?id=eq.${encodeURIComponent(row.id)}`, {
     method: "PATCH",
@@ -215,7 +220,7 @@ async function updateWithUserToken(config: SecurityConfig, row: InsertedRow, tok
 }
 
 async function deleteWithUserToken(config: SecurityConfig, row: InsertedRow, token: string): Promise<unknown[]> {
-  assert(row.checkOwner, `${row.table} rows are not part of owner RLS negative checks`);
+  assert(row.ownerCheck, "support rows are not part of owner RLS negative checks");
   assert(config.anonKey, "anon key missing");
   const res = await supabaseFetchJson<unknown[]>(config, `/rest/v1/${row.table}?id=eq.${encodeURIComponent(row.id)}`, {
     method: "DELETE",
@@ -269,12 +274,11 @@ async function main(): Promise<void> {
     await seedRowsForUserB(config, userB, runId, rows);
 
     for (const row of rows) {
-      if (!row.checkOwner) continue;
-      const ownerTable = row.table as OwnerTable;
-      const positiveRows = await selectWithUserToken(config, ownerTable, row.id, userBToken);
+      if (!row.ownerCheck) continue;
+      const positiveRows = await selectWithUserToken(config, row.table, row.id, userBToken);
       assert(positiveRows.length === 1, `${row.table} positive owner select should return exactly one row`);
 
-      const crossReadRows = await selectWithUserToken(config, ownerTable, row.id, userAToken);
+      const crossReadRows = await selectWithUserToken(config, row.table, row.id, userAToken);
       assert(crossReadRows.length === 0, `${row.table} cross-user select must return zero rows`);
 
       const crossUpdateRows = await updateWithUserToken(config, row, userAToken);
@@ -283,12 +287,13 @@ async function main(): Promise<void> {
       const crossDeleteRows = await deleteWithUserToken(config, row, userAToken);
       assert(crossDeleteRows.length === 0, `${row.table} cross-user delete must return zero rows`);
 
-      const ownerRowsAfterDelete = await selectWithUserToken(config, ownerTable, row.id, userBToken);
-      assert(ownerRowsAfterDelete.length === 1, `${row.table} owner row must survive cross-user delete attempt`);
-      console.info(`[OK] ${row.table} blocks cross-user read/update/delete and owner row survives`);
+      // The owner's row must survive the blocked cross-user delete.
+      const survivingRows = await selectWithUserToken(config, row.table, row.id, userBToken);
+      assert(survivingRows.length === 1, `${row.table} owner row must survive a blocked cross-user delete`);
+      console.info(`[OK] ${row.table} blocks cross-user read/update/delete`);
     }
 
-    console.info("Phase 6 task 01 Supabase Auth/RLS negative smoke passed.");
+    console.info("Phase 6 task 01 + Phase 11 task 07 Supabase Auth/RLS negative smoke passed.");
   } finally {
     await cleanup(config, rows, users);
   }
