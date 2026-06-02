@@ -95,6 +95,7 @@ export async function generateDocumentNodeDetail(
           role: "user",
           content: buildDocumentNodeDetailUserMessage({
             documentTitle,
+            nodeId,
             conceptTitle,
             sourceType,
             evidenceText,

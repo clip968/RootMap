@@ -308,6 +308,7 @@ async function runLlmEvalTests(filter: Set<string>): Promise<void> {
 
     const detailMessage = prompts.buildDocumentNodeDetailUserMessage({
       documentTitle: "Transformer Notes",
+      nodeId: "attention-node",
       conceptTitle: "Attention",
       sourceType: "explicit",
       evidenceText: malicious,

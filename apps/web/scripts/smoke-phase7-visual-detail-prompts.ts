@@ -13,6 +13,7 @@ import {
   DOCUMENT_NODE_DETAIL_SYSTEM_PROMPT,
   NODE_DETAIL_VISUAL_SYSTEM_PROMPT,
   NODE_DETAIL_SYSTEM_BASE,
+  buildDocumentNodeDetailUserMessage,
   buildNodeDetailVisualUserMessage,
 } from "../src/lib/llm/prompts";
 import { nodeDetailQualityWarnings } from "../src/lib/llm/schemas";
@@ -256,6 +257,23 @@ const documentDetail = parseDocumentNodeDetailResponse(
   "doc-vfs",
 );
 assert(documentDetail.visual_blocks?.[0]?.type === "layer_stack", "document detail visual block");
+
+const documentDetailUserMessage = buildDocumentNodeDetailUserMessage({
+  documentTitle: "FAST 26 DPAS",
+  nodeId: "n1",
+  conceptTitle: "I/O 완료 (I/O Completion)",
+  sourceType: "explicit",
+  evidenceText: "I/O completion methods decide how the CPU learns that an SSD request is done.",
+  prerequisites: "없음",
+});
+assert(
+  documentDetailUserMessage.includes('Node ID: "n1"'),
+  "document detail prompt should include the exact node id",
+);
+assert(
+  documentDetailUserMessage.includes('"node_id" field in your JSON response MUST be exactly "n1"'),
+  "document detail prompt should force the response node_id to the parser-expected id",
+);
 
 const visualUserMessage = buildNodeDetailVisualUserMessage({
   topic: "운영체제",
