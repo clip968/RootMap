@@ -17,6 +17,10 @@ export interface EnqueueNodeDetailJobInput {
   detailVersion?: string;
   maxAttempts?: number;
   now?: Date;
+  // 사용자가 직접 다시 요청한 경우, 이미 'failed'로 끝나 워커가 다시 집을 수 없는
+  // 기존 작업을 'queued'로 되돌려 재생성 기회를 준다. 백그라운드 prewarm은 이 플래그를
+  // 쓰지 않으므로, 실패한 노드를 자동으로 무한 재생성하지 않는다.
+  resetExhausted?: boolean;
 }
 
 export interface ClaimQueuedNodeDetailJobInput {
@@ -164,6 +168,40 @@ export async function enqueueNodeDetailJob(
     detailVersion,
   );
   if (!existing) throw new Error("node_detail_jobs enqueue conflict lookup failed");
+
+  // 'failed' 작업은 claim 조건(status='queued')에 영영 잡히지 않고, (tree,node,version)
+  // 고유 제약 때문에 새 작업도 만들 수 없어 그대로 두면 영구히 실패 상태로 고착된다.
+  // 사용자가 명시적으로 재시도한 경우에만 queued로 되돌려 워커가 새로 처리하게 한다.
+  if (input.resetExhausted && existing.status === "failed") {
+    const reset = await getDb()
+      .update(nodeDetailJobs)
+      .set({
+        status: "queued",
+        attemptCount: 0,
+        lockedAt: null,
+        lockedBy: null,
+        startedAt: null,
+        completedAt: null,
+        errorMessage: null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(nodeDetailJobs.id, existing.id),
+          eq(nodeDetailJobs.status, "failed"),
+        ),
+      )
+      .returning();
+    if (reset[0]) return toJobRow(reset[0]);
+    // 동시에 다른 요청/워커가 상태를 바꿨다면 최신 행을 다시 읽어 반환한다.
+    const refreshed = await getNodeDetailJobByTarget(
+      input.treeId,
+      input.nodeId,
+      detailVersion,
+    );
+    if (refreshed) return refreshed;
+  }
+
   return existing;
 }
 

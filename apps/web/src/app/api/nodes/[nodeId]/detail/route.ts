@@ -94,6 +94,8 @@ export async function POST(req: Request, ctx: Ctx) {
         treeId,
         nodeId,
         detailVersion: CURRENT_NODE_DETAIL_VERSION,
+        // 사용자 요청 경로다. 이전에 실패로 끝난 작업이면 다시 큐에 넣어 재생성한다.
+        resetExhausted: true,
       });
       return NextResponse.json(
         {

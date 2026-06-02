@@ -81,6 +81,7 @@ for (const fn of [
 const repositorySource = readSource("src/lib/repository/node-detail-job-repository.ts");
 assert(repositorySource.includes("for update skip locked"), "claim must use for update skip locked");
 assert(repositorySource.includes("attempt_count = attempt_count + 1"), "claim must increment attempt_count atomically");
+assert(repositorySource.includes("resetExhausted"), "enqueue should support resetting exhausted (failed) jobs so retries are not permanently stuck");
 assert(repositorySource.includes("transaction(async"), "ready path must use a transaction");
 assert(repositorySource.includes("detailJson"), "ready transaction must save learning_nodes.detailJson");
 
@@ -122,6 +123,7 @@ assert(detailRouteSource.includes("auth.userId"), "detail route should pass auth
 assert(detailRouteSource.includes("NODE_DETAIL_ASYNC_ENABLED"), "detail route should gate async behavior behind NODE_DETAIL_ASYNC_ENABLED");
 assert(detailRouteSource.includes('status: "ready"'), "detail route should return ready status in async mode");
 assert(detailRouteSource.includes('status: "queued"'), "detail route should return queued status in async mode");
+assert(detailRouteSource.includes("resetExhausted: true"), "detail route retry should reset failed jobs back to the queue");
 assert(!detailRouteSource.includes("export async function GET"), "detail route must not create jobs from GET");
 
 const jobRouteSource = readSource("src/app/api/node-detail-jobs/[jobId]/route.ts");
