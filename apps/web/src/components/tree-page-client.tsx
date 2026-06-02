@@ -137,6 +137,7 @@ const FLOW_PATH_LEVEL_GAP = 260;
 const FLOW_COMMUNITY_COLUMN_GAP = 390;
 const DETAIL_JOB_POLL_INTERVAL_MS = 1_000;
 const DETAIL_JOB_TIMEOUT_MS = 90_000;
+const DETAIL_JOB_MAX_STATUS_FAILURES = 3;
 
 type DetailRequestPayload =
   | { status: "ready"; detail: ApiNodeDetailResponse }
@@ -240,6 +241,10 @@ function documentSourceTypeTone(sourceType: DocumentSourceType): string {
 
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
+}
+
+function isPermanentDetailPollingError(status: number): boolean {
+  return status === 401 || status === 403 || status === 404;
 }
 
 function generationStageMessage(elapsedSeconds: number): string {
@@ -637,6 +642,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
   const detailExtrasAbortControllerRef = useRef<AbortController | null>(null);
   const detailJobAbortControllerRef = useRef<AbortController | null>(null);
   const detailJobPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const detailJobStatusFailureCountRef = useRef(0);
   const [regenLoading, setRegenLoading] = useState(false);
   const [regenElapsedSeconds, setRegenElapsedSeconds] = useState(0);
   const [regenError, setRegenError] = useState<string | null>(null);
@@ -1033,6 +1039,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
 
   const pollDetailJob = useCallback((nodeId: string, jobId: string, requestSeq: number, startedAt: number) => {
     clearDetailPolling();
+    detailJobStatusFailureCountRef.current = 0;
     setDetailJobId(jobId);
     setDetailJobStatus("queued");
     setDetailJobTimedOut(false);
@@ -1048,6 +1055,20 @@ export function TreePageClient({ treeId }: { treeId: string }) {
 
       const controller = new AbortController();
       detailJobAbortControllerRef.current = controller;
+      const scheduleNextPoll = () => {
+        detailJobPollTimerRef.current = setTimeout(pollOnce, DETAIL_JOB_POLL_INTERVAL_MS);
+      };
+      const registerTransientStatusFailure = (message: string) => {
+        detailJobStatusFailureCountRef.current += 1;
+        if (detailJobStatusFailureCountRef.current < DETAIL_JOB_MAX_STATUS_FAILURES) {
+          scheduleNextPoll();
+          return;
+        }
+        clearDetailPolling();
+        setDetailError(message);
+        setDetailLoading(false);
+        detailInFlightNodeRef.current = null;
+      };
       try {
         const res = await authenticatedFetch(`/api/node-detail-jobs/${jobId}`, {
           signal: controller.signal,
@@ -1056,8 +1077,20 @@ export function TreePageClient({ treeId }: { treeId: string }) {
         const data = await res.json().catch(() => ({})) as Partial<DetailJobPayload>;
         if (controller.signal.aborted || detailRequestSeqRef.current !== requestSeq) return;
         if (!res.ok) {
-          throw new Error((data as { error?: { message?: string } })?.error?.message ?? "상세 설명 생성 상태를 확인하지 못했습니다.");
+          const message =
+            (data as { error?: { message?: string } })?.error?.message ??
+            "상세 설명 생성 상태를 확인하지 못했습니다.";
+          if (isPermanentDetailPollingError(res.status)) {
+            clearDetailPolling();
+            setDetailError(message);
+            setDetailLoading(false);
+            detailInFlightNodeRef.current = null;
+            return;
+          }
+          registerTransientStatusFailure(message);
+          return;
         }
+        detailJobStatusFailureCountRef.current = 0;
 
         if (data.status === "ready" && "detail" in data && data.detail) {
           clearDetailPolling();
@@ -1078,16 +1111,13 @@ export function TreePageClient({ treeId }: { treeId: string }) {
         if (data.status === "queued" || data.status === "running") {
           setDetailJobStatus(data.status);
         }
-        detailJobPollTimerRef.current = setTimeout(pollOnce, DETAIL_JOB_POLL_INTERVAL_MS);
+        scheduleNextPoll();
       } catch (error) {
         if (isAbortError(error) || controller.signal.aborted) return;
         if (detailRequestSeqRef.current !== requestSeq) return;
-        clearDetailPolling();
-        setDetailError(
+        registerTransientStatusFailure(
           error instanceof Error ? error.message : "상세 설명 생성 상태를 확인하지 못했습니다.",
         );
-        setDetailLoading(false);
-        detailInFlightNodeRef.current = null;
       } finally {
         if (detailJobAbortControllerRef.current === controller) {
           detailJobAbortControllerRef.current = null;

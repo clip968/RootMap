@@ -136,6 +136,8 @@ const treeClientSource = readSource("src/components/tree-page-client.tsx");
 assert(treeClientSource.includes("/api/node-detail-jobs/"), "client should poll node detail jobs");
 assert(treeClientSource.includes("detailJobTimedOut"), "client should expose node detail polling timeout state");
 assert(treeClientSource.includes("clearDetailPolling"), "client should clean up detail polling on node switch/close/unmount");
+assert(treeClientSource.includes("DETAIL_JOB_MAX_STATUS_FAILURES"), "client should tolerate transient job status polling failures");
+assert(treeClientSource.includes("isPermanentDetailPollingError"), "client should only fail immediately for permanent job polling errors");
 assert(!treeClientSource.includes("detail?.easy_explanation ||\n                          selectedNode.description"), "client should not render selectedNode.description as detail fallback");
 
 const prewarmSource = readSource("src/lib/services/node-detail-prewarm.ts");
