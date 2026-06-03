@@ -142,6 +142,9 @@ assert(treeClientSource.includes("DETAIL_JOB_MAX_STATUS_FAILURES"), "client shou
 assert(treeClientSource.includes("isPermanentDetailPollingError"), "client should only fail immediately for permanent job polling errors");
 assert(!treeClientSource.includes("detail?.easy_explanation ||\n                          selectedNode.description"), "client should not render selectedNode.description as detail fallback");
 
+const browserAuthSource = readSource("src/lib/auth/browser-auth.ts");
+assert(browserAuthSource.includes("refreshSupabaseAccessToken"), "authenticatedFetch should refresh the session once on 401 token-expiry races");
+
 const prewarmSource = readSource("src/lib/services/node-detail-prewarm.ts");
 assert(prewarmSource.includes("NODE_DETAIL_PREWARM_LIMIT"), "prewarm should expose limit config");
 assert(prewarmSource.includes("NODE_DETAIL_PREWARM_CONCURRENCY"), "prewarm should expose concurrency config");

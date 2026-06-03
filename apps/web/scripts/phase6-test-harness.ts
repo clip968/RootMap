@@ -313,6 +313,24 @@ async function runUnitTests(filter: Set<string>): Promise<void> {
         "authenticatedFetch should preserve contentType null for GET-like requests",
       );
 
+      // 401은 세션 갱신이 불가능하면(여기서는 Supabase env 미설정) 재시도 없이 그대로 반환돼야 한다.
+      let fetchCallCount = 0;
+      globalThis.fetch = (async () => {
+        fetchCallCount += 1;
+        return new Response("{}", { status: 401 });
+      }) as typeof fetch;
+      const unauthorizedRes = await authenticatedFetch("/api/trees", {}, { contentType: null });
+      assertEqual(
+        unauthorizedRes.status,
+        401,
+        "authenticatedFetch should surface 401 when session refresh is unavailable",
+      );
+      assertEqual(
+        fetchCallCount,
+        1,
+        "authenticatedFetch should not blind-retry 401 without a refreshed token",
+      );
+
       clearSupabaseAccessTokenBridge();
       assertEqual(readSupabaseAccessToken(), null, "sign-out should remove the bridge token");
       unsubscribe();
