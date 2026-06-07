@@ -495,6 +495,76 @@ export async function getOrCreateNodeDetail(params: {
     );
   };
 
+  // 동기 클릭 경로에서 visual을 "응답 차단 조건"이 아니라 "보강 단계"로 다룬다.
+  // 텍스트 detail은 그 자체로 사용자에게 가치가 있으므로 text readiness와 visual
+  // readiness를 분리한다. (async prewarm/worker 경로는 여전히 visual 포함만 ready로 본다.)
+  const VISUAL_PENDING = "VISUAL_PENDING";
+
+  // visual 생성/저장 실패의 구체 원인은 사용자 응답에 노출하지 않고 서버 로그에만 남긴다.
+  const logVisualPending = (err: unknown): void => {
+    const cause =
+      err instanceof Error && "cause" in err
+        ? (err as { cause?: unknown }).cause
+        : undefined;
+    console.warn("[node-detail-service]", {
+      source: "visual_pending",
+      treeId,
+      nodeId,
+      nodeKey: nodeRow.nodeKey,
+      conceptId: detailConceptId,
+      reason: VISUAL_PENDING,
+      errorClass: err instanceof Error ? err.name : "UnknownError",
+      errorMessage: err instanceof Error ? err.message : String(err),
+      causeClass: cause instanceof Error ? cause.name : undefined,
+      causeMessage: cause instanceof Error ? cause.message : undefined,
+    });
+  };
+
+  // 텍스트가 이미 저장된 상태에서 visual만 best-effort로 보강한다.
+  // best-effort catch 범위는 visual 단계(생성 + visual 전용 저장)로만 한정한다.
+  // - visual 생성 실패: 텍스트만 유지하고 VISUAL_PENDING
+  // - visual 생성 성공 but visual 저장 실패: 텍스트만 유지하고 VISUAL_PENDING(+로그)
+  const augmentVisualBestEffort = async (
+    textDetail: NodeDetailResponse,
+    baseWarnings: string[],
+  ): Promise<{ detail: NodeDetailResponse; warnings: string[] }> => {
+    if (!requireVisualDetail) {
+      return { detail: textDetail, warnings: baseWarnings };
+    }
+    try {
+      const detailWithVisual = await ensureVisualIfRequired(textDetail);
+      const visualSaved = await withDetailDuration(
+        "save_detail",
+        logContext,
+        () => persistNodeDetail(nodeId, detailWithVisual),
+      );
+      if (!visualSaved) {
+        throw new Error("DETAIL_VISUAL_SAVE_FAILED");
+      }
+      return { detail: detailWithVisual, warnings: baseWarnings };
+    } catch (err) {
+      logVisualPending(err);
+      return { detail: textDetail, warnings: [...baseWarnings, VISUAL_PENDING] };
+    }
+  };
+
+  // 새로 생성한 텍스트 detail은 먼저 저장한 뒤 visual을 보강한다.
+  // 텍스트 저장 실패는 진짜 에러로 던진다(텍스트 생성/권한/트리 오류도 이 함수 밖에서 그대로 전파).
+  const persistFreshDetailThenAugment = async (
+    textDetail: NodeDetailResponse,
+    baseWarnings: string[],
+  ): Promise<{ detail: NodeDetailResponse; warnings: string[] }> => {
+    const textSaved = await withDetailDuration(
+      "save_detail",
+      logContext,
+      () => persistNodeDetail(nodeId, textDetail),
+    );
+    if (!textSaved) {
+      throw new Error("DETAIL_SAVE_FAILED");
+    }
+    return augmentVisualBestEffort(textDetail, baseWarnings);
+  };
+
   const hasCachedDetail = await withDetailDuration(
     "cache_check",
     logContext,
@@ -502,26 +572,21 @@ export async function getOrCreateNodeDetail(params: {
   );
 
   if (hasCachedDetail && (!requireVisualDetail || hasRequestReadyTextDetail(nodeRow.detailJson!))) {
-    let cachedDetail = nodeRow.detailJson!;
-    if (requireVisualDetail && !hasRequiredNodeDetailVisual(cachedDetail)) {
-      cachedDetail = await ensureVisualIfRequired(cachedDetail);
-      const saved = await withDetailDuration(
-        "save_detail",
-        logContext,
-        () => persistNodeDetail(nodeId, cachedDetail),
-      );
-      if (!saved) {
-        throw new Error("DETAIL_SAVE_FAILED");
-      }
-    }
+    const cachedText = nodeRow.detailJson!;
+    // 텍스트는 이미 캐시되어 있다. visual만 없으면 best-effort로 보강하고,
+    // 실패해도 캐시된 텍스트를 그대로 응답한다(동기 클릭 경로 완화).
+    const cached =
+      requireVisualDetail && !hasRequiredNodeDetailVisual(cachedText)
+        ? await augmentVisualBestEffort(cachedText, [])
+        : { detail: cachedText, warnings: [] as string[] };
     return withDetailDuration(
       "cache_hit",
       logContext,
       async () => toApiBody(
         nodeId,
         nodeRow.nodeKey,
-        cachedDetail,
-        [],
+        cached.detail,
+        cached.warnings,
         extrasBase(),
       ),
     );
@@ -584,16 +649,11 @@ export async function getOrCreateNodeDetail(params: {
         visual_decision: detail.visual_decision,
         visual_blocks: detail.visual_blocks ?? [],
       };
-      const detailToSave = await ensureVisualIfRequired(genericDetail);
-      const saved = await withDetailDuration(
-        "save_detail",
-        logContext,
-        () => persistNodeDetail(nodeId, detailToSave),
+      const finalized = await persistFreshDetailThenAugment(
+        genericDetail,
+        qualityWarnings,
       );
-      if (!saved) {
-        throw new Error("DETAIL_SAVE_FAILED");
-      }
-      return toApiBody(nodeId, nodeRow.nodeKey, detailToSave, qualityWarnings, {
+      return toApiBody(nodeId, nodeRow.nodeKey, finalized.detail, finalized.warnings, {
         ...extrasBase(),
         from_concept_store: false,
         why_it_matters_for_document: detail.why_it_matters_for_document,
@@ -632,17 +692,9 @@ export async function getOrCreateNodeDetail(params: {
       logContext,
       () => generateGenericNodeDetail(llmInput),
     );
-    const detailToSave = await ensureVisualIfRequired(detail);
-    const saved = await withDetailDuration(
-      "save_detail",
-      logContext,
-      () => persistNodeDetail(nodeId, detailToSave),
-    );
-    if (!saved) {
-      throw new Error("DETAIL_SAVE_FAILED");
-    }
+    const finalized = await persistFreshDetailThenAugment(detail, qualityWarnings);
 
-    return toApiBody(nodeId, nodeRow.nodeKey, detailToSave, qualityWarnings, {
+    return toApiBody(nodeId, nodeRow.nodeKey, finalized.detail, finalized.warnings, {
       ...extrasBase(),
       from_concept_store: false,
     });

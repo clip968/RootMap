@@ -440,6 +440,53 @@ async function runRequiredVisualRegeneratesIncompleteCachedDetailCase(): Promise
   assert(result.visual_blocks.length === 1, "regenerated detail should include required visual block");
 }
 
+async function runRequiredVisualFallsBackToTextWhenVisualFailsCase(): Promise<void> {
+  // 동기 클릭 경로: visual 생성이 실패해도 텍스트 detail은 저장하고 200으로 응답하며
+  // VISUAL_PENDING 경고를 포함해야 한다(visual readiness와 text readiness 분리).
+  let textPersisted: NodeDetailResponse | null = null;
+  let persistCount = 0;
+
+  const result = await getOrCreateNodeDetail({
+    treeId: "tree-1",
+    nodeId: "node-1",
+    bundle: bundle("concept-visual-fail"),
+    requireVisualDetail: true,
+    loadDocumentTreeContext: async () => null,
+    loadConcept: async () => concept("concept-visual-fail", null),
+    persistNodeDetail: async (_nodeId, nextDetail) => {
+      persistCount += 1;
+      textPersisted = nextDetail;
+      return true;
+    },
+    generateGenericNodeDetail: async () => ({
+      detail: detail("cpu_utilization"),
+      qualityWarnings: [],
+    }),
+    generateVisualDetail: async () => {
+      throw new Error("visual generation failed");
+    },
+  });
+
+  assert(
+    result.visual_blocks.length === 0,
+    "visual 생성 실패 시 응답 visual_blocks는 비어 있어야 한다",
+  );
+  assert(
+    result.quality_warnings.includes("VISUAL_PENDING"),
+    "visual 생성 실패 시 VISUAL_PENDING 경고를 포함해야 한다",
+  );
+  assert(
+    result.why_it_matters.trim().length > 0 &&
+      result.easy_explanation.trim().length > 0 &&
+      result.check_questions.length > 0,
+    "visual 실패와 무관하게 텍스트 detail은 그대로 응답해야 한다",
+  );
+  assert(
+    textPersisted !== null && persistCount >= 1,
+    "visual 실패 시에도 텍스트 detail은 저장되어야 한다",
+  );
+}
+
 async function runConceptExplanationFastPathCase(): Promise<void> {
   let generated = false;
   const richExplanation =
@@ -517,6 +564,7 @@ async function main(): Promise<void> {
     await runRequiredVisualRepairForCachedDetailCase();
     await runRequiredVisualForNewDetailCase();
     await runRequiredVisualRegeneratesIncompleteCachedDetailCase();
+    await runRequiredVisualFallsBackToTextWhenVisualFailsCase();
     await runConceptExplanationFastPathCase();
     await runDetailExtrasCase();
   });
