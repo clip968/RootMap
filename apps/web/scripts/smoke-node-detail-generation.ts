@@ -18,6 +18,11 @@ import type {
 import { parseNodeDetailResponse } from "../src/lib/llm/parse";
 import { NODE_DETAIL_SYSTEM_BASE } from "../src/lib/llm/prompts";
 import {
+  LlmExhaustedRetriesError,
+  LlmValidationError,
+} from "../src/lib/llm/errors";
+import { nodeDetailVisualResponseSchema } from "../src/lib/llm/schemas";
+import {
   getNodeDetailExtras,
   getOrCreateNodeDetail,
 } from "../src/lib/services/node-detail";
@@ -58,6 +63,32 @@ async function captureServiceLogs(
   }
 
   return logs;
+}
+
+// logVisualPending은 console.warn으로 visual_pending 로그를 남기므로 별도 캡처가 필요하다.
+// ([node-detail-service] warn 만 수집하고 나머지 warn은 그대로 통과시킨다.)
+type ServiceWarn = Record<string, unknown>;
+
+async function captureServiceWarnings(
+  run: () => Promise<void>,
+): Promise<ServiceWarn[]> {
+  const warns: ServiceWarn[] = [];
+  const originalWarn = console.warn;
+  console.warn = (message?: unknown, details?: unknown, ...rest: unknown[]) => {
+    if (message === "[node-detail-service]" && details && typeof details === "object") {
+      warns.push(details as ServiceWarn);
+      return;
+    }
+    originalWarn(message, details, ...rest);
+  };
+
+  try {
+    await run();
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  return warns;
 }
 
 function assertServiceLog(logs: ServiceLog[], source: string): void {
@@ -487,6 +518,96 @@ async function runRequiredVisualFallsBackToTextWhenVisualFailsCase(): Promise<vo
   );
 }
 
+// 실제 visual 스키마를 위반하는 응답을 넣어 진짜 zod issues를 만든다.
+// (mapping_table의 row 칸 수가 columns 수와 다른 대표적인 실패 케이스)
+function invalidVisualSchemaIssues() {
+  const result = nodeDetailVisualResponseSchema.safeParse({
+    visual_decision: {
+      should_visualize: true,
+      skill: "mapping_table",
+      confidence: 0.9,
+      reason: "표로 비교한다.",
+    },
+    visual_blocks: [
+      {
+        type: "mapping_table",
+        title: "잘못된 표",
+        columns: ["항목", "의미"],
+        // columns는 2개인데 row는 1칸만 있어 mapping_table row 길이 검증에 실패한다.
+        rows: [["한 칸만 있음"]],
+        annotations: [],
+      },
+    ],
+  });
+  assert(!result.success, "잘못된 mapping_table 응답은 스키마 검증에 실패해야 한다");
+  return result.error.issues;
+}
+
+async function runVisualPendingLogsValidationIssuesCase(): Promise<void> {
+  // generateNodeDetailVisual은 검증 실패를 LlmExhaustedRetriesError(cause: LlmValidationError)로
+  // 감싸 던진다. 그 모양을 그대로 흉내 내, logVisualPending이 validationIssues를 로그에
+  // 남기는지 확인한다. (visual 실패의 실제 원인을 서버 로그만 보고 진단할 수 있어야 한다.)
+  const issues = invalidVisualSchemaIssues();
+  let captured: { quality_warnings: string[]; visual_blocks: unknown[] } | null = null;
+
+  const warns = await captureServiceWarnings(async () => {
+    await captureServiceLogs(async () => {
+      captured = await getOrCreateNodeDetail({
+        treeId: "tree-1",
+        nodeId: "node-1",
+        bundle: bundle("concept-visual-validation"),
+        requireVisualDetail: true,
+        loadDocumentTreeContext: async () => null,
+        loadConcept: async () => concept("concept-visual-validation", null),
+        persistNodeDetail: async () => true,
+        generateGenericNodeDetail: async () => ({
+          detail: detail("cpu_utilization"),
+          qualityWarnings: [],
+        }),
+        generateVisualDetail: async () => {
+          throw new LlmExhaustedRetriesError(
+            "노드 시각화 응답을 처리하지 못했습니다.",
+            new LlmValidationError("노드 시각화 응답 형식이 올바르지 않습니다.", issues),
+          );
+        },
+      });
+    });
+  });
+
+  assert(captured !== null, "visual 검증 실패 케이스는 텍스트 detail을 응답해야 한다");
+  const result = captured as { quality_warnings: string[]; visual_blocks: unknown[] };
+  assert(
+    result.visual_blocks.length === 0,
+    "스키마 검증 실패 시 응답 visual_blocks는 비어 있어야 한다",
+  );
+  assert(
+    result.quality_warnings.includes("VISUAL_PENDING"),
+    "스키마 검증 실패 시 VISUAL_PENDING 경고를 포함해야 한다",
+  );
+
+  const pendingLog = warns.find((w) => w.source === "visual_pending");
+  assert(pendingLog, "visual_pending warn 로그가 남아야 한다");
+  const validationIssues = pendingLog.validationIssues;
+  assert(
+    Array.isArray(validationIssues) && validationIssues.length > 0,
+    "visual_pending 로그는 validationIssues 배열을 포함해야 한다",
+  );
+  assert(
+    validationIssues.some(
+      (line) =>
+        typeof line === "string" &&
+        line.includes("mapping_table row length must match columns length"),
+    ),
+    "validationIssues는 실제 zod 위반 메시지를 담아야 한다",
+  );
+  assert(
+    validationIssues.some(
+      (line) => typeof line === "string" && line.startsWith("visual_blocks.0.rows."),
+    ),
+    "validationIssues는 위반 경로(visual_blocks.0.rows.*)를 포함해야 한다",
+  );
+}
+
 async function runConceptExplanationFastPathCase(): Promise<void> {
   let generated = false;
   const richExplanation =
@@ -578,7 +699,14 @@ async function main(): Promise<void> {
   assertServiceLog(logs, "panel_graph");
   assertServiceLog(logs, "concept_fast_path");
 
+  // visual 검증 실패가 VISUAL_PENDING 로그에 validation issue까지 남기는지 확인한다.
+  // (자체 console.warn/info 캡처를 사용하므로 위 captureServiceLogs 블록 밖에서 실행한다.)
+  await runVisualPendingLogsValidationIssuesCase();
+
   const extrasRouteSource = readSource("src/app/api/nodes/[nodeId]/detail/extras/route.ts");
+  const generateDetailRouteSource = readSource(
+    "src/app/api/trees/[treeId]/nodes/[nodeId]/generate-detail/route.ts",
+  );
   const generateNodeDetailSource = readSource("src/lib/llm/generate-node-detail.ts");
   const nodeDetailServiceSource = readSource("src/lib/services/node-detail.ts");
   const treeClientSource = readSource("src/components/tree-page-client.tsx");
@@ -589,6 +717,20 @@ async function main(): Promise<void> {
   assert(
     extrasRouteSource.includes("getNodeDetailExtrasForRequest"),
     "detail extras route should call the extras-only service",
+  );
+  // 문서용 generate-detail 라우트는 detailJson 캐시가 있어도 조기 반환하지 않고
+  // 항상 서비스로 보내 visual 보강을 재시도해야 한다.
+  assert(
+    generateDetailRouteSource.includes("getOrCreateNodeDetailForRequest"),
+    "generate-detail route should always call getOrCreateNodeDetailForRequest",
+  );
+  assert(
+    generateDetailRouteSource.includes("cached: hadCachedDetail"),
+    "generate-detail route should report prior cache state without short-circuiting",
+  );
+  assert(
+    !generateDetailRouteSource.includes("cached: true"),
+    "generate-detail route should no longer early-return cached detailJson (visual must be retried)",
   );
   assert(
     nodeDetailServiceSource.includes("requireVisualDetail: true"),

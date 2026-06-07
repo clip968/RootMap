@@ -57,6 +57,11 @@ assertPromptContains(NODE_DETAIL_VISUAL_SYSTEM_PROMPT, "layer_stack");
 assertPromptContains(NODE_DETAIL_VISUAL_SYSTEM_PROMPT, "tree_graph");
 assertPromptContains(NODE_DETAIL_VISUAL_SYSTEM_PROMPT, "state_machine");
 assertPromptContains(NODE_DETAIL_VISUAL_SYSTEM_PROMPT, "compare_matrix");
+// Phase 11 후속: 자주 실패하는 스키마 제약을 prompt에 명시해 first-attempt 성공률을 올린다.
+assertPromptContains(NODE_DETAIL_VISUAL_SYSTEM_PROMPT, "Additional validation rules");
+assertPromptContains(NODE_DETAIL_VISUAL_SYSTEM_PROMPT, "every row must have exactly columns.length cells");
+assertPromptContains(NODE_DETAIL_VISUAL_SYSTEM_PROMPT, "must reference an id that exists in nodes");
+assertPromptContains(NODE_DETAIL_VISUAL_SYSTEM_PROMPT, "prefer mapping_table or flow_pipeline");
 
 const blocks: Array<{ nodeId: string; title: string; skill: VisualBlock["type"]; block: VisualBlock }> = [
   {

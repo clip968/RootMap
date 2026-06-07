@@ -1,4 +1,4 @@
-import { createChatCompletion } from "@/lib/llm/chat";
+import { createChatCompletion, type ChatMessage } from "@/lib/llm/chat";
 import {
   LlmExhaustedRetriesError,
   LlmParseError,
@@ -22,13 +22,25 @@ import {
 } from "@/lib/visualization/visual-block-schema";
 import type { NodeDetailResponse, NodeType } from "@/types/learning";
 
-const MAX_ATTEMPTS = 2;
+// 첫 시도(attempt 0) + 검증 실패 시 issue를 되먹이는 repair 시도 2회.
+// best-effort visual 경로(동기 클릭에서 inline await)에서 호출되므로 응답 지연이
+// 무한정 늘어나지 않도록 3회로 제한한다. 대부분은 attempt 0 또는 1에서 통과한다.
+const MAX_ATTEMPTS = 3;
 
 export const NODE_DETAIL_MISSING_REQUIRED_VISUAL =
   "NODE_DETAIL_MISSING_REQUIRED_VISUAL";
 
 function shouldAbortRetries(err: unknown): boolean {
   return err instanceof LlmTransportError && err.status === 401;
+}
+
+// LlmValidationError.issues(zod 위반 목록)를 모델에게 돌려줄 수 있는 "경로: 메시지" 줄로 만든다.
+// issues가 없으면(예: visual_blocks 개수 검증 실패) 에러 메시지 자체를 힌트로 사용한다.
+function formatValidationIssues(err: LlmValidationError): string {
+  const lines = (err.issues ?? [])
+    .slice(0, 8)
+    .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`);
+  return lines.length ? lines.join("\n") : err.message;
 }
 
 export interface GenerateNodeDetailVisualInput {
@@ -47,16 +59,24 @@ export type NodeDetailVisualGenerator = (
 export async function generateNodeDetailVisual(
   input: GenerateNodeDetailVisualInput,
 ): Promise<NodeDetailVisualResponse> {
+  // 매 시도마다 처음부터 새로 만들지 않고, 직전 출력과 검증 실패 내역을 대화에 누적해
+  // 모델이 "JSON만 고치도록" 유도하는 repair loop로 동작한다. 스키마 제약(예: row 길이,
+  // skill=block.type, unit enum)은 한 번에 다 지키기 어려워, 실패 사유를 그대로 돌려주면
+  // 처음부터 다시 생성하는 것보다 통과 확률이 높다.
+  const messages: ChatMessage[] = [
+    { role: "system", content: NODE_DETAIL_VISUAL_SYSTEM_PROMPT },
+    { role: "user", content: buildNodeDetailVisualUserMessage(input) },
+  ];
   let lastError: unknown;
+
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    // catch 블록에서 직전 출력을 repair 메시지로 되먹이기 위해 try 밖에 둔다.
+    let rawText = "";
     try {
-      const { rawText } = await createChatCompletion([
-        { role: "system", content: NODE_DETAIL_VISUAL_SYSTEM_PROMPT },
-        {
-          role: "user",
-          content: buildNodeDetailVisualUserMessage(input),
-        },
-      ], { providerConfig: input.providerConfig });
+      const completion = await createChatCompletion(messages, {
+        providerConfig: input.providerConfig,
+      });
+      rawText = completion.rawText;
       const visual = parseNodeDetailVisualResponse(rawText);
       if (visual.visual_blocks.length !== REQUIRED_NODE_DETAIL_VISUAL_BLOCK_COUNT) {
         throw new LlmValidationError("visual_blocks.length !== 1");
@@ -65,6 +85,19 @@ export async function generateNodeDetailVisual(
     } catch (e) {
       lastError = e;
       if (shouldAbortRetries(e)) break;
+
+      // 스키마/검증 실패는 다음 시도에서 "직전 출력 + 실패 사유"를 함께 주어 고치게 한다.
+      // (transport 오류 등 rawText가 비어 있는 경우에는 동일 메시지로 재시도한다.)
+      if (e instanceof LlmValidationError && rawText) {
+        messages.push({ role: "assistant", content: rawText });
+        messages.push({
+          role: "user",
+          content:
+            "Your previous JSON failed validation. Fix only the JSON and return JSON only. Do not add prose or code fences.\n" +
+            formatValidationIssues(e),
+        });
+      }
+
       const retryable =
         e instanceof LlmParseError ||
         e instanceof LlmValidationError ||

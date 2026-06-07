@@ -324,7 +324,17 @@ Visual block field shapes:
 - layer_stack: title, layers[{label,description}], annotations
 - tree_graph: title, nodes[{id,label}], edges[{from,to,label?}], annotations
 - state_machine: title, states[{id,label,description?}], transitions[{from,to,label}], annotations
-- compare_matrix: title, columns, rows[{criterion,values}], annotations`;
+- compare_matrix: title, columns, rows[{criterion,values}], annotations
+
+Additional validation rules (a response that breaks any of these is rejected):
+- annotations must be an array of 0 to 3 non-empty strings.
+- For mapping_table, every row must have exactly columns.length cells.
+- For compare_matrix, every row.values must have exactly columns.length cells.
+- For tree_graph, every edge.from and edge.to must reference an id that exists in nodes.
+- For state_machine, every transition.from and transition.to must reference an id that exists in states.
+- Use linear_space only when the unit is one of: block, byte, page, sector, slot.
+- linear_space.highlighted_ranges must contain 1 to 4 entries.
+- If you are unsure which type fits, prefer mapping_table or flow_pipeline.`;
 
 export function buildNodeDetailVisualUserMessage(input: {
   topic: string;

@@ -12,6 +12,7 @@ import {
   ensureRequiredNodeDetailVisual,
   type NodeDetailVisualGenerator,
 } from "@/lib/llm/generate-node-detail-visual";
+import { LlmValidationError } from "@/lib/llm/errors";
 import { getDb } from "@/db/client";
 import type { LearningTreeBundle, LearningNodeRow } from "@/lib/repository/learning-repository";
 import {
@@ -349,6 +350,34 @@ function hasRequestReadyTextDetail(detail: NodeDetailResponse): boolean {
   );
 }
 
+// Error.cause를 안전하게 꺼낸다. (Error 타입이 아니거나 cause가 없으면 undefined)
+function getErrorCause(err: unknown): unknown {
+  return err instanceof Error && "cause" in err
+    ? (err as Error & { cause?: unknown }).cause
+    : undefined;
+}
+
+// visual 실패 원인의 대부분은 LlmValidationError.issues(zod 스키마 위반 목록)에 들어 있다.
+// best-effort visual 경로는 사용자 응답에 원인을 노출하지 않으므로, 서버 로그에서
+// "왜 visual이 안 붙었는지"를 바로 확인할 수 있도록 issue의 경로/메시지를 추출한다.
+// generateNodeDetailVisual은 LlmValidationError를 LlmExhaustedRetriesError(cause)로
+// 감싸 던지므로 최상위 에러와 cause 양쪽을 모두 확인한다. 로그 한 줄이 과도하게
+// 길어지지 않도록 최대 8개 issue만 남긴다.
+function visualValidationIssues(err: unknown): string[] | undefined {
+  const cause = getErrorCause(err);
+  const validation =
+    err instanceof LlmValidationError
+      ? err
+      : cause instanceof LlmValidationError
+        ? cause
+        : null;
+
+  return validation?.issues?.slice(0, 8).map((issue) => {
+    const path = issue.path.length ? issue.path.join(".") : "(root)";
+    return `${path}: ${issue.message}`;
+  });
+}
+
 async function responseFromStoredConcept(
   dbId: string,
   nodeKey: string,
@@ -501,11 +530,10 @@ export async function getOrCreateNodeDetail(params: {
   const VISUAL_PENDING = "VISUAL_PENDING";
 
   // visual 생성/저장 실패의 구체 원인은 사용자 응답에 노출하지 않고 서버 로그에만 남긴다.
+  // validationIssues에 zod 스키마 위반(예: mapping_table row 길이 불일치, skill≠block.type)이
+  // 그대로 찍히므로, "visual이 거의 안 붙는" 실제 원인을 로그만 보고 진단할 수 있다.
   const logVisualPending = (err: unknown): void => {
-    const cause =
-      err instanceof Error && "cause" in err
-        ? (err as { cause?: unknown }).cause
-        : undefined;
+    const cause = getErrorCause(err);
     console.warn("[node-detail-service]", {
       source: "visual_pending",
       treeId,
@@ -517,6 +545,7 @@ export async function getOrCreateNodeDetail(params: {
       errorMessage: err instanceof Error ? err.message : String(err),
       causeClass: cause instanceof Error ? cause.name : undefined,
       causeMessage: cause instanceof Error ? cause.message : undefined,
+      validationIssues: visualValidationIssues(err),
     });
   };
 

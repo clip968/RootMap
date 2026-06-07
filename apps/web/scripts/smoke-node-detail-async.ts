@@ -107,6 +107,19 @@ const visualGeneratorSource = readSource("src/lib/llm/generate-node-detail-visua
 assert(visualGeneratorSource.includes("generateNodeDetailVisual"), "visual-only generator should exist");
 assert(visualGeneratorSource.includes("parseNodeDetailVisualResponse"), "visual-only generator should parse the required visual schema");
 assert(visualGeneratorSource.includes("visual_blocks.length !== 1"), "visual-only generator should enforce exactly one visual block");
+// 검증 실패 시 처음부터 다시 생성하지 않고, 직전 출력 + 실패 사유를 되먹이는 repair loop여야 한다.
+assert(
+  visualGeneratorSource.includes("Your previous JSON failed validation"),
+  "visual generator should run a validation-issue repair loop instead of regenerating from scratch",
+);
+assert(
+  visualGeneratorSource.includes('role: "assistant"'),
+  "visual generator repair loop should feed the previous raw output back as an assistant message",
+);
+assert(
+  visualGeneratorSource.includes("formatValidationIssues"),
+  "visual generator should format LlmValidationError.issues into the repair message",
+);
 
 const jobRepositorySource = readSource("src/lib/repository/node-detail-job-repository.ts");
 assert(jobRepositorySource.includes('CURRENT_NODE_DETAIL_VERSION = "v2"'), "required visual policy should bump detail version");
@@ -125,6 +138,26 @@ assert(detailRouteSource.includes('status: "ready"'), "detail route should retur
 assert(detailRouteSource.includes('status: "queued"'), "detail route should return queued status in async mode");
 assert(detailRouteSource.includes("resetExhausted: true"), "detail route retry should reset failed jobs back to the queue");
 assert(!detailRouteSource.includes("export async function GET"), "detail route must not create jobs from GET");
+
+// 알려진 정책 경계: async click 분기는 getReadyNodeDetailForRequest로 ready 여부만 확인하고
+// 아니면 job을 enqueue한 뒤 202 queued를 반환한다. 즉 이 분기에서는 동기 text-first 경로
+// (getOrCreateNodeDetailForRequest)를 호출하지 않으므로, best-effort visual fallback은
+// NODE_DETAIL_ASYNC_ENABLED=false일 때만 클릭 UX에 적용된다. async click을 text-first로
+// 만들려면 worker/job status(text_ready 등)를 분리해야 한다(별도 작업).
+const asyncBranchStart = detailRouteSource.indexOf("if (NODE_DETAIL_ASYNC_ENABLED())");
+assert(asyncBranchStart !== -1, "detail route should gate the async branch on the flag");
+const afterAsyncBranch = detailRouteSource.slice(asyncBranchStart);
+const enqueueIndex = afterAsyncBranch.indexOf("enqueueNodeDetailJob");
+assert(enqueueIndex !== -1, "async branch should enqueue a node detail job");
+const asyncBranchBody = afterAsyncBranch.slice(0, enqueueIndex);
+assert(
+  asyncBranchBody.includes("getReadyNodeDetailForRequest"),
+  "async click branch should gate on getReadyNodeDetailForRequest",
+);
+assert(
+  !asyncBranchBody.includes("getOrCreateNodeDetailForRequest"),
+  "async click branch must NOT call getOrCreateNodeDetailForRequest; text-first best-effort visual only applies when NODE_DETAIL_ASYNC_ENABLED=false",
+);
 
 const jobRouteSource = readSource("src/app/api/node-detail-jobs/[jobId]/route.ts");
 assert(jobRouteSource.includes("export async function GET"), "job polling route should expose GET");
