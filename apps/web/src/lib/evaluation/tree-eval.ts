@@ -26,6 +26,10 @@ import {
   deriveLearningGraphView,
   type ConceptGraphInputNode,
 } from "@/lib/tree/concept-graph";
+import {
+  proposePrerequisiteCycleRepairs,
+  type ConceptGraphQualityEdgeInput,
+} from "@/lib/tree/graph-quality";
 
 // ──────────────────────────────────────────────
 // 1. 타입 계약 (Phase 12 Task 00)
@@ -236,6 +240,42 @@ function toGraphInput(nodes: LearningTreeNode[]): ConceptGraphInputNode[] {
   }));
 }
 
+/**
+ * Phase 13: 사이클 repair 후보를 계산하기 위한 edge 입력을 만든다.
+ *
+ * 두 출처를 합친다.
+ * - `node.prerequisites`: confidence 정보가 없으므로 생략(기본 0.5로 간주된다).
+ * - `tree.edges` 중 prerequisite: edge가 가진 confidence를 그대로 싣는다(끊을 후보 판정의 핵심 신호).
+ */
+function toQualityEdgeInputs(
+  tree: LearningTreeResponse,
+): ConceptGraphQualityEdgeInput[] {
+  // (from,to) 쌍별로 한 번만 담는다. node.prerequisites와 tree.edges가 같은 쌍을 둘 다 제공할 수
+  // 있는데, 중복을 그대로 두면 같은 사이클이 두 번 보고된다. confidence 정보가 있는 쪽(tree.edges)을 우선한다.
+  const byPair = new Map<string, ConceptGraphQualityEdgeInput>();
+  const keyOf = (from: string, to: string) => `${from}\u0000${to}`;
+
+  for (const node of tree.nodes) {
+    for (const prerequisite of node.prerequisites) {
+      const key = keyOf(prerequisite, node.id);
+      if (!byPair.has(key)) {
+        byPair.set(key, { from: prerequisite, to: node.id, relationType: "prerequisite" });
+      }
+    }
+  }
+  for (const edge of tree.edges ?? []) {
+    if (edge.relation_type !== "prerequisite") continue;
+    // tree.edges는 confidence를 가지므로 항상 덮어써서 끊을 후보 판정 신호를 살린다.
+    byPair.set(keyOf(edge.from, edge.to), {
+      from: edge.from,
+      to: edge.to,
+      relationType: "prerequisite",
+      confidence: edge.confidence,
+    });
+  }
+  return [...byPair.values()];
+}
+
 /** Phase 14 의존 필드(learning_objective 등)를 타입 깨짐 없이 안전하게 읽는다. */
 function readOptionalField(node: LearningTreeNode, key: string): unknown {
   return (node as unknown as Record<string, unknown>)[key];
@@ -327,6 +367,20 @@ export function collectTreeQualityFailures(
       code: "TOPIC_MISMATCH",
       message: '응답의 "topic" 필드가 입력 주제와 다릅니다.',
     });
+  }
+
+  // Phase 13: edge 근거가 비어 있으면(=explanation도 reason도 없음) 보정이 일어났다는 뜻이다.
+  // 자유 문자열 경고가 아니라 안정적 code를 가진 warn으로 남긴다. 기존 경고 순서를 유지하기 위해
+  // 항상 마지막에 push한다(edge가 없으면 아무 경고도 추가되지 않는다 → 기존 동작과 동일).
+  for (const edge of tree.edges ?? []) {
+    const explanation = (edge.explanation ?? edge.reason ?? "").trim();
+    if (!explanation) {
+      failures.push({
+        severity: "warn",
+        code: "EDGE_MISSING_EXPLANATION",
+        message: `관계 "${edge.from}" → "${edge.to}"에 근거(explanation)가 없어 기본값으로 보정했습니다.`,
+      });
+    }
   }
 
   return failures;
@@ -645,12 +699,23 @@ export function evaluateLearningTree(
     deriveLearningGraphView(toGraphInput(tree.nodes));
     orderingScore = scoreOrdering(tree, prerequisitePairs, failures);
   } catch (error) {
+    // Phase 13: 사이클이면 끊을 edge 후보(confidence 최저)를 함께 제시한다(자동 적용은 하지 않음).
+    const repairs = proposePrerequisiteCycleRepairs(toQualityEdgeInputs(tree));
+    const repairHint =
+      repairs.length > 0
+        ? ` 끊을 후보: ${repairs
+            .map(
+              (repair) =>
+                `${repair.cut_edge.from}→${repair.cut_edge.to}(confidence ${repair.confidence.toFixed(2)})`,
+            )
+            .join(", ")}`
+        : "";
     failures.push({
       severity: "error",
       code: "PREREQUISITE_CYCLE",
       message: `선수관계 그래프에 사이클 또는 잘못된 참조가 있습니다: ${
         error instanceof Error ? error.message : String(error)
-      }`,
+      }.${repairHint}`,
     });
     orderingScore = 0;
   }

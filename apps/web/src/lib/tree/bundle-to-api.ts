@@ -13,10 +13,32 @@ import type {
   ApiLearningNode,
   ApiProgressEntry,
   ApiTreePayload,
+  LearningEdgeQuality,
+  LlmConceptEdge,
 } from "@/types/learning";
 
 export interface ApiTreeResponse extends ApiTreePayload {
   progress: ApiProgressEntry[];
+}
+
+/**
+ * Phase 13: 저장된 트리(`tree_json`)의 edge를 항상 채워진 `LearningEdgeQuality`로 보정한다.
+ *
+ * 옛 트리에는 `explanation`/`confidence`/`is_blocking`이 없으므로 기본값으로 채워
+ * UI가 옛 데이터에서도 깨지지 않게 한다(explanation이 없으면 옛 `reason`을 쓴다).
+ */
+function normalizeEdges(
+  edges: LlmConceptEdge[] | undefined,
+): LearningEdgeQuality[] {
+  if (!edges || edges.length === 0) return [];
+  return edges.map((edge) => ({
+    from: edge.from,
+    to: edge.to,
+    relation_type: edge.relation_type,
+    explanation: (edge.explanation ?? edge.reason ?? "").trim(),
+    confidence: typeof edge.confidence === "number" ? edge.confidence : 0.5,
+    is_blocking: edge.is_blocking ?? false,
+  }));
 }
 
 export function bundleToApiTreeResponse(
@@ -85,6 +107,7 @@ export function bundleToApiTreeResponse(
     nodes,
     recommended_order: bundle.tree.treeJson.recommended_order,
     communities: bundle.tree.treeJson.communities ?? [],
+    edges: normalizeEdges(bundle.tree.treeJson.edges),
     progress: bundle.progress,
   };
 }

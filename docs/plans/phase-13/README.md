@@ -28,12 +28,12 @@ Phase 13의 핵심은 트리를 더 화려하게 만드는 것이 아니라 **ed
 
 > 작업을 완료할 때마다 해당 항목을 `[x]`로 바꿔 진행 상황을 추적한다.
 
-- [ ] 00. [00-edge-quality-contract-and-scope.md](./00-edge-quality-contract-and-scope.md) - edge 품질 계약과 범위 고정
-- [ ] 01. [01-learning-edge-quality-schema.md](./01-learning-edge-quality-schema.md) - `LearningEdgeQuality` 스키마와 LLM 출력 확장
-- [ ] 02. [02-graph-view-relation-preservation.md](./02-graph-view-relation-preservation.md) - 그래프 뷰 관계 보존과 하위 호환
-- [ ] 03. [03-graph-repair-and-transitive-reduction.md](./03-graph-repair-and-transitive-reduction.md) - transitive reduction과 cycle repair
-- [ ] 04. [04-edge-rationale-ui.md](./04-edge-rationale-ui.md) - edge 근거 hover UI
-- [ ] 05. [05-phase13-docs-and-quality-gate.md](./05-phase13-docs-and-quality-gate.md) - 문서와 최종 품질 gate 정리
+- [x] 00. [00-edge-quality-contract-and-scope.md](./00-edge-quality-contract-and-scope.md) - edge 품질 계약과 범위 고정
+- [x] 01. [01-learning-edge-quality-schema.md](./01-learning-edge-quality-schema.md) - `LearningEdgeQuality` 스키마와 LLM 출력 확장
+- [x] 02. [02-graph-view-relation-preservation.md](./02-graph-view-relation-preservation.md) - 그래프 뷰 관계 보존과 하위 호환
+- [x] 03. [03-graph-repair-and-transitive-reduction.md](./03-graph-repair-and-transitive-reduction.md) - transitive reduction과 cycle repair
+- [x] 04. [04-edge-rationale-ui.md](./04-edge-rationale-ui.md) - edge 근거 hover UI
+- [x] 05. [05-phase13-docs-and-quality-gate.md](./05-phase13-docs-and-quality-gate.md) - 문서와 최종 품질 gate 정리
 
 ## 범위 요약
 

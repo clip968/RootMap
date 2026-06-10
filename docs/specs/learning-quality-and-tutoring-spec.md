@@ -199,11 +199,11 @@ edge에 마우스를 올리면 관계 근거를 보여준다.
 
 ### 2.5 Acceptance Criteria
 
-- [ ] LLM 트리 출력 edge가 `explanation`(필수)·`confidence`·`is_blocking`을 포함한다.
-- [ ] `deriveLearningGraphView`가 prerequisite 외 관계도 보존해 뷰에 전달한다(기존 depth 계산은 prerequisite만 사용해 하위 호환 유지).
-- [ ] edge hover 시 관계 근거가 노출된다.
-- [ ] transitive reduction과 cross-community link 식별이 `graph-quality.ts`에 구현되고 smoke로 검증된다.
-- [ ] 사이클이 있으면 `TreeEvalResult.failures`에 `error`로 기록되고 끊을 edge 후보가 제시된다.
+- [x] LLM 트리 출력 edge가 `explanation`(필수)·`confidence`·`is_blocking`을 포함한다.
+- [x] `deriveLearningGraphView`가 prerequisite 외 관계도 보존해 뷰에 전달한다(기존 depth 계산은 prerequisite만 사용해 하위 호환 유지).
+- [x] edge hover 시 관계 근거가 노출된다.
+- [x] transitive reduction과 cross-community link 식별이 `graph-quality.ts`에 구현되고 smoke로 검증된다.
+- [x] 사이클이 있으면 `TreeEvalResult.failures`에 `error`로 기록되고 끊을 edge 후보가 제시된다.
 
 ---
 

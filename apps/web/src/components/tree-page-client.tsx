@@ -35,19 +35,24 @@ import type {
   ApiReviewDueResponse,
   ApiReviewItem,
   ApiSessionReportResponse,
+  ConceptRelationType,
   DocumentSourceType,
+  LearningEdgeQuality,
   NodeType,
   ProgressStatus,
 } from "@/types/learning";
-import type { Edge, Node, NodeProps } from "@xyflow/react";
+import type { Edge, EdgeProps, Node, NodeProps } from "@xyflow/react";
 import {
   Background,
+  BaseEdge,
   Controls,
+  EdgeLabelRenderer,
   Handle,
   MarkerType,
   MiniMap,
   Position,
   ReactFlow,
+  getSmoothStepPath,
 } from "@xyflow/react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -121,6 +126,28 @@ const NODE_KIND_CONFIG: Record<
   },
 };
 
+/**
+ * Phase 13: edge 관계 타입별 사람이 읽는 라벨. hover 카드와 접근성 라벨에 쓴다.
+ */
+const RELATION_LABEL: Record<ConceptRelationType, string> = {
+  prerequisite: "선행 관계",
+  part_of: "부분 관계",
+  related: "관련 개념",
+  misconception_of: "오개념 관계",
+  example_of: "예시 관계",
+  application_of: "응용 관계",
+};
+
+/** 관계 타입별 edge CSS 클래스(색·점선 구분). */
+const RELATION_EDGE_CLASS: Record<ConceptRelationType, string> = {
+  prerequisite: "rel-prerequisite",
+  part_of: "rel-part-of",
+  related: "rel-related",
+  misconception_of: "rel-misconception",
+  example_of: "rel-example",
+  application_of: "rel-application",
+};
+
 const FOCUS_OPTIONS = [
   { id: "all", label: "전체" },
   { id: "near", label: "선택 주변" },
@@ -165,6 +192,25 @@ interface RootMapNodeData {
   recommended: boolean;
   progressBusy: boolean;
   onProgressChange: (nodeId: string, status: ProgressStatus) => void;
+}
+
+/**
+ * Phase 13: ReactFlow edge에 실어 보내는 관계 근거 메타데이터.
+ * 커스텀 edge 컴포넌트가 hover/포커스 시 이 정보를 카드로 보여준다.
+ */
+interface RootMapEdgeData {
+  [key: string]: unknown;
+  relationType: ConceptRelationType;
+  /** 관계 근거(왜 이 순서/연결인가). 비어 있으면 카드에서 관계 타입만 보여준다. */
+  explanation: string;
+  /** prerequisite에서 "이걸 모르면 다음이 막힘" 여부. */
+  isBlocking: boolean;
+  /** 관계 확신도(0~1). 0이면 표시하지 않는다. */
+  confidence: number;
+  /** community를 가로지르는 연결인지(다른 묶음 연결 표시용). */
+  crossCommunity: boolean;
+  sourceTitle: string;
+  targetTitle: string;
 }
 
 interface NodeRelation {
@@ -413,7 +459,7 @@ function buildFlowElements(
   hideKnownPrerequisites: boolean,
   progressBusy: string | null,
   onProgressChange: (nodeId: string, status: ProgressStatus) => void,
-): { nodes: Node<RootMapNodeData>[]; edges: Edge[]; visibleCount: number } {
+): { nodes: Node<RootMapNodeData>[]; edges: Edge<RootMapEdgeData>[]; visibleCount: number } {
   const recommendedSet = new Set(recommendations.map((item) => item.node_id));
   const visibleIds = visibleNodeIds(
     tree,
@@ -521,18 +567,29 @@ function buildFlowElements(
     }
   }
 
-  const flowEdges: Edge[] = [];
+  // Phase 13: 노드 간 관계 근거를 (from,to) 쌍으로 빠르게 조회(키는 node_key).
+  const edgeQualityByPair = new Map<string, LearningEdgeQuality>();
+  for (const edge of tree.edges ?? []) {
+    edgeQualityByPair.set(`${edge.from}\u0000${edge.to}`, edge);
+  }
+  /** 같은 두 노드 쌍에 edge를 중복으로 그리지 않기 위한 집합(DB id 기준). */
+  const drawnPairs = new Set<string>();
+
+  const flowEdges: Edge<RootMapEdgeData>[] = [];
+  // 1) 위상(prerequisite) 계층 edge: children 관계로 그리고, 관계 근거가 있으면 실어 보낸다.
   for (const source of tree.nodes) {
     if (!visibleIds.has(source.id)) continue;
     for (const childKey of source.children) {
       const target = nodeByKey.get(childKey);
       if (!target || !visibleIds.has(target.id)) continue;
       const active = source.id === selectedId || target.id === selectedId;
+      const quality = edgeQualityByPair.get(`${source.node_key}\u0000${target.node_key}`);
+      drawnPairs.add(`${source.id}\u0000${target.id}`);
       flowEdges.push({
         id: `${source.id}-${target.id}`,
         source: source.id,
         target: target.id,
-        type: "smoothstep",
+        type: "rootmap",
         animated: true,
         markerEnd: {
           type: MarkerType.ArrowClosed,
@@ -542,10 +599,60 @@ function buildFlowElements(
         className: [
           active ? "rootmap-edge-active" : "rootmap-edge-muted",
           edgeClassForNodeType(target.type),
+          RELATION_EDGE_CLASS[quality?.relation_type ?? "prerequisite"],
         ].join(" "),
+        data: {
+          relationType: quality?.relation_type ?? "prerequisite",
+          explanation: quality?.explanation ?? "",
+          isBlocking: quality?.is_blocking ?? false,
+          confidence: quality?.confidence ?? 0,
+          crossCommunity: false,
+          sourceTitle: source.title,
+          targetTitle: target.title,
+        },
       });
     }
   }
+
+  // 2) 비-prerequisite 관계(related/application_of 등) edge: 계층에는 없지만 "개념이 연결돼 있다"는
+  //    통찰을 주므로 별도 스타일(점선·약하게)로 추가한다. cross-community면 별도 클래스로 강조한다.
+  (tree.edges ?? []).forEach((edge, index) => {
+    if (edge.relation_type === "prerequisite") return;
+    const source = nodeByKey.get(edge.from);
+    const target = nodeByKey.get(edge.to);
+    if (!source || !target) return;
+    if (!visibleIds.has(source.id) || !visibleIds.has(target.id)) return;
+    const pairKey = `${source.id}\u0000${target.id}`;
+    if (drawnPairs.has(pairKey)) return;
+    drawnPairs.add(pairKey);
+    const crossCommunity =
+      Boolean(source.community) &&
+      Boolean(target.community) &&
+      source.community !== target.community;
+    const active = source.id === selectedId || target.id === selectedId;
+    flowEdges.push({
+      id: `rel-${index}-${source.id}-${target.id}`,
+      source: source.id,
+      target: target.id,
+      type: "rootmap",
+      animated: false,
+      className: [
+        active ? "rootmap-edge-active" : "rootmap-edge-muted",
+        "rootmap-edge-relation",
+        RELATION_EDGE_CLASS[edge.relation_type],
+        crossCommunity ? "rootmap-edge-cross" : "",
+      ].join(" "),
+      data: {
+        relationType: edge.relation_type,
+        explanation: edge.explanation ?? "",
+        isBlocking: edge.is_blocking ?? false,
+        confidence: edge.confidence ?? 0,
+        crossCommunity,
+        sourceTitle: source.title,
+        targetTitle: target.title,
+      },
+    });
+  });
 
   return { nodes: flowNodes, edges: flowEdges, visibleCount: flowNodes.length };
 }
@@ -618,6 +725,100 @@ function RootMapFlowNode({ data }: NodeProps<Node<RootMapNodeData>>) {
 }
 
 const nodeTypes = { rootmap: RootMapFlowNode };
+
+/**
+ * Phase 13: 관계 근거를 보여주는 커스텀 edge.
+ *
+ * - edge 경로(BaseEdge)는 기존 smoothstep과 동일하게 그린다.
+ * - 경로 중앙에 작은 칩을 두고, 마우스 hover 또는 키보드 포커스 시 관계 근거 카드를 띄운다.
+ * - `is_blocking`이면 자물쇠 표시와 "이걸 모르면 막힘" 배지를 보여준다.
+ * - 근거(explanation)가 없으면 관계 타입만 보여주고 화면이 깨지지 않게 한다(fallback).
+ * - hover뿐 아니라 버튼 포커스로도 카드가 열려 키보드 접근성을 유지한다(Phase 07 기조).
+ */
+function RootMapFlowEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  markerEnd,
+  style,
+  data,
+}: EdgeProps<Edge<RootMapEdgeData>>) {
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+  });
+
+  const relationType = data?.relationType ?? "prerequisite";
+  const explanation = (data?.explanation ?? "").trim();
+  const isBlocking = data?.isBlocking ?? false;
+  const crossCommunity = data?.crossCommunity ?? false;
+  const confidence = data?.confidence ?? 0;
+  const relationLabel = RELATION_LABEL[relationType];
+  const sourceTitle = data?.sourceTitle ?? "";
+  const targetTitle = data?.targetTitle ?? "";
+  const tooltipId = `${id}-rationale`;
+
+  return (
+    <>
+      <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={style} />
+      <EdgeLabelRenderer>
+        <div
+          className="rootmap-edge-label nodrag nopan"
+          style={{
+            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+          }}
+        >
+          <button
+            type="button"
+            className={[
+              "rootmap-edge-chip",
+              isBlocking ? "is-blocking" : "",
+              crossCommunity ? "is-cross" : "",
+            ].join(" ")}
+            aria-label={`${sourceTitle}에서 ${targetTitle}로: ${relationLabel}${
+              explanation ? `. 이유: ${explanation}` : ""
+            }${isBlocking ? ". 이걸 모르면 다음 개념 이해가 막힙니다." : ""}`}
+            aria-describedby={tooltipId}
+          >
+            {isBlocking ? "!" : "·"}
+          </button>
+          <div role="tooltip" id={tooltipId} className="rootmap-edge-card">
+            <div className="rootmap-edge-card-head">
+              <span className="rootmap-edge-card-relation">{relationLabel}</span>
+              {isBlocking ? (
+                <span className="rootmap-edge-card-blocking">이걸 모르면 막힘</span>
+              ) : null}
+              {crossCommunity ? (
+                <span className="rootmap-edge-card-cross">다른 묶음 연결</span>
+              ) : null}
+            </div>
+            <strong className="rootmap-edge-card-title">
+              {sourceTitle} → {targetTitle}
+            </strong>
+            <p className="rootmap-edge-card-reason">
+              {explanation ? `이유: ${explanation}` : "아직 관계 근거가 없습니다."}
+            </p>
+            {confidence > 0 ? (
+              <span className="rootmap-edge-card-confidence">
+                확신도 {Math.round(confidence * 100)}%
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </EdgeLabelRenderer>
+    </>
+  );
+}
+
+const edgeTypes = { rootmap: RootMapFlowEdge };
 
 export function TreePageClient({ treeId }: { treeId: string }) {
   const router = useRouter();
@@ -1809,6 +2010,7 @@ export function TreePageClient({ treeId }: { treeId: string }) {
                 nodes={flow.nodes}
                 edges={flow.edges}
                 nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
                 fitView
                 fitViewOptions={{ padding: 0.18 }}
                 minZoom={0.2}

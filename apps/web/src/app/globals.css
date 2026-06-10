@@ -334,6 +334,161 @@ body {
   fill: rgba(9, 9, 11, 0.88);
 }
 
+/* Phase 13: 비-prerequisite 관계 edge는 점선·약한 회색으로 그려 계층선과 구분한다. */
+.rootmap-flow-frame .react-flow__edge.rootmap-edge-relation path {
+  stroke: #52525b;
+  stroke-dasharray: 4 4;
+}
+
+.rootmap-flow-frame .react-flow__edge.rel-related path {
+  stroke: #38bdf8;
+}
+
+.rootmap-flow-frame .react-flow__edge.rel-application path {
+  stroke: #818cf8;
+}
+
+.rootmap-flow-frame .react-flow__edge.rel-part-of path {
+  stroke: #a78bfa;
+}
+
+.rootmap-flow-frame .react-flow__edge.rel-example path {
+  stroke: #2dd4bf;
+}
+
+.rootmap-flow-frame .react-flow__edge.rel-misconception path {
+  stroke: #f59e0b;
+}
+
+/* cross-community 연결은 더 굵은 점선으로 강조한다(다른 묶음을 잇는다는 신호). */
+.rootmap-flow-frame .react-flow__edge.rootmap-edge-cross path {
+  stroke: #f472b6;
+  stroke-dasharray: 7 4;
+}
+
+/* Phase 13: edge 중앙 칩 + hover/포커스 시 뜨는 관계 근거 카드. */
+.rootmap-edge-label {
+  position: absolute;
+  pointer-events: all;
+  font-size: 11px;
+}
+
+.rootmap-edge-chip {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid #3f3f46;
+  background: #09090b;
+  color: #d4d4d8;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 120ms ease, border-color 120ms ease;
+}
+
+.rootmap-edge-label:hover .rootmap-edge-chip,
+.rootmap-edge-label:focus-within .rootmap-edge-chip {
+  opacity: 1;
+  border-color: #047857;
+}
+
+.rootmap-edge-chip.is-blocking {
+  border-color: #b45309;
+  color: #fbbf24;
+}
+
+.rootmap-edge-chip.is-cross {
+  border-color: #db2777;
+  color: #f9a8d4;
+}
+
+.rootmap-edge-chip:focus-visible {
+  outline: 2px solid #34d399;
+  outline-offset: 2px;
+}
+
+.rootmap-edge-card {
+  display: none;
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  width: 232px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #27272a;
+  background: rgba(9, 9, 11, 0.97);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.5);
+  color: #e4e4e7;
+  text-align: left;
+  z-index: 20;
+}
+
+.rootmap-edge-label:hover .rootmap-edge-card,
+.rootmap-edge-label:focus-within .rootmap-edge-card {
+  display: block;
+}
+
+.rootmap-edge-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.rootmap-edge-card-relation {
+  border-radius: 999px;
+  padding: 1px 8px;
+  background: #047857;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.rootmap-edge-card-blocking {
+  border-radius: 999px;
+  padding: 1px 8px;
+  background: #b45309;
+  color: #fff7ed;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.rootmap-edge-card-cross {
+  border-radius: 999px;
+  padding: 1px 8px;
+  background: #db2777;
+  color: #fdf2f8;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.rootmap-edge-card-title {
+  display: block;
+  color: #ffffff;
+  font-size: 12px;
+  line-height: 1.35;
+  margin-bottom: 4px;
+}
+
+.rootmap-edge-card-reason {
+  margin: 0;
+  color: #a1a1aa;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.rootmap-edge-card-confidence {
+  display: inline-block;
+  margin-top: 6px;
+  color: #6ee7b7;
+  font-size: 10px;
+  font-weight: 700;
+}
+
 .rootmap-flow-node {
   width: 196px;
   min-height: 96px;

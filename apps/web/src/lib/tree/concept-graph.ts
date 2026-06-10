@@ -1,4 +1,4 @@
-import type { NodeType } from "@/types/learning";
+import type { LearningEdgeQuality, NodeType } from "@/types/learning";
 
 export interface ConceptGraphInputNode {
   id: string;
@@ -25,6 +25,14 @@ export interface DerivedConceptGraphView {
   nodes: DerivedConceptGraphNode[];
   recommended_order: string[];
   communities: ConceptCommunityView[];
+  /**
+   * Phase 13: prerequisite 외 관계까지 보존한 edge 목록(뷰의 추가 정보).
+   *
+   * 중요: depth·children·recommended_order는 여전히 prerequisite만으로 계산한다(하위 호환).
+   * 이 `edges`는 위상 계산에 전혀 쓰이지 않고, UI hover 근거·cross-community 식별의 입력으로만 쓴다.
+   * 양끝이 실제 노드 id가 아닌 edge는 잡음이므로 걸러서 담는다.
+   */
+  edges: LearningEdgeQuality[];
 }
 
 function communityId(name: string): string {
@@ -82,6 +90,7 @@ function deriveDepths(nodes: ConceptGraphInputNode[]): Map<string, number> {
 
 export function deriveLearningGraphView(
   nodes: ConceptGraphInputNode[],
+  edges: LearningEdgeQuality[] = [],
 ): DerivedConceptGraphView {
   assertValidRefs(nodes);
   const depths = deriveDepths(nodes);
@@ -132,9 +141,16 @@ export function deriveLearningGraphView(
     (a, b) => a.priority - b.priority || a.name.localeCompare(b.name),
   );
 
+  // Phase 13: 양끝이 모두 실제 노드인 edge만 보존한다(위상 계산엔 영향 없음).
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const preservedEdges = edges.filter(
+    (edge) => nodeIds.has(edge.from) && nodeIds.has(edge.to),
+  );
+
   return {
     nodes: derivedNodes,
     recommended_order: derivedNodes.map((node) => node.id),
     communities,
+    edges: preservedEdges,
   };
 }

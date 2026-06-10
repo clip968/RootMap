@@ -45,12 +45,38 @@ export const conceptCandidateSchema = z.object({
   is_reusable: z.boolean().optional().default(true),
 });
 
-export const llmConceptEdgeSchema = z.object({
-  from: z.string().min(1),
-  to: z.string().min(1),
-  relation_type: conceptRelationSchema,
-  reason: z.string().optional(),
-});
+/**
+ * Phase 13: edge 품질 스키마.
+ *
+ * 입력에서 `explanation`/`confidence`/`is_blocking`을 받되, 없으면 안전하게 보정한다.
+ * - `explanation`이 없으면 옛 필드 `reason`을 쓰고, 둘 다 없으면 빈 문자열로 둔다(UI는 관계 타입만 표시).
+ * - `confidence`는 0~1로 강제하고, 없으면 중립값 0.5로 둔다.
+ * - `is_blocking`은 없으면 false로 둔다(prerequisite에서만 의미).
+ * 이렇게 하면 옛 트리(이 필드들이 없는 데이터)도 파싱·렌더링이 깨지지 않는다.
+ */
+export const llmConceptEdgeSchema = z
+  .object({
+    from: z.string().min(1),
+    to: z.string().min(1),
+    relation_type: conceptRelationSchema,
+    reason: z.string().optional(),
+    explanation: z.string().optional(),
+    confidence: z.number().min(0).max(1).optional(),
+    is_blocking: z.boolean().optional(),
+  })
+  .transform((edge) => {
+    const explanation = (edge.explanation ?? edge.reason ?? "").trim();
+    return {
+      from: edge.from,
+      to: edge.to,
+      relation_type: edge.relation_type,
+      // 옛 소비자/응답 형태 보존을 위해 reason도 유지한다(있으면 그대로, 없으면 explanation으로).
+      reason: edge.reason ?? (explanation || undefined),
+      explanation,
+      confidence: edge.confidence ?? 0.5,
+      is_blocking: edge.is_blocking ?? false,
+    };
+  });
 
 export const learningTreeNodeSchema = z.object({
   id: z.string().min(1),
@@ -666,6 +692,10 @@ export const documentTreeResponseSchema = z
         to: e.to,
         relation_type: e.relation_type,
         reason: e.reason,
+        // Phase 13: 품질 필드는 llmConceptEdgeSchema의 transform이 이미 보정해 둔다.
+        explanation: e.explanation,
+        confidence: e.confidence,
+        is_blocking: e.is_blocking,
       })),
       recommended_order: data.recommended_order,
     }),
@@ -780,6 +810,10 @@ export const documentTreeStructureResponseSchema = z
         to: e.to,
         relation_type: e.relation_type,
         reason: e.reason,
+        // Phase 13: 품질 필드는 llmConceptEdgeSchema의 transform이 이미 보정해 둔다.
+        explanation: e.explanation,
+        confidence: e.confidence,
+        is_blocking: e.is_blocking,
       })),
       recommended_order: data.recommended_order,
     }),

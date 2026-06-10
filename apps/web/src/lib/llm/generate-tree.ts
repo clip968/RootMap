@@ -225,7 +225,7 @@ function assembleLearningTree(
   outline: LearningTreeOutlineResponse,
   detailResponses: LearningTreeDetailResponse[],
 ): LearningTreeResponse {
-  const graph = deriveLearningGraphView(outline.nodes);
+  const graph = deriveLearningGraphView(outline.nodes, outline.edges);
   const graphById = new Map(graph.nodes.map((node) => [node.id, node]));
   const detailById = new Map(
     detailResponses.flatMap((response) =>

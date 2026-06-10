@@ -31,7 +31,9 @@ Requirements:
 - Keep each nodes.description concise: 1 to 2 Korean sentences, maximum about 180 Korean characters.
 - Keep each concept_candidate.short_description to 1 short sentence, maximum about 100 Korean characters.
 - Keep edges[] to essential relationships only, preferably no more than the node count.
-- Keep each edges.reason to 1 short Korean phrase or sentence.
+- Keep each edges.explanation to 1 short Korean phrase or sentence saying why this relationship holds.
+- Set each edges.confidence to a number from 0 to 1 for how sure you are about the relationship.
+- For prerequisite edges, set edges.is_blocking true when not knowing "from" blocks understanding "to"; otherwise false.
 - Include at least 3 prerequisite nodes, 3 core nodes, 1 misconception node, and 2 quiz nodes.
 - Put prerequisite nodes before core nodes in recommended_order whenever possible.
 - Ensure every prerequisite id appears earlier than the node that depends on it in recommended_order.
@@ -75,7 +77,9 @@ JSON schema:
       "from": string,
       "to": string,
       "relation_type": "prerequisite" | "part_of" | "related" | "misconception_of" | "example_of" | "application_of",
-      "reason": string
+      "explanation": string,
+      "confidence": number,
+      "is_blocking": boolean
     }
   ],
   "recommended_order": string[]
@@ -115,6 +119,9 @@ Requirements:
 - Use stable lowercase ASCII snake_case node ids.
 - Write learner-facing title and summary text in Korean.
 - Keep edges[] to essential non-tree relationships or important prerequisite relationships only.
+- For every edge, write "explanation": one short Korean sentence saying why this relationship holds.
+- For every edge, set "confidence": a number from 0 to 1 for how sure you are about this relationship.
+- For prerequisite edges, set "is_blocking": true when not knowing "from" would block understanding "to"; otherwise false.
 - recommended_order is optional. If included, it must follow learning priority.
 
 JSON schema:
@@ -136,11 +143,16 @@ JSON schema:
       "from": string,
       "to": string,
       "relation_type": "prerequisite" | "part_of" | "related" | "misconception_of" | "example_of" | "application_of",
-      "reason": string
+      "explanation": string,
+      "confidence": number,
+      "is_blocking": boolean
     }
   ],
   "recommended_order": string[]
-}`;
+}
+
+Example edge:
+{ "from": "page_table", "to": "address_translation", "relation_type": "prerequisite", "explanation": "가상 주소를 물리 주소로 바꾸려면 page table 조회 과정을 먼저 알아야 함.", "confidence": 0.9, "is_blocking": true }`;
 
 export function buildLearningTreeOutlineUserMessage(
   topic: string,
@@ -581,7 +593,9 @@ JSON schema:
       "from": string,
       "to": string,
       "relation_type": "prerequisite" | "part_of" | "related" | "misconception_of" | "example_of" | "application_of",
-      "reason": string
+      "explanation": string,
+      "confidence": number,
+      "is_blocking": boolean
     }
   ],
   "recommended_order": string[]
@@ -663,7 +677,9 @@ JSON schema:
       "from": string,
       "to": string,
       "relation_type": "prerequisite" | "part_of" | "related" | "misconception_of" | "example_of" | "application_of",
-      "reason": string
+      "explanation": string,
+      "confidence": number,
+      "is_blocking": boolean
     }
   ],
   "recommended_order": string[]

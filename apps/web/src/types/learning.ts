@@ -23,12 +23,42 @@ export interface ConceptCandidate {
   is_reusable: boolean;
 }
 
-/** Phase 2: LLM 트리 출력 최상위 간선 (노드 id = node_key) */
+/** Phase 2: LLM 트리 출력 최상위 간선 (노드 id = node_key)
+ *
+ * Phase 13: edge를 "단순 위상 관계"에서 "근거·확신도·blocking 여부를 가진 학습 관계"로
+ * 끌어올리기 위해 품질 필드를 추가했다. 단, 아래 세 필드는 모두 optional이다.
+ * - 기존에 저장된 트리(`tree_json`)에는 이 필드가 없으므로 파서/뷰가 기본값으로 보정한다.
+ * - 그래서 화면이나 평가가 옛 데이터에서도 깨지지 않는다(하위 호환).
+ */
 export interface LlmConceptEdge {
   from: string;
   to: string;
   relation_type: ConceptRelationType;
+  /** @deprecated Phase 13에서 `explanation`으로 통합. 옛 데이터 호환을 위해 유지한다. */
   reason?: string;
+  /** Phase 13: 왜 이 관계인가(필수화 목표). 비어 있으면 `reason`으로 보정한다. */
+  explanation?: string;
+  /** Phase 13: 관계 확신도(0~1). 없으면 0.5로 보정한다. */
+  confidence?: number;
+  /** Phase 13: 이걸 모르면 다음 개념 이해가 막히는가. prerequisite에서만 의미가 있다. */
+  is_blocking?: boolean;
+}
+
+/**
+ * Phase 13: 보정이 끝나 "항상 채워진" 형태의 학습 edge 품질 타입.
+ *
+ * `LlmConceptEdge`는 LLM/DB 입력 단계라 품질 필드가 optional이지만,
+ * 뷰·API·UI는 이 타입을 받아 항상 `explanation`·`confidence`·`is_blocking`이 있다고 가정한다.
+ * 명세(§2.2)는 relation_type을 4종으로 좁히지만, RootMap은 cross-community link 식별(§2.4)에
+ * `application_of`/`example_of`가 필요하므로 6종 `ConceptRelationType`을 그대로 유지한다.
+ */
+export interface LearningEdgeQuality {
+  from: string;
+  to: string;
+  relation_type: ConceptRelationType;
+  explanation: string;
+  confidence: number;
+  is_blocking: boolean;
 }
 
 export type NodeType =
@@ -144,6 +174,11 @@ export interface ApiTreePayload {
     priority: number;
     node_ids: string[];
   }>;
+  /**
+   * Phase 13: 노드 간 관계 근거(edge hover UI가 소비).
+   * from/to는 노드의 `node_key`다. 옛 트리에는 없을 수 있으므로 optional이다.
+   */
+  edges?: LearningEdgeQuality[];
 }
 
 export interface ApiTreeHistoryItem {
