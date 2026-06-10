@@ -41,12 +41,18 @@ function assertFixtureShape(fixture: TreeEvalFixture, index: number): void {
   if (fixture.expected_concepts.length === 0) {
     throw new Error(`${where}: expected_concepts가 비어 있습니다.`);
   }
-  // DoD: 각 픽스처에 required_edges와 forbidden_edges가 1개 이상 있어야 한다.
+  // DoD: 각 픽스처의 필수 배열은 모두 비어 있으면 안 된다.
   if (fixture.required_edges.length === 0) {
     throw new Error(`${where}: required_edges가 1개 이상 필요합니다.`);
   }
   if (fixture.forbidden_edges.length === 0) {
     throw new Error(`${where}: forbidden_edges가 1개 이상 필요합니다.`);
+  }
+  if (fixture.beginner_misconceptions.length === 0) {
+    throw new Error(`${where}: beginner_misconceptions가 1개 이상 필요합니다.`);
+  }
+  if (fixture.required_examples.length === 0) {
+    throw new Error(`${where}: required_examples가 1개 이상 필요합니다.`);
   }
   for (const edge of [...fixture.required_edges, ...fixture.forbidden_edges]) {
     if (!edge.from.trim() || !edge.to.trim() || !edge.reason.trim()) {

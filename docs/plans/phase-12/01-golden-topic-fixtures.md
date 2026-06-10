@@ -71,5 +71,5 @@ Linux block layer
 
 ```bash
 cd apps/web
-npx tsx -e "import('./evals/fixtures/topics/index.ts').then(m=>console.log(m.default.length))"
+npx tsx -e "import topicFixtures from './evals/fixtures/topics/index.ts'; console.log(topicFixtures.length)"
 ```
