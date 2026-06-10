@@ -56,7 +56,10 @@
     "phase7:visual-block-schema": "tsx scripts/smoke-phase7-visual-block-schema.ts",
     "phase7:visual-detail-prompts": "tsx scripts/smoke-phase7-visual-detail-prompts.ts",
     "phase7:visual-detail-renderers": "tsx scripts/smoke-phase7-visual-detail-renderers.ts",
-    "phase7:visual-detail-smoke": "npm run phase7:visual-block-schema && npm run phase7:visual-detail-prompts && npm run phase7:visual-detail-renderers"
+    "phase7:visual-detail-smoke": "npm run phase7:visual-block-schema && npm run phase7:visual-detail-prompts && npm run phase7:visual-detail-renderers",
+    "eval:tree": "tsx scripts/eval-tree.ts",
+    "eval:tree:live": "tsx scripts/eval-tree.ts --live",
+    "eval:tree:self-check": "tsx scripts/eval-tree.ts --self-check"
   },
   "dependencies": {
     "@esbuild/linux-x64": "^0.28.0",

@@ -28,12 +28,12 @@ Phase 12의 핵심은 새 기능을 늘리는 것이 아니라, 결과물이 아
 
 > 작업을 완료할 때마다 해당 항목을 `[x]`로 바꿔 진행 상황을 추적한다.
 
-- [ ] 00. [00-tree-eval-contract-and-scope.md](./00-tree-eval-contract-and-scope.md) - Tree eval 계약과 RED 기준 고정
-- [ ] 01. [01-golden-topic-fixtures.md](./01-golden-topic-fixtures.md) - 골든 주제 픽스처 스키마와 10개 작성
-- [ ] 02. [02-tree-eval-scoring-engine.md](./02-tree-eval-scoring-engine.md) - `evaluateLearningTree` 채점 엔진 구현
-- [ ] 03. [03-quality-warnings-to-failures.md](./03-quality-warnings-to-failures.md) - quality warnings를 failures로 흡수
-- [ ] 04. [04-eval-tree-cli-runner.md](./04-eval-tree-cli-runner.md) - `eval:tree` CLI runner와 점수표
-- [ ] 05. [05-phase12-docs-and-quality-gate.md](./05-phase12-docs-and-quality-gate.md) - 문서와 최종 품질 gate 정리
+- [x] 00. [00-tree-eval-contract-and-scope.md](./00-tree-eval-contract-and-scope.md) - Tree eval 계약과 RED 기준 고정
+- [x] 01. [01-golden-topic-fixtures.md](./01-golden-topic-fixtures.md) - 골든 주제 픽스처 스키마와 10개 작성
+- [x] 02. [02-tree-eval-scoring-engine.md](./02-tree-eval-scoring-engine.md) - `evaluateLearningTree` 채점 엔진 구현
+- [x] 03. [03-quality-warnings-to-failures.md](./03-quality-warnings-to-failures.md) - quality warnings를 failures로 흡수
+- [x] 04. [04-eval-tree-cli-runner.md](./04-eval-tree-cli-runner.md) - `eval:tree` CLI runner와 점수표
+- [x] 05. [05-phase12-docs-and-quality-gate.md](./05-phase12-docs-and-quality-gate.md) - 문서와 최종 품질 gate 정리
 
 ## 범위 요약
 

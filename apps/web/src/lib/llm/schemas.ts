@@ -16,6 +16,9 @@ import {
   type VisualBlock,
   type VisualDecision,
 } from "@/lib/visualization/visual-block-schema";
+// Phase 12: 트리 품질 경고는 tree-eval의 단일 검사 로직(collectTreeQualityFailures)에
+// 위임한다. 같은 문제를 두 곳에서 중복 검사하지 않기 위한 통합이다(명세 §1.5).
+import { collectTreeQualityFailures } from "@/lib/evaluation/tree-eval";
 
 const nodeTypeSchema = z.enum([
   "prerequisite",
@@ -323,51 +326,20 @@ export const nodeDetailVisualResponseSchema = z
     }
   });
 
-/** 명세 §5·task 03 품질 가드레일: 스키마 통과 후 경고만 누적 */
+/**
+ * 명세 §5·task 03 품질 가드레일: 스키마 통과 후 경고만 누적.
+ *
+ * Phase 12: 검사 로직을 `collectTreeQualityFailures`(tree-eval.ts)로 단일화하고,
+ * 이 함수는 하위 호환을 위해 구조화 실패의 message만 추출해 그대로 반환한다.
+ * 따라서 반환되는 경고 문자열과 순서는 기존과 동일하게 유지된다(응답/로그 회귀 없음).
+ */
 export function learningTreeQualityWarnings(
   tree: LearningTreeResponse,
   inputTopic: string,
 ): string[] {
-  const w: string[] = [];
-  const n = tree.nodes.length;
-  if (n < 8 || n > 20) {
-    w.push(`노드 수(${n}개)가 권장 범위(8~20)를 벗어났습니다.`);
-  }
-
-  const count = (t: (typeof tree.nodes)[number]["type"]) =>
-    tree.nodes.filter((x) => x.type === t).length;
-
-  if (count("prerequisite") < 3) {
-    w.push("선수지식(prerequisite) 노드가 3개 미만입니다.");
-  }
-  if (count("core") < 3) {
-    w.push("핵심(core) 노드가 3개 미만입니다.");
-  }
-  if (count("misconception") < 1) {
-    w.push("오개념(misconception) 노드가 1개 미만입니다.");
-  }
-  if (count("quiz") < 2) {
-    w.push("이해 점검(quiz) 노드가 2개 미만입니다.");
-  }
-
-  const orderSet = new Set(tree.recommended_order);
-  if (orderSet.size !== tree.recommended_order.length) {
-    w.push("recommended_order에 중복된 id가 있습니다.");
-  }
-
-  const idSet = new Set(tree.nodes.map((x) => x.id));
-  for (const id of idSet) {
-    if (!tree.recommended_order.includes(id)) {
-      w.push("일부 노드 id가 recommended_order에 누락되었습니다.");
-      break;
-    }
-  }
-
-  if (tree.topic.trim() !== inputTopic.trim()) {
-    w.push('응답의 "topic" 필드가 입력 주제와 다릅니다.');
-  }
-
-  return w;
+  return collectTreeQualityFailures(tree, inputTopic).map(
+    (failure) => failure.message,
+  );
 }
 
 export function nodeDetailQualityWarnings(
