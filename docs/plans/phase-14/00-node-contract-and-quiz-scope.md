@@ -56,6 +56,47 @@ type ConceptQuestion = {
 - 문항 시도 기록·세션은 Phase 15.
 - 문서 노드 근거성은 Phase 16.
 
+## 확정된 계약 결정 (Phase 14 시작 시점 고정)
+
+아래 결정을 Phase 14 전체의 단일 기준으로 고정한다. Task 01~06은 이 표를 그대로 따른다.
+
+### 1. 저장·DB 경계 (DB 마이그레이션 없음)
+
+- `learning_objective`, `mastery_evidence`, `ConceptQuestion[]`는 모두 노드 상세 JSON(`learningNodes.detailJson`) 안에 저장한다.
+- Phase 14에서는 **새 컬럼·새 테이블·migration을 추가하지 않는다.** `detailJson`은 이미 임의 구조 JSON이므로 신규 필드는 하위 호환된다.
+- 문항 시도 기록(`QuestionAttempt`)용 스키마 확장은 Phase 14 범위가 아니라 **Phase 15**에서 다룬다(거기서 migration·plan 승인 후 진행).
+
+### 2. 하위 호환
+
+- `NodeDetailResponse`·`DocumentNodeDetailResponse`의 신규 필드는 전부 **optional**로 추가한다.
+- 필드가 없는 기존 상세(`detailJson`)는 화면에서 해당 블록을 숨기고 깨지지 않는다.
+- 기존 `check_questions`(`{question, answer}`)는 제거하지 않고 유지한다. `ConceptQuestion[]`는 별도 필드(`concept_questions`)로 **보강**한다.
+
+### 3. 동사 체계 (5개)
+
+```text
+define, explain, apply, compare, debug
+```
+
+`learning_objective`는 위 동사 중 하나로 시작해야 한다(영어 동사 접두로 고정해 검증을 단순화).
+
+### 4. 동사 ↔ 문항 유형 정렬 규칙 (고정)
+
+| learning_objective 동사 | 우선 ConceptQuestion.type | 허용 보조 type |
+| --- | --- | --- |
+| define | recall | compare |
+| explain | recall | compare, trace |
+| apply | apply | trace |
+| compare | compare | recall |
+| debug | debug | trace |
+
+- 한 노드의 퀴즈가 `recall` 한 종류로만 채워지지 않도록, 가능하면 보조 type을 1개 이상 섞는다(`QUIZ_TYPE_IMBALANCE` 경고 대상).
+- 각 노드의 퀴즈는 그 노드 `mastery_evidence` 항목을 최소 1개 검증해야 한다(`QUIZ_EVIDENCE_GAP` 경고 대상).
+
+### 5. 오개념 자산 재사용
+
+- `ConceptQuestion.misconception_target`은 새로 만들지 않고, 기존 `misconception` 노드 타입과 노드 상세의 `common_misconceptions`에서 가져와 채운다.
+
 ## 완료 기준(DoD)
 
 - `NodeLearningContract`, `ConceptQuestion` 계약이 문서·타입 초안으로 고정된다.

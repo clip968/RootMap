@@ -32,7 +32,7 @@
 
 > 작업을 완료할 때마다 해당 항목을 `[x]`로 바꿔 진행 상황을 추적한다.
 
-- [ ] 00. [00-node-contract-and-quiz-scope.md](./00-node-contract-and-quiz-scope.md) - 노드 계약·퀴즈 범위 고정
+- [x] 00. [00-node-contract-and-quiz-scope.md](./00-node-contract-and-quiz-scope.md) - 노드 계약·퀴즈 범위 고정
 - [ ] 01. [01-node-learning-contract-schema.md](./01-node-learning-contract-schema.md) - `learning_objective`·`mastery_evidence` 스키마
 - [ ] 02. [02-node-detail-prompt-shift.md](./02-node-detail-prompt-shift.md) - 노드 상세 프롬프트 학습 목표 전환
 - [ ] 03. [03-concept-question-schema.md](./03-concept-question-schema.md) - `ConceptQuestion` 스키마 도입
