@@ -677,6 +677,19 @@ async function main(): Promise<void> {
     NODE_DETAIL_SYSTEM_BASE.includes("Do not translate node_id, type, or next_nodes"),
     "node detail prompt should forbid translating structural fields",
   );
+  // Phase 14: 프롬프트가 학습 계약·개념 퀴즈 필드를 실제로 요구하는지 gate로 검증한다.
+  assert(
+    NODE_DETAIL_SYSTEM_BASE.includes('"learning_objective": string'),
+    "node detail prompt should request learning_objective",
+  );
+  assert(
+    NODE_DETAIL_SYSTEM_BASE.includes('"mastery_evidence": string[]'),
+    "node detail prompt should request mastery_evidence",
+  );
+  assert(
+    NODE_DETAIL_SYSTEM_BASE.includes('"concept_questions"'),
+    "node detail prompt should request concept_questions",
+  );
 
   const logs = await captureServiceLogs(async () => {
     await runCacheHitSkipsPanelGraphCase();
