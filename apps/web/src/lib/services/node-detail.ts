@@ -102,6 +102,8 @@ export interface ApiNodeDetailResponse {
   example: string;
   common_misconceptions: string[];
   check_questions: NodeDetailResponse["check_questions"];
+  /** Phase 14: 개념 문항(있으면 그대로 전달). 없을 수 있다(기존 데이터·Concept fast path). */
+  concept_questions?: NodeDetailResponse["concept_questions"];
   next_nodes: string[];
   visual_decision: VisualDecision;
   visual_blocks: VisualBlock[];
@@ -280,6 +282,7 @@ function toApiBody(
     example: d.example,
     common_misconceptions: d.common_misconceptions,
     check_questions: d.check_questions,
+    concept_questions: d.concept_questions,
     next_nodes: d.next_nodes,
     visual_decision: normalizeVisualDecision(d.visual_decision),
     visual_blocks: normalizeVisualBlocks(d.visual_blocks),
@@ -684,6 +687,7 @@ export async function getOrCreateNodeDetail(params: {
         example: detail.example,
         common_misconceptions: detail.common_misconceptions,
         check_questions: detail.check_questions,
+        concept_questions: detail.concept_questions,
         next_nodes: detail.next_nodes,
         visual_decision: detail.visual_decision,
         visual_blocks: detail.visual_blocks ?? [],

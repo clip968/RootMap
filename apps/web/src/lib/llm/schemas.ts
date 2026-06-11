@@ -339,6 +339,37 @@ export const learningObjectiveSchema = z
 /** Phase 14: mastery_evidence zod. 1개 이상, 각 항목은 비어 있지 않은 행동 진술. */
 export const masteryEvidenceSchema = z.array(z.string().trim().min(1)).min(1);
 
+/** Phase 14(§6.3): ConceptQuestion 유형 5종. learning_objective 동사 체계와 정렬된다. */
+export const conceptQuestionTypeSchema = z.enum([
+  "recall",
+  "apply",
+  "compare",
+  "trace",
+  "debug",
+]);
+
+/**
+ * Phase 14(§6.3): 개념 문항 스키마.
+ *
+ * - `node_id`는 노드 상세가 이미 자기 id를 가지므로 optional(문항마다 반복 강제하지 않음).
+ * - `difficulty`는 코드베이스 관례대로 1~5 정수로 clamp한다(LLM이 3.0/6 등을 줘도 안전).
+ * - `rubric`은 채점 기준이므로 최소 1개를 강제한다.
+ */
+export const conceptQuestionSchema = z.object({
+  id: z.string().min(1),
+  node_id: z.string().min(1).optional(),
+  type: conceptQuestionTypeSchema,
+  prompt: z.string().min(1),
+  expected_answer: z.string().min(1),
+  rubric: z.array(z.string().trim().min(1)).min(1),
+  misconception_target: z.string().trim().min(1).optional(),
+  difficulty: z
+    .number()
+    .min(1)
+    .max(5)
+    .transform((v) => Math.max(1, Math.min(5, Math.round(v)))),
+});
+
 export const nodeDetailResponseSchema = z.object({
   node_id: z.string().min(1),
   title: z.string().min(1),
@@ -352,6 +383,8 @@ export const nodeDetailResponseSchema = z.object({
   example: z.string(),
   common_misconceptions: z.array(z.string()),
   check_questions: z.array(nodeDetailQuestionSchema),
+  // Phase 14: 개념 문항(보강). optional이라 없으면 그대로 통과한다.
+  concept_questions: z.array(conceptQuestionSchema).optional(),
   next_nodes: z.array(z.string()),
   visual_decision: visualDecisionSchema.optional().default(DEFAULT_VISUAL_DECISION),
   visual_blocks: visualBlocksSchema.optional().default([]),
@@ -878,6 +911,7 @@ export const documentNodeDetailResponseSchema = z
     example: z.string(),
     common_misconceptions: z.array(z.string()),
     check_questions: z.array(documentNodeDetailQuestionSchema),
+    concept_questions: z.array(conceptQuestionSchema).optional(),
     next_nodes: z.array(z.string()),
     visual_decision: visualDecisionSchema.optional().default(DEFAULT_VISUAL_DECISION),
     visual_blocks: visualBlocksSchema.optional().default([]),
@@ -899,6 +933,7 @@ export const documentNodeDetailResponseSchema = z
         question: q.question,
         answer: q.answer,
       })),
+      concept_questions: data.concept_questions,
       next_nodes: data.next_nodes,
       visual_decision: data.visual_decision,
       visual_blocks: data.visual_blocks,

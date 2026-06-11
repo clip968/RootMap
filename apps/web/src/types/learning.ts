@@ -98,6 +98,38 @@ export interface NodeLearningContract {
   mastery_evidence: string[];
 }
 
+/**
+ * Phase 14(§6.3): 개념 이해 점검 문항.
+ *
+ * 퀴즈를 "노드 타입"이 아니라 "각 개념의 mastery_evidence를 검증하는 도구"로 본다.
+ * `type`은 Section 3 동사 체계와 정렬된다(define→recall, apply→apply, compare→compare,
+ * debug→debug/trace). 기존 `check_questions`(`{question, answer}`)는 유지하고 이 타입으로 보강한다.
+ *
+ * 설계 메모:
+ * - `node_id`는 노드 상세가 이미 자기 node_id를 가지므로 문항마다 반복하지 않아도 되도록 optional이다.
+ * - `difficulty`는 코드베이스의 다른 difficulty 필드와 동일하게 number(1~5, 스키마에서 clamp)로 둔다.
+ */
+export type ConceptQuestionType =
+  | "recall"
+  | "apply"
+  | "compare"
+  | "trace"
+  | "debug";
+
+export interface ConceptQuestion {
+  id: string;
+  node_id?: string;
+  type: ConceptQuestionType;
+  prompt: string;
+  expected_answer: string;
+  /** 채점 기준 항목(1개 이상). rubric 충족 여부로 부분 점수를 낸다(Phase 14-04). */
+  rubric: string[];
+  /** 이 문항이 겨냥하는 오개념(기존 misconception 자산에서 재사용). */
+  misconception_target?: string;
+  /** 1~5 난이도. 스키마에서 정수로 clamp한다. */
+  difficulty: number;
+}
+
 /** LLM 트리 생성 응답의 단일 노드 (id = LLM node_key) */
 export interface LearningTreeNode {
   id: string;
@@ -149,6 +181,11 @@ export interface NodeDetailResponse {
     question: string;
     answer: string;
   }>;
+  /**
+   * Phase 14(§6): mastery_evidence를 검증하는 개념 문항(보강 필드).
+   * optional이라 기존 상세는 그대로 동작하고, check_questions와 병존한다(점진 대체).
+   */
+  concept_questions?: ConceptQuestion[];
   next_nodes: string[];
   visual_decision?: VisualDecision;
   visual_blocks?: VisualBlock[];
@@ -423,6 +460,8 @@ export interface DocumentNodeDetailResponse {
     question: string;
     answer: string;
   }>;
+  /** Phase 14(§6): 문서 노드의 개념 문항(보강 필드). optional(하위 호환). */
+  concept_questions?: ConceptQuestion[];
   next_nodes: string[];
   visual_decision?: VisualDecision;
   visual_blocks?: VisualBlock[];

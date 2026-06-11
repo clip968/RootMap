@@ -237,6 +237,10 @@ Requirements:
 - Begin learning_objective with exactly one of these English verbs, then " — ", then the Korean sentence: define, explain, apply, compare, debug.
 - Choose the verb to fit the node: define/explain for understanding a concept, apply for using it, compare for distinguishing concepts, debug for finding or fixing errors.
 - Add mastery_evidence: 2 to 4 short Korean statements in "~할 수 있다" form that can be checked to prove the learning_objective is met.
+- Add concept_questions: 2 to 4 questions that verify the mastery_evidence above; each question must check at least one mastery_evidence item.
+- For each concept_question set id (short ascii slug), type (recall|apply|compare|trace|debug), prompt, expected_answer, rubric (1 to 3 grading points), difficulty (integer 1-5), and optional misconception_target.
+- Do not make every concept_question "recall". Include at least one apply, compare, trace, or debug question when the concept allows it.
+- For misconception_target, reuse one of the common_misconceptions when the question targets a typical mistake.
 - Write all learner-facing text in Korean: title, why_it_matters, easy_explanation, analogy, example, common_misconceptions, questions, and answers.
 - For established English technical terms, use Korean-first wording with the original term in parentheses when helpful.
 - Do not translate node_id, type, or next_nodes. Keep type as one of the exact enum values below.
@@ -258,6 +262,18 @@ JSON schema:
     {
       "question": string,
       "answer": string
+    }
+  ],
+  "concept_questions": [
+    {
+      "id": string,
+      "node_id": string,
+      "type": "recall" | "apply" | "compare" | "trace" | "debug",
+      "prompt": string,
+      "expected_answer": string,
+      "rubric": string[],
+      "misconception_target": string | null,
+      "difficulty": number (integer 1-5)
     }
   ],
   "next_nodes": string[]
@@ -746,6 +762,10 @@ Requirements:
 - Add a learning_objective: one Korean sentence stating what the learner should be able to DO after this node, in the context of the document.
 - Begin learning_objective with exactly one of these English verbs, then " — ", then the Korean sentence: define, explain, apply, compare, debug.
 - Add mastery_evidence: 2 to 4 short Korean "~할 수 있다" statements that can be checked and that stay consistent with the document evidence (do not contradict it).
+- Add concept_questions: 2 to 4 questions that verify the mastery_evidence above; each question must check at least one mastery_evidence item.
+- For each concept_question set id (short ascii slug), type (recall|apply|compare|trace|debug), prompt, expected_answer, rubric (1 to 3 grading points), difficulty (integer 1-5), and optional misconception_target.
+- Do not make every concept_question "recall"; include at least one apply, compare, trace, or debug when the concept allows it.
+- For misconception_target, reuse one of the common_misconceptions when the question targets a typical mistake.
 - Return valid JSON only.
 - Do not include markdown outside JSON.
 - Do not wrap the JSON in code fences.
@@ -769,6 +789,18 @@ JSON schema:
     {
       "question": string,
       "answer": string
+    }
+  ],
+  "concept_questions": [
+    {
+      "id": string,
+      "node_id": string,
+      "type": "recall" | "apply" | "compare" | "trace" | "debug",
+      "prompt": string,
+      "expected_answer": string,
+      "rubric": string[],
+      "misconception_target": string | null,
+      "difficulty": number (integer 1-5)
     }
   ],
   "next_nodes": string[]
