@@ -233,6 +233,10 @@ Requirements:
 - Include at least one common misconception.
 - Include 1 to 3 short check questions with answers.
 - Keep easy_explanation, example, and check_questions concrete enough for a beginner to self-check.
+- Add a learning_objective: one Korean sentence stating what the learner should be able to DO after studying this node.
+- Begin learning_objective with exactly one of these English verbs, then " — ", then the Korean sentence: define, explain, apply, compare, debug.
+- Choose the verb to fit the node: define/explain for understanding a concept, apply for using it, compare for distinguishing concepts, debug for finding or fixing errors.
+- Add mastery_evidence: 2 to 4 short Korean statements in "~할 수 있다" form that can be checked to prove the learning_objective is met.
 - Write all learner-facing text in Korean: title, why_it_matters, easy_explanation, analogy, example, common_misconceptions, questions, and answers.
 - For established English technical terms, use Korean-first wording with the original term in parentheses when helpful.
 - Do not translate node_id, type, or next_nodes. Keep type as one of the exact enum values below.
@@ -243,6 +247,8 @@ JSON schema:
   "node_id": string,
   "title": string,
   "type": "prerequisite" | "core" | "supplementary" | "misconception" | "quiz",
+  "learning_objective": string,
+  "mastery_evidence": string[],
   "why_it_matters": string,
   "easy_explanation": string,
   "analogy": string,
@@ -255,6 +261,16 @@ JSON schema:
     }
   ],
   "next_nodes": string[]
+}
+
+Example of learning_objective and mastery_evidence (for a "page_table" node):
+{
+  "learning_objective": "explain — 가상 주소가 페이지 번호와 오프셋으로 나뉘고, 페이지 테이블을 통해 물리 주소로 변환되는 과정을 설명할 수 있다.",
+  "mastery_evidence": [
+    "주어진 가상 주소를 page number와 offset으로 나눌 수 있다.",
+    "TLB miss가 발생했을 때 page table lookup이 왜 필요한지 설명할 수 있다.",
+    "page fault와 TLB miss를 구분할 수 있다."
+  ]
 }`;
 
 export function buildNodeDetailUserMessage(input: {
@@ -727,6 +743,9 @@ Requirements:
 - Include common misconceptions.
 - Include short check questions.
 - Recommend next nodes to study.
+- Add a learning_objective: one Korean sentence stating what the learner should be able to DO after this node, in the context of the document.
+- Begin learning_objective with exactly one of these English verbs, then " — ", then the Korean sentence: define, explain, apply, compare, debug.
+- Add mastery_evidence: 2 to 4 short Korean "~할 수 있다" statements that can be checked and that stay consistent with the document evidence (do not contradict it).
 - Return valid JSON only.
 - Do not include markdown outside JSON.
 - Do not wrap the JSON in code fences.
@@ -739,6 +758,8 @@ JSON schema:
   "node_id": string,
   "title": string,
   "source_type": "explicit" | "inferred" | "generated",
+  "learning_objective": string,
+  "mastery_evidence": string[],
   "why_it_matters_for_document": string,
   "document_context_summary": string,
   "easy_explanation": string,
@@ -751,6 +772,15 @@ JSON schema:
     }
   ],
   "next_nodes": string[]
+}
+
+Example of learning_objective and mastery_evidence (for a document concept):
+{
+  "learning_objective": "compare — 이 문서에서 다루는 두 페이지 교체 알고리즘의 차이를 구분해 설명할 수 있다.",
+  "mastery_evidence": [
+    "문서에 나온 알고리즘의 핵심 차이를 한 문장으로 말할 수 있다.",
+    "주어진 접근 패턴에서 각 알고리즘이 어떤 페이지를 교체할지 예측할 수 있다."
+  ]
 }`;
 
 export function buildDocumentNodeDetailUserMessage(input: {
