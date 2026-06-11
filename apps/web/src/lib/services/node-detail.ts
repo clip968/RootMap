@@ -92,6 +92,10 @@ export interface ApiNodeDetailResponse {
   node_key: string;
   title: string;
   type: NodeType;
+  /** Phase 14: 노드 학습 목표(허용 동사 접두). 없을 수 있다(기존 데이터·Concept fast path). */
+  learning_objective?: string;
+  /** Phase 14: 숙달 증거 목록. 없을 수 있다(기존 데이터·Concept fast path). */
+  mastery_evidence?: string[];
   why_it_matters: string;
   easy_explanation: string;
   analogy: string;
@@ -267,6 +271,9 @@ function toApiBody(
     node_key: nodeKey,
     title: d.title,
     type: d.type,
+    // Phase 14: 저장된 detailJson에 들어 있으면 그대로 응답에 실어 보낸다(없으면 undefined).
+    learning_objective: d.learning_objective,
+    mastery_evidence: d.mastery_evidence,
     why_it_matters: d.why_it_matters,
     easy_explanation: d.easy_explanation,
     analogy: d.analogy,
@@ -668,6 +675,9 @@ export async function getOrCreateNodeDetail(params: {
         node_id: nodeRow.nodeKey,
         title: detail.title,
         type: nodeRow.type,
+        // Phase 14: 문서 노드 상세의 학습 계약 필드를 generic 상세에도 보존한다.
+        learning_objective: detail.learning_objective,
+        mastery_evidence: detail.mastery_evidence,
         why_it_matters: detail.why_it_matters_for_document,
         easy_explanation: detail.easy_explanation,
         analogy: detail.document_context_summary,

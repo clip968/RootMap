@@ -8,6 +8,8 @@ import type {
   DocumentTreeStructureResponse,
   DocumentNodeDetailResponse,
 } from "@/types/learning";
+// Phase 14: learning_objective 동사 접두 검증에 쓰는 허용 동사 목록(값 import).
+import { LEARNING_OBJECTIVE_VERBS } from "@/types/learning";
 import {
   DEFAULT_VISUAL_DECISION,
   REQUIRED_NODE_DETAIL_VISUAL_BLOCK_COUNT,
@@ -305,10 +307,45 @@ export const nodeDetailQuestionSchema = z.object({
   answer: z.string().min(1),
 });
 
+/**
+ * Phase 14(§3.3): learning_objective가 허용 동사로 시작하는지 검사한다.
+ *
+ * 동사 뒤에는 공백/구분자(`— : -`)나 문장이 자연스럽게 이어질 수 있다.
+ * 예: "explain — 가상 주소가 ... 변환되는 과정을 설명할 수 있다."
+ */
+export function startsWithAllowedObjectiveVerb(objective: string): boolean {
+  const head = objective.trim().toLowerCase();
+  return LEARNING_OBJECTIVE_VERBS.some(
+    (verb) =>
+      head === verb ||
+      head.startsWith(`${verb} `) ||
+      head.startsWith(`${verb}:`) ||
+      head.startsWith(`${verb}-`) ||
+      head.startsWith(`${verb}—`) ||
+      head.startsWith(`${verb}–`),
+  );
+}
+
+/** Phase 14: learning_objective zod. 허용 동사 접두를 강제한다. */
+export const learningObjectiveSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine(startsWithAllowedObjectiveVerb, {
+    message:
+      "learning_objective는 define|explain|apply|compare|debug 중 하나로 시작해야 합니다.",
+  });
+
+/** Phase 14: mastery_evidence zod. 1개 이상, 각 항목은 비어 있지 않은 행동 진술. */
+export const masteryEvidenceSchema = z.array(z.string().trim().min(1)).min(1);
+
 export const nodeDetailResponseSchema = z.object({
   node_id: z.string().min(1),
   title: z.string().min(1),
   type: nodeTypeSchema,
+  // Phase 14: 신규 학습 계약 필드. optional이라 기존(필드 없는) 상세도 그대로 통과한다.
+  learning_objective: learningObjectiveSchema.optional(),
+  mastery_evidence: masteryEvidenceSchema.optional(),
   why_it_matters: z.string(),
   easy_explanation: z.string(),
   analogy: z.string(),
@@ -832,6 +869,9 @@ export const documentNodeDetailResponseSchema = z
     node_id: z.string().min(1),
     title: z.string().min(1),
     source_type: documentSourceTypeSchema,
+    // Phase 14: 문서 노드도 학습 계약 필드를 optional로 받는다(하위 호환).
+    learning_objective: learningObjectiveSchema.optional(),
+    mastery_evidence: masteryEvidenceSchema.optional(),
     why_it_matters_for_document: z.string(),
     document_context_summary: z.string(),
     easy_explanation: z.string(),
@@ -847,6 +887,9 @@ export const documentNodeDetailResponseSchema = z
       node_id: data.node_id,
       title: data.title,
       source_type: data.source_type,
+      // Phase 14: transform이 명시적으로 필드를 매핑하므로 신규 필드도 그대로 통과시킨다.
+      learning_objective: data.learning_objective,
+      mastery_evidence: data.mastery_evidence,
       why_it_matters_for_document: data.why_it_matters_for_document,
       document_context_summary: data.document_context_summary,
       easy_explanation: data.easy_explanation,

@@ -70,6 +70,34 @@ export type NodeType =
 
 export type ProgressStatus = "known" | "partial" | "unknown";
 
+/**
+ * Phase 14(§3.3): `learning_objective`가 시작할 수 있는 허용 동사 5종.
+ *
+ * 전체 Bloom taxonomy 대신 이 5개 동사만 사용한다(spec Non-Goals).
+ * 이 동사는 Section 6 퀴즈 유형(`recall|apply|compare|trace|debug`)과 정렬된다.
+ */
+export const LEARNING_OBJECTIVE_VERBS = [
+  "define",
+  "explain",
+  "apply",
+  "compare",
+  "debug",
+] as const;
+export type LearningObjectiveVerb = (typeof LEARNING_OBJECTIVE_VERBS)[number];
+
+/**
+ * Phase 14(§3.2): 노드 학습 계약.
+ *
+ * - `learning_objective`: "이 노드를 읽은 다음 무엇을 할 수 있어야 하는가"를 한 문장으로 적는다.
+ *   허용 동사(영문) 중 하나로 시작해 기계가 검증할 수 있고 UI가 skill 라벨로 쓸 수 있게 한다.
+ *   예: "explain — 가상 주소가 페이지 번호와 오프셋으로 나뉘는 과정을 설명할 수 있다."
+ * - `mastery_evidence`: 위 목표를 "할 수 있다" 형태로 쪼갠 검증 가능한 행동 진술(1개 이상).
+ */
+export interface NodeLearningContract {
+  learning_objective: string;
+  mastery_evidence: string[];
+}
+
 /** LLM 트리 생성 응답의 단일 노드 (id = LLM node_key) */
 export interface LearningTreeNode {
   id: string;
@@ -105,6 +133,13 @@ export interface NodeDetailResponse {
   node_id: string;
   title: string;
   type: NodeType;
+  /**
+   * Phase 14(§3.2): 노드 학습 목표. 허용 동사로 시작한다.
+   * optional이라 이 필드가 없는 기존 상세(detailJson)도 그대로 동작한다(하위 호환).
+   */
+  learning_objective?: string;
+  /** Phase 14(§3.2): 학습 목표를 검증하는 행동 진술 목록(1개 이상). optional(하위 호환). */
+  mastery_evidence?: string[];
   why_it_matters: string;
   easy_explanation: string;
   analogy: string;
@@ -375,6 +410,10 @@ export interface DocumentNodeDetailResponse {
   node_id: string;
   title: string;
   source_type: DocumentSourceType;
+  /** Phase 14(§3.2): 문서 노드 학습 목표. 허용 동사로 시작. optional(하위 호환). */
+  learning_objective?: string;
+  /** Phase 14(§3.2): 문서 노드 숙달 증거(1개 이상). optional(하위 호환). */
+  mastery_evidence?: string[];
   why_it_matters_for_document: string;
   document_context_summary: string;
   easy_explanation: string;

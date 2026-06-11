@@ -22,6 +22,11 @@ export function DetailLearningBlocks({
   const explanation = firstSentence(
     detail?.easy_explanation || node.description || "",
   );
+  // Phase 14: 학습 목표·숙달 증거. 값이 없는 기존 상세는 블록을 통째로 숨긴다(하위 호환).
+  const learningObjective = detail?.learning_objective?.trim() ?? "";
+  const masteryEvidence = (detail?.mastery_evidence ?? []).filter((item) =>
+    item.trim(),
+  );
   const whyItMatters = detail?.why_it_matters_for_document ?? detail?.why_it_matters ?? "";
   const nodeRole = sectionLabel[node.type];
   const prerequisiteLabel = detail?.prerequisite_concepts?.[0]?.title ?? "선수 개념";
@@ -38,6 +43,25 @@ export function DetailLearningBlocks({
         <section className="detail-learning-card detail-learning-summary">
           <span>한 줄로 잡기</span>
           <strong>{explanation}</strong>
+        </section>
+      ) : null}
+
+      {learningObjective || masteryEvidence.length ? (
+        <section className="detail-learning-card detail-mastery-card">
+          <h3>이 노드를 이해했다는 증거</h3>
+          {learningObjective ? (
+            <p className="detail-learning-objective">
+              <span className="detail-objective-label">학습 목표</span>
+              {learningObjective}
+            </p>
+          ) : null}
+          {masteryEvidence.length ? (
+            <ul className="detail-mastery-evidence">
+              {masteryEvidence.map((evidence, index) => (
+                <li key={index}>{evidence}</li>
+              ))}
+            </ul>
+          ) : null}
         </section>
       ) : null}
 
