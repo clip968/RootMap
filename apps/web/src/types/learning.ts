@@ -105,9 +105,9 @@ export interface NodeLearningContract {
  * `type`은 Section 3 동사 체계와 정렬된다(define→recall, apply→apply, compare→compare,
  * debug→debug/trace). 기존 `check_questions`(`{question, answer}`)는 유지하고 이 타입으로 보강한다.
  *
- * 설계 메모:
- * - `node_id`는 노드 상세가 이미 자기 node_id를 가지므로 문항마다 반복하지 않아도 되도록 optional이다.
- * - `difficulty`는 코드베이스의 다른 difficulty 필드와 동일하게 number(1~5, 스키마에서 clamp)로 둔다.
+ * 계약(§00):
+ * - `node_id`는 항상 채워진다. LLM이 생략/오기해도 파서가 노드 상세 id로 backfill한다.
+ * - `difficulty`는 1~5 정수다. LLM이 3.0/6 등을 줘도 스키마에서 clamp해 안전하게 보정한다.
  */
 export type ConceptQuestionType =
   | "recall"
@@ -118,7 +118,7 @@ export type ConceptQuestionType =
 
 export interface ConceptQuestion {
   id: string;
-  node_id?: string;
+  node_id: string;
   type: ConceptQuestionType;
   prompt: string;
   expected_answer: string;
@@ -127,7 +127,7 @@ export interface ConceptQuestion {
   /** 이 문항이 겨냥하는 오개념(기존 misconception 자산에서 재사용). */
   misconception_target?: string;
   /** 1~5 난이도. 스키마에서 정수로 clamp한다. */
-  difficulty: number;
+  difficulty: 1 | 2 | 3 | 4 | 5;
 }
 
 /** LLM 트리 생성 응답의 단일 노드 (id = LLM node_key) */

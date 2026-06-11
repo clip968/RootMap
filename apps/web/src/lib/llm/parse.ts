@@ -106,8 +106,20 @@ export function parseNodeDetailResponse(
   expectedNodeType?: NodeDetailResponse["type"],
 ): NodeDetailResponse {
   const parsed = parseJsonObject(rawModelText);
-  if (expectedNodeType && parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-    (parsed as Record<string, unknown>).type = expectedNodeType;
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const obj = parsed as Record<string, unknown>;
+    if (expectedNodeType) {
+      obj.type = expectedNodeType;
+    }
+    // Phase 14: concept_questions.node_id를 노드 상세 id로 backfill한다.
+    // LLM이 생략/오기해도 검증 전에 채워 두어 node_id 필수 계약을 견고하게 만든다.
+    if (Array.isArray(obj.concept_questions)) {
+      for (const question of obj.concept_questions) {
+        if (question && typeof question === "object" && !Array.isArray(question)) {
+          (question as Record<string, unknown>).node_id = expectedNodeId;
+        }
+      }
+    }
   }
   const result = nodeDetailResponseSchema.safeParse(parsed);
   if (!result.success) {
@@ -192,6 +204,17 @@ export function parseDocumentNodeDetailResponse(
   expectedNodeId: string,
 ): DocumentNodeDetailResponse {
   const parsed = parseJsonObject(rawModelText);
+  // Phase 14: 문서 노드도 concept_questions.node_id를 노드 상세 id로 backfill한다.
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const obj = parsed as Record<string, unknown>;
+    if (Array.isArray(obj.concept_questions)) {
+      for (const question of obj.concept_questions) {
+        if (question && typeof question === "object" && !Array.isArray(question)) {
+          (question as Record<string, unknown>).node_id = expectedNodeId;
+        }
+      }
+    }
+  }
   const result = documentNodeDetailResponseSchema.safeParse(parsed);
   if (!result.success) {
     throw new LlmValidationError(

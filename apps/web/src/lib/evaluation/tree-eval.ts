@@ -281,6 +281,47 @@ function readOptionalField(node: LearningTreeNode, key: string): unknown {
   return (node as unknown as Record<string, unknown>)[key];
 }
 
+/**
+ * Phase 14(§6.6): 한 문항이 특정 mastery_evidence를 검증하는지 어휘 겹침으로 추정한다.
+ * 노드 상세의 concept_questions가 트리 노드에 실려 있을 때 pedagogy_score에 반영하기 위한 헬퍼다.
+ * (트리 노드에 concept_questions가 없으면 호출되지 않으므로 기존 트리 점수에는 영향이 없다.)
+ */
+function pedagogyTokens(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, " ")
+      .split(/\s+/u)
+      .filter((token) => token.length >= 2),
+  );
+}
+
+/** ConceptQuestion 형태(unknown)에서 비교용 텍스트(prompt+expected_answer+rubric)를 추출한다. */
+function conceptQuestionText(question: unknown): string {
+  if (!question || typeof question !== "object") return "";
+  const q = question as Record<string, unknown>;
+  const parts: string[] = [];
+  if (typeof q.prompt === "string") parts.push(q.prompt);
+  if (typeof q.expected_answer === "string") parts.push(q.expected_answer);
+  if (Array.isArray(q.rubric)) {
+    for (const item of q.rubric) {
+      if (typeof item === "string") parts.push(item);
+    }
+  }
+  return parts.join(" ");
+}
+
+function conceptQuestionVerifiesEvidence(question: unknown, evidence: string): boolean {
+  const questionTokens = pedagogyTokens(conceptQuestionText(question));
+  const evidenceTokens = [...pedagogyTokens(evidence)];
+  if (evidenceTokens.length === 0) return false;
+  let hit = 0;
+  for (const token of evidenceTokens) {
+    if (questionTokens.has(token)) hit += 1;
+  }
+  return hit / evidenceTokens.length >= 0.4;
+}
+
 // ──────────────────────────────────────────────
 // 3. 기존 품질 경고 → 구조화 실패 (Phase 12 Task 03)
 // ──────────────────────────────────────────────
@@ -536,10 +577,12 @@ function scoreOrdering(
 /**
  * pedagogy_score: 학습 목표·숙달 증거·이해 점검 장치가 갖춰진 정도.
  *
- * learning_objective/mastery_evidence는 Phase 14에서 추가되는 필드다.
+ * learning_objective/mastery_evidence/concept_questions는 Phase 14에서 추가되는 필드다.
  * 명세 의사결정에 따라 "필드가 없으면 0 처리"하지 않는다. 대신:
  * - Phase 14 필드가 트리에 아예 없으면 warn(MISSING_LEARNING_CONTRACT)만 남기고,
  *   해당 항목을 채점 분모에서 제외한다(Phase 간 결합도 최소화).
+ * - Phase 14 필드가 있으면 학습 목표·숙달 증거 보유 비율과 "퀴즈가 숙달 증거를 검증하는
+ *   노드 비율"(§6.6)을 점수에 직접 반영한다.
  * - 오늘 측정 가능한 신호(퀴즈/오개념 노드 존재)로 점수를 구성한다.
  */
 function scorePedagogy(
@@ -558,16 +601,34 @@ function scorePedagogy(
   );
 
   if (hasLearningContractCapability) {
-    // Phase 14가 적용된 트리: 노드별 학습 계약 충족 비율을 채점에 포함한다.
+    // Phase 14가 적용된 트리: 노드별 학습 계약·퀴즈 충족 비율을 채점에 포함한다.
     let withObjective = 0;
     let withEvidence = 0;
+    let withQuizVerifyingEvidence = 0;
     for (const node of nodes) {
       const objective = readOptionalField(node, "learning_objective");
       const evidence = readOptionalField(node, "mastery_evidence");
+      const questions = readOptionalField(node, "concept_questions");
       const hasObjective = typeof objective === "string" && objective.trim().length > 0;
-      const hasEvidence = Array.isArray(evidence) && evidence.length > 0;
+      const evidenceItems = Array.isArray(evidence)
+        ? evidence.filter(
+            (item): item is string => typeof item === "string" && item.trim().length > 0,
+          )
+        : [];
+      const hasEvidence = evidenceItems.length > 0;
+      const questionItems = Array.isArray(questions) ? questions : [];
       if (hasObjective) withObjective += 1;
       if (hasEvidence) withEvidence += 1;
+
+      // 이 노드의 퀴즈가 mastery_evidence를 최소 1개 검증하는가(§6.6).
+      const quizVerifiesEvidence =
+        hasEvidence &&
+        questionItems.length > 0 &&
+        evidenceItems.some((item) =>
+          questionItems.some((q) => conceptQuestionVerifiesEvidence(q, item)),
+        );
+      if (quizVerifiesEvidence) withQuizVerifyingEvidence += 1;
+
       if (!hasObjective || !hasEvidence) {
         failures.push({
           severity: "warn",
@@ -575,10 +636,20 @@ function scorePedagogy(
           node_id: node.id,
           message: `노드 "${node.title}"에 learning_objective 또는 mastery_evidence가 없습니다.`,
         });
+      } else if (!quizVerifiesEvidence) {
+        // 증거는 있는데 퀴즈가 그것을 검증하지 못하면 gap으로 본다(점수에도 반영됨).
+        failures.push({
+          severity: "warn",
+          code: "QUIZ_EVIDENCE_GAP",
+          node_id: node.id,
+          message: `노드 "${node.title}"의 concept_questions가 mastery_evidence를 검증하지 않습니다.`,
+        });
       }
     }
     checks.push(withObjective / nodeCount);
     checks.push(withEvidence / nodeCount);
+    // Phase 14(§6.6): 퀴즈가 숙달 증거를 검증하는 노드 비율도 pedagogy_score에 직접 반영한다.
+    checks.push(withQuizVerifyingEvidence / nodeCount);
   } else {
     // Phase 14 미구현: 0으로 깎지 않고 warn만 남긴 뒤 분모에서 제외한다.
     failures.push({

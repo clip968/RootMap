@@ -352,23 +352,29 @@ export const conceptQuestionTypeSchema = z.enum([
 /**
  * Phase 14(§6.3): 개념 문항 스키마.
  *
- * - `node_id`는 노드 상세가 이미 자기 id를 가지므로 optional(문항마다 반복 강제하지 않음).
- * - `difficulty`는 코드베이스 관례대로 1~5 정수로 clamp한다(LLM이 3.0/6 등을 줘도 안전).
+ * - `node_id`는 필수다. 파서(parse.ts)가 검증 전에 노드 상세 id로 backfill하므로
+ *   LLM이 생략해도 항상 채워진 상태로 검증된다.
+ * - `difficulty`는 1~5 정수로 clamp하고 union 타입(1|2|3|4|5)으로 좁힌다(계약 일치 + 견고함).
+ * - `misconception_target`은 프롬프트가 `string | null`을 허용하므로 null/빈 문자열을 undefined로 정규화한다.
  * - `rubric`은 채점 기준이므로 최소 1개를 강제한다.
  */
 export const conceptQuestionSchema = z.object({
   id: z.string().min(1),
-  node_id: z.string().min(1).optional(),
+  node_id: z.string().min(1),
   type: conceptQuestionTypeSchema,
   prompt: z.string().min(1),
   expected_answer: z.string().min(1),
   rubric: z.array(z.string().trim().min(1)).min(1),
-  misconception_target: z.string().trim().min(1).optional(),
+  misconception_target: z
+    .string()
+    .trim()
+    .nullish()
+    .transform((value) => (value && value.length > 0 ? value : undefined)),
   difficulty: z
     .number()
     .min(1)
     .max(5)
-    .transform((v) => Math.max(1, Math.min(5, Math.round(v)))),
+    .transform((value) => Math.max(1, Math.min(5, Math.round(value))) as 1 | 2 | 3 | 4 | 5),
 });
 
 export const nodeDetailResponseSchema = z.object({

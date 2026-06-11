@@ -4,6 +4,8 @@ import { requireSupabaseAuthUserId } from "@/lib/auth/supabase-auth";
 import {
   applyQuizResultToMastery,
   evaluateQuizAnswerWithLlm,
+  gradeAnswerWithRubric,
+  type RubricGradingResult,
 } from "@/lib/learning/quiz";
 import { gradeForQuizResult, scheduleFsrsLiteReview } from "@/lib/learning/fsrs-lite";
 import { toIsoString } from "@/lib/learning/session-events";
@@ -38,6 +40,10 @@ const bodySchema = z.object({
   question: z.string().min(1),
   expected_answer: z.string().min(1),
   user_answer: z.string().min(1),
+  // Phase 14(§6.4·§6.5): ConceptQuestion에서 온 rubric·오개념 타깃(선택).
+  // 제공되면 LLM 평가에 더해 결정적 rubric 채점을 함께 수행하고, rubric이 짚은 오개념을 기록한다.
+  rubric: z.array(z.string().min(1)).optional(),
+  misconception_target: z.string().min(1).optional(),
 });
 
 function llmErrorResponse(err: unknown) {
@@ -136,6 +142,25 @@ export async function POST(req: Request) {
   }
 
   const previous = await getUserConceptMastery(auth.userId, parsed.data.concept_id);
+
+  // Phase 14(§6.4·§6.5): rubric이 제공되면 LLM 없이 결정적 rubric 채점을 함께 수행하고,
+  // rubric이 짚어낸 오개념(misconception_target 일치)을 misconceptionEvents 기록 대상에 합친다.
+  // rubric이 없으면 기존 동작과 100% 동일하다(하위 호환).
+  const detectedMisconceptions = [...evaluation.detectedMisconceptions];
+  let rubricGrading: RubricGradingResult | null = null;
+  if (parsed.data.rubric && parsed.data.rubric.length > 0) {
+    rubricGrading = gradeAnswerWithRubric(parsed.data.user_answer, {
+      rubric: parsed.data.rubric,
+      expected_answer: parsed.data.expected_answer,
+      misconception_target: parsed.data.misconception_target,
+    });
+    if (
+      rubricGrading.matchedMisconception &&
+      !detectedMisconceptions.includes(rubricGrading.matchedMisconception)
+    ) {
+      detectedMisconceptions.push(rubricGrading.matchedMisconception);
+    }
+  }
   const updatedMastery = applyQuizResultToMastery(
     previous ?
       {
@@ -170,10 +195,10 @@ export async function POST(req: Request) {
     isCorrect: evaluation.isCorrect,
     score: evaluation.score,
     feedback: evaluation.feedback,
-    detectedMisconceptions: evaluation.detectedMisconceptions,
+    detectedMisconceptions: detectedMisconceptions,
   });
 
-  for (const misconception of evaluation.detectedMisconceptions) {
+  for (const misconception of detectedMisconceptions) {
     await createMisconceptionEvent({
       userId: auth.userId,
       conceptId: parsed.data.concept_id,
@@ -221,7 +246,7 @@ export async function POST(req: Request) {
       quiz_type: parsed.data.quiz_type,
       is_correct: evaluation.isCorrect,
       score: evaluation.score,
-      detected_misconception_count: evaluation.detectedMisconceptions.length,
+      detected_misconception_count: detectedMisconceptions.length,
     },
   });
 
@@ -230,7 +255,18 @@ export async function POST(req: Request) {
     is_correct: evaluation.isCorrect,
     score: evaluation.score,
     feedback: evaluation.feedback,
-    detected_misconceptions: evaluation.detectedMisconceptions,
+    detected_misconceptions: detectedMisconceptions,
+    // Phase 14: rubric이 제공된 경우에만 결정적 rubric 채점 요약을 함께 내려준다.
+    rubric_grading: rubricGrading
+      ? {
+          score: rubricGrading.score,
+          is_correct: rubricGrading.isCorrect,
+          matched_rubric: rubricGrading.matchedRubric,
+          missed_rubric: rubricGrading.missedRubric,
+          matched_misconception: rubricGrading.matchedMisconception ?? null,
+          feedback: rubricGrading.feedback,
+        }
+      : undefined,
     updated_mastery: {
       concept_id: parsed.data.concept_id,
       status: mastery.status,
