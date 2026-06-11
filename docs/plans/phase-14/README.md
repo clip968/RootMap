@@ -37,7 +37,7 @@
 - [x] 02. [02-node-detail-prompt-shift.md](./02-node-detail-prompt-shift.md) - 노드 상세 프롬프트 학습 목표 전환
 - [x] 03. [03-concept-question-schema.md](./03-concept-question-schema.md) - `ConceptQuestion` 스키마 도입
 - [x] 04. [04-misconception-distractors-and-grading.md](./04-misconception-distractors-and-grading.md) - 오개념 distractor와 채점
-- [ ] 05. [05-quality-warnings-and-pedagogy-score.md](./05-quality-warnings-and-pedagogy-score.md) - quality warnings와 pedagogy_score 연동
+- [x] 05. [05-quality-warnings-and-pedagogy-score.md](./05-quality-warnings-and-pedagogy-score.md) - quality warnings와 pedagogy_score 연동
 - [ ] 06. [06-phase14-docs-and-quality-gate.md](./06-phase14-docs-and-quality-gate.md) - 문서와 최종 품질 gate 정리
 
 ## 범위 요약

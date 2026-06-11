@@ -2,6 +2,7 @@ import { z } from "zod/v3";
 import type {
   LearningTreeResponse,
   NodeDetailResponse,
+  ConceptQuestion,
   ChunkConceptExtractionResponse,
   DocumentConsolidationResponse,
   DocumentTreeResponse,
@@ -438,6 +439,81 @@ export function learningTreeQualityWarnings(
   );
 }
 
+/**
+ * Phase 14(§3.4·§6.6): 노드 학습 계약·퀴즈 품질 경고.
+ *
+ * 노드 상세(일반/문서 공통)의 learning_objective·mastery_evidence·concept_questions를
+ * 검사해 안정적 code가 붙은 경고를 만든다. LLM 호출 없이 결정적으로 동작한다.
+ * 반환 문자열은 "CODE: 설명" 형태라 기계 분기(code)와 사람 읽기(설명)를 함께 만족한다.
+ */
+function tokenizeForWarnings(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, " ")
+      .split(/\s+/u)
+      .filter((token) => token.length >= 2),
+  );
+}
+
+/** 문항 텍스트가 한 mastery_evidence 항목을 검증하는지 어휘 겹침으로 추정한다. */
+function quizCoversEvidence(questionText: string, evidence: string): boolean {
+  const questionTokens = tokenizeForWarnings(questionText);
+  const evidenceTokens = [...tokenizeForWarnings(evidence)];
+  if (evidenceTokens.length === 0) return false;
+  let hit = 0;
+  for (const token of evidenceTokens) {
+    if (questionTokens.has(token)) hit += 1;
+  }
+  return hit / evidenceTokens.length >= 0.4;
+}
+
+export function learningContractQualityWarnings(detail: {
+  learning_objective?: string;
+  mastery_evidence?: string[];
+  concept_questions?: ConceptQuestion[];
+}): string[] {
+  const w: string[] = [];
+
+  const objective = detail.learning_objective?.trim() ?? "";
+  if (!objective || !startsWithAllowedObjectiveVerb(objective)) {
+    w.push(
+      "MISSING_OR_INVALID_OBJECTIVE: learning_objective가 없거나 허용 동사(define/explain/apply/compare/debug)로 시작하지 않습니다.",
+    );
+  }
+
+  const evidence = detail.mastery_evidence ?? [];
+  if (evidence.length === 0) {
+    w.push("MISSING_MASTERY_EVIDENCE: mastery_evidence가 비어 있습니다.");
+  }
+
+  const questions = detail.concept_questions ?? [];
+  // 퀴즈와 증거가 모두 있는데 어떤 문항도 증거를 검증하지 않으면 gap으로 본다.
+  if (questions.length > 0 && evidence.length > 0) {
+    const coversAnyEvidence = evidence.some((item) =>
+      questions.some((q) =>
+        quizCoversEvidence(
+          `${q.prompt} ${q.expected_answer} ${q.rubric.join(" ")}`,
+          item,
+        ),
+      ),
+    );
+    if (!coversAnyEvidence) {
+      w.push(
+        "QUIZ_EVIDENCE_GAP: concept_questions가 mastery_evidence를 하나도 검증하지 않는 것으로 보입니다.",
+      );
+    }
+  }
+  // 문항이 2개 이상인데 전부 recall이면 정의 암기 편중으로 본다.
+  if (questions.length >= 2 && questions.every((q) => q.type === "recall")) {
+    w.push(
+      "QUIZ_TYPE_IMBALANCE: concept_questions가 모두 recall 유형입니다(정의 암기 편중).",
+    );
+  }
+
+  return w;
+}
+
 export function nodeDetailQualityWarnings(
   detail: NodeDetailResponse,
 ): string[] {
@@ -448,6 +524,8 @@ export function nodeDetailQualityWarnings(
   if (detail.common_misconceptions.length === 0) {
     w.push("common_misconceptions가 비어 있습니다.");
   }
+  // Phase 14: 학습 계약·퀴즈 품질 경고를 추가한다.
+  w.push(...learningContractQualityWarnings(detail));
   w.push(...visualDetailQualityWarnings(detail));
   return w;
 }
@@ -1020,6 +1098,8 @@ export function documentNodeDetailQualityWarnings(
   if (!detail.why_it_matters_for_document) {
     w.push("why_it_matters_for_document가 비어 있습니다.");
   }
+  // Phase 14: 문서 노드도 동일한 학습 계약·퀴즈 품질 경고를 적용한다.
+  w.push(...learningContractQualityWarnings(detail));
   w.push(...visualDetailQualityWarnings(detail));
   return w;
 }
