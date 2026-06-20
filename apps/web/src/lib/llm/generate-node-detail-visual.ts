@@ -63,6 +63,11 @@ export async function generateNodeDetailVisual(
   // 모델이 "JSON만 고치도록" 유도하는 repair loop로 동작한다. 스키마 제약(예: row 길이,
   // skill=block.type, unit enum)은 한 번에 다 지키기 어려워, 실패 사유를 그대로 돌려주면
   // 처음부터 다시 생성하는 것보다 통과 확률이 높다.
+  //
+  // Phase 17: worked_example도 별도 경로 없이 이 visual-only 패스를 그대로 탄다.
+  // 개념별 시각화 매핑(예: B-tree -> tree_graph + worked_example)과 worked_example을
+  // 언제 고를지/과생성을 어떻게 막을지는 NODE_DETAIL_VISUAL_SYSTEM_PROMPT 안의
+  // "Concept-to-visual mapping guide" / "When to choose worked_example" 가이드에 들어 있다.
   const messages: ChatMessage[] = [
     { role: "system", content: NODE_DETAIL_VISUAL_SYSTEM_PROMPT },
     { role: "user", content: buildNodeDetailVisualUserMessage(input) },

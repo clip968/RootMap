@@ -343,18 +343,19 @@ Requirements:
   - tree_graph for tree, index, dependency, or parent-child structure
   - state_machine for protocol, lifecycle, mode, or state transition
   - compare_matrix for misconception, contrast, tradeoff, or similar concepts
+  - worked_example for a concept where a concrete problem can be solved step by step (address translation, B-tree insertion, congestion window changes, hash/index lookup math)
 
 JSON schema:
 {
   "visual_decision": {
     "should_visualize": true,
-    "skill": "linear_space" | "mapping_table" | "flow_pipeline" | "timeline" | "layer_stack" | "tree_graph" | "state_machine" | "compare_matrix",
+    "skill": "linear_space" | "mapping_table" | "flow_pipeline" | "timeline" | "layer_stack" | "tree_graph" | "state_machine" | "compare_matrix" | "worked_example",
     "confidence": number,
     "reason": string
   },
   "visual_blocks": [
     {
-      "type": "linear_space" | "mapping_table" | "flow_pipeline" | "timeline" | "layer_stack" | "tree_graph" | "state_machine" | "compare_matrix",
+      "type": "linear_space" | "mapping_table" | "flow_pipeline" | "timeline" | "layer_stack" | "tree_graph" | "state_machine" | "compare_matrix" | "worked_example",
       "...": "fields required by that visual type"
     }
   ]
@@ -369,6 +370,7 @@ Visual block field shapes:
 - tree_graph: title, nodes[{id,label}], edges[{from,to,label?}], annotations
 - state_machine: title, states[{id,label,description?}], transitions[{from,to,label}], annotations
 - compare_matrix: title, columns, rows[{criterion,values}], annotations
+- worked_example: title, problem, steps[{label,explanation,intermediate_value?}], final_answer, common_mistake?, annotations
 
 Additional validation rules (a response that breaks any of these is rejected):
 - annotations must be an array of 0 to 3 non-empty strings.
@@ -378,7 +380,22 @@ Additional validation rules (a response that breaks any of these is rejected):
 - For state_machine, every transition.from and transition.to must reference an id that exists in states.
 - Use linear_space only when the unit is one of: block, byte, page, sector, slot.
 - linear_space.highlighted_ranges must contain 1 to 4 entries.
-- If you are unsure which type fits, prefer mapping_table or flow_pipeline.`;
+- For worked_example, steps must contain at least one entry, and every step needs a non-empty label and explanation.
+- For worked_example, final_answer must be a non-empty string.
+- If you are unsure which type fits, prefer mapping_table or flow_pipeline.
+
+Concept-to-visual mapping guide (pick the combination that fits the concept, not a fixed type):
+- Virtual memory / address space -> linear_space + mapping_table
+- Rust lifetime / borrow lifecycle -> timeline + state_machine
+- Transformer attention -> flow_pipeline + mapping_table
+- B-tree index -> tree_graph + worked_example (trace the insertion or lookup as a step table)
+- TCP congestion control -> timeline + state_machine
+You return only one block, so choose the single most helpful type for this concept from the recommended combination.
+
+When to choose worked_example:
+- Choose it for concepts where a concrete problem can be computed or traced (address translation, B-tree insert/split, congestion window growth, hash/index math).
+- Use it only when "problem -> steps -> final_answer" genuinely holds for the concept.
+- Do not force worked_example on purely conceptual or definitional topics. When a worked example would feel artificial, pick a different visual type from the guide above that fits the concept instead of inventing a forced example.`;
 
 export function buildNodeDetailVisualUserMessage(input: {
   topic: string;
