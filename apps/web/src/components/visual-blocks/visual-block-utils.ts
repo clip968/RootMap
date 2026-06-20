@@ -12,6 +12,8 @@ export const VISUAL_BLOCK_LABEL: Record<VisualBlock["type"], string> = {
   tree_graph: "트리/그래프",
   state_machine: "상태 전이",
   compare_matrix: "비교",
+  // Phase 17: 단계별 풀이 블록 라벨.
+  worked_example: "풀이 예시",
 };
 
 export function validateVisualBlockForRender(value: unknown): VisualBlock | null {
@@ -40,6 +42,9 @@ function hasRenderableData(block: VisualBlock): boolean {
       return block.states.length > 0;
     case "compare_matrix":
       return block.columns.length > 0 && block.rows.length > 0;
+    // Phase 17: 단계가 하나 이상 있으면 렌더 가능하다.
+    case "worked_example":
+      return block.steps.length > 0;
   }
 }
 
@@ -63,5 +68,8 @@ export function visualBlockSummaryItems(block: VisualBlock): string[] {
       return [`상태 ${block.states.length}개`, `전이 ${block.transitions.length}개`];
     case "compare_matrix":
       return [`${block.columns.join(" vs ")}`, `${block.rows.length}개 기준`];
+    // Phase 17: 요약은 문제 + 단계 라벨 목록으로 보여준다(fallback shell에서 사용).
+    case "worked_example":
+      return [block.problem, ...block.steps.map((step) => step.label)];
   }
 }
