@@ -27,7 +27,7 @@ Phase 17의 핵심은 visual type을 무작정 늘리는 것이 아니라, CS �
 
 > 작업을 완료할 때마다 해당 항목을 `[x]`로 바꿔 진행 상황을 추적한다.
 
-- [ ] 00. [00-worked-example-contract-and-scope.md](./00-worked-example-contract-and-scope.md) - worked_example 계약과 범위 고정
+- [x] 00. [00-worked-example-contract-and-scope.md](./00-worked-example-contract-and-scope.md) - worked_example 계약과 범위 고정
 - [ ] 01. [01-worked-example-schema.md](./01-worked-example-schema.md) - worked_example 타입·스키마·skill enum 추가
 - [ ] 02. [02-worked-example-renderer.md](./02-worked-example-renderer.md) - worked_example 렌더러와 등록
 - [ ] 03. [03-concept-visual-mapping-prompts.md](./03-concept-visual-mapping-prompts.md) - 개념-시각화 매핑 프롬프트 가이드
