@@ -7,6 +7,7 @@ import { MappingTableDiagram } from "@/components/visual-blocks/mapping-table-di
 import { StateMachineDiagram } from "@/components/visual-blocks/state-machine-diagram";
 import { TimelineDiagram } from "@/components/visual-blocks/timeline-diagram";
 import { TreeGraphDiagram } from "@/components/visual-blocks/tree-graph-diagram";
+import { WorkedExampleDiagram } from "@/components/visual-blocks/worked-example-diagram";
 import { VisualBlockAnnotations } from "@/components/visual-blocks/visual-block-annotations";
 import { VisualBlockEmptyState } from "@/components/visual-blocks/visual-block-empty-state";
 import {
@@ -62,6 +63,7 @@ function renderVisualBlockDiagram(block: VisualBlock) {
   if (block.type === "tree_graph") return <TreeGraphDiagram block={block} />;
   if (block.type === "state_machine") return <StateMachineDiagram block={block} />;
   if (block.type === "compare_matrix") return <CompareMatrixDiagram block={block} />;
+  if (block.type === "worked_example") return <WorkedExampleDiagram block={block} />;
   return <VisualBlockShellDiagram block={block} />;
 }
 

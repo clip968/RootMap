@@ -11,6 +11,7 @@ import type {
   StateMachineVisualBlock,
   TimelineVisualBlock,
   TreeGraphVisualBlock,
+  WorkedExampleVisualBlock,
 } from "../src/lib/visualization/visual-block-schema";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -345,6 +346,83 @@ if (shouldRun("compare_matrix")) {
   const pollingMarkup = render([pollingInterrupt]);
   assert(pollingMarkup.includes("Polling vs Interrupt"), "polling comparison should render");
   assert(pollingMarkup.includes("CPU가 반복 확인"), "polling value should render");
+}
+
+if (shouldRun("worked_example")) {
+  // 주소 변환: 중간 계산값(intermediate_value)과 common_mistake가 모두 있는 케이스.
+  const addressTranslation: WorkedExampleVisualBlock = {
+    type: "worked_example",
+    title: "가상 주소 변환",
+    problem: "페이지 크기 4KB, VPN 2의 물리 프레임이 5일 때 가상 주소 0x2A50의 물리 주소는?",
+    steps: [
+      {
+        label: "VPN과 offset 분리",
+        explanation: "하위 12비트가 offset, 나머지가 VPN이다.",
+        intermediate_value: "VPN=2, offset=0xA50",
+      },
+      {
+        label: "프레임 번호 조회",
+        explanation: "페이지 테이블에서 VPN 2 → PFN 5를 찾는다.",
+        intermediate_value: "PFN=5",
+      },
+      {
+        label: "물리 주소 조립",
+        explanation: "PFN을 12비트 왼쪽으로 옮기고 offset을 더한다.",
+        intermediate_value: "0x5A50",
+      },
+    ],
+    final_answer: "물리 주소는 0x5A50이다.",
+    common_mistake: "offset까지 변환하려 하지만 offset은 그대로 유지된다.",
+    annotations: ["주소 변환은 offset을 보존한다."],
+  };
+
+  // B-tree 삽입: common_mistake와 intermediate_value가 없는 최소 케이스(선택 필드 생략 검증).
+  const btreeInsert: WorkedExampleVisualBlock = {
+    type: "worked_example",
+    title: "B-tree 삽입",
+    problem: "차수 3인 B-tree의 가득 찬 노드에 키를 넣으면?",
+    steps: [
+      { label: "중앙 키 선택", explanation: "노드의 중앙 키를 고른다." },
+      { label: "분할", explanation: "노드를 둘로 나눈다." },
+      { label: "승격", explanation: "중앙 키를 부모로 올린다." },
+    ],
+    final_answer: "노드가 분할되고 중앙 키가 부모로 승격된다.",
+    annotations: ["가득 찬 노드는 분할로 높이를 키운다."],
+  };
+
+  const addressMarkup = render([addressTranslation]);
+  assert(addressMarkup.includes("가상 주소 변환"), "worked_example title should render");
+  assert(addressMarkup.includes("문제"), "worked_example problem tag should render");
+  assert(addressMarkup.includes("0x5A50"), "worked_example final answer should render");
+  assert(addressMarkup.includes("0xA50"), "worked_example intermediate value should render");
+  assert(addressMarkup.includes("자주 하는 실수"), "worked_example common_mistake should render");
+  // 단계 순서가 보존되어야 한다(VPN 분리가 프레임 조회보다 먼저).
+  assert(
+    addressMarkup.indexOf("VPN과 offset 분리") < addressMarkup.indexOf("프레임 번호 조회"),
+    "worked_example step order should be preserved",
+  );
+
+  const btreeMarkup = render([btreeInsert]);
+  assert(btreeMarkup.includes("B-tree 삽입"), "minimal worked_example title should render");
+  assert(btreeMarkup.includes("중앙 키가 부모로"), "minimal worked_example answer should render");
+  // common_mistake가 없으면 "자주 하는 실수" 영역이 렌더되지 않아야 한다.
+  assert(
+    !btreeMarkup.includes("자주 하는 실수"),
+    "worked_example without common_mistake should omit the mistake section",
+  );
+
+  // steps가 비어 있으면(schema 위반) 렌더되지 않고 빈 fallback이어야 한다.
+  const invalidMarkup = render([
+    {
+      type: "worked_example",
+      title: "빈 풀이",
+      problem: "문제만 있고 단계가 없다.",
+      steps: [],
+      final_answer: "답",
+      annotations: [],
+    },
+  ]);
+  assert(!invalidMarkup.includes("빈 풀이"), "worked_example without steps should not render");
 }
 
 console.log("Phase 07 visual detail renderer smoke passed");

@@ -1355,6 +1355,126 @@ body {
   word-break: keep-all;
 }
 
+/* Phase 17: worked_example(단계별 풀이) 스타일. 기존 visual block 어두운 테마를 따른다. */
+.worked-example-diagram {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.worked-example-tag {
+  display: inline-flex;
+  width: fit-content;
+  margin-bottom: 6px;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: #bfdbfe;
+  background: #0f172a;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+/* 최종 답은 초록 계열, 자주 하는 실수는 주황 계열로 구분한다. */
+.worked-example-tag.is-answer {
+  color: #bbf7d0;
+  border-color: #166534;
+  background: #052e16;
+}
+
+.worked-example-tag.is-mistake {
+  color: #fed7aa;
+  border-color: #9a3412;
+  background: #431407;
+}
+
+.worked-example-problem,
+.worked-example-answer,
+.worked-example-mistake {
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 10px;
+  background: #020617;
+}
+
+.worked-example-problem p,
+.worked-example-answer p,
+.worked-example-mistake p {
+  margin: 0;
+  color: #e2e8f0;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.worked-example-steps {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.worked-example-step {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 10px;
+  background: #020617;
+}
+
+.worked-example-index {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  color: #082f49;
+  background: #7dd3fc;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.worked-example-step-body {
+  min-width: 0;
+}
+
+.worked-example-step-body strong {
+  color: #ffffff;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.worked-example-step-body p {
+  margin: 4px 0 0;
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+/* 중간 계산값은 모노스페이스로 강조한다. */
+.worked-example-value {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 6px;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 2px 8px;
+  color: #fde68a;
+  background: #0f172a;
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .timeline-diagram {
   display: grid;
   gap: 14px;
