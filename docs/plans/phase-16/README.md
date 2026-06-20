@@ -28,7 +28,7 @@ Phase 16의 핵심은 문서 기반 트리의 완성도를 "근거성"으로 끌
 
 > 작업을 완료할 때마다 해당 항목을 `[x]`로 바꿔 진행 상황을 추적한다.
 
-- [ ] 00. [00-document-grounding-contract-and-scope.md](./00-document-grounding-contract-and-scope.md) - 근거성 계약과 범위 고정
+- [x] 00. [00-document-grounding-contract-and-scope.md](./00-document-grounding-contract-and-scope.md) - 근거성 계약과 범위 고정
 - [ ] 01. [01-node-source-span-grounding.md](./01-node-source-span-grounding.md) - 노드 source span 부착
 - [ ] 02. [02-evidence-vs-augmentation-display.md](./02-evidence-vs-augmentation-display.md) - 근거 vs 보강 분리 표시
 - [ ] 03. [03-document-eval-result-metrics.md](./03-document-eval-result-metrics.md) - `DocumentEvalResult` 지표 산출
