@@ -130,6 +130,36 @@ export const phase7VisualDetailFixtures: Phase7VisualDetailFixture[] = [
       annotations: ["비슷한 개념은 같은 기준으로 비교합니다."],
     },
   ]),
+  // Phase 17: 단계별 풀이(worked_example) fixture.
+  // 주소 변환은 "문제 → 단계 → 최종 답"이 분명한 계산형 개념이라 worked_example에 적합하다.
+  // decision.skill == "worked_example"와 block.type이 일치해야 required-visual 정책을 만족한다.
+  detailFixture("address translation", "worked_example", [
+    {
+      type: "worked_example",
+      title: "가상 주소 변환",
+      problem: "페이지 크기 4KB, VPN 2의 물리 프레임이 5일 때 가상 주소 0x2A50의 물리 주소는?",
+      steps: [
+        {
+          label: "VPN과 offset 분리",
+          explanation: "하위 12비트가 offset, 나머지가 VPN입니다.",
+          intermediate_value: "VPN=2, offset=0xA50",
+        },
+        {
+          label: "프레임 번호 조회",
+          explanation: "페이지 테이블에서 VPN 2 → PFN 5를 찾습니다.",
+          intermediate_value: "PFN=5",
+        },
+        {
+          label: "물리 주소 조립",
+          explanation: "PFN을 12비트 왼쪽으로 옮기고 offset을 더합니다.",
+          intermediate_value: "0x5A50",
+        },
+      ],
+      final_answer: "물리 주소는 0x5A50입니다.",
+      common_mistake: "offset까지 변환하려 하지만 offset은 그대로 유지됩니다.",
+      annotations: ["주소 변환은 offset을 보존합니다."],
+    },
+  ]),
   detailFixture("abstract concept", "none", []),
 ];
 

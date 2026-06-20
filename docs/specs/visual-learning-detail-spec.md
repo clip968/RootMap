@@ -114,6 +114,7 @@ layer_stack
 tree_graph
 state_machine
 compare_matrix
+worked_example
 ```
 
 LLM은 “그림”을 직접 만들지 않는다. LLM은 `visual_blocks` JSON만 생성하고, 프론트엔드가 타입별 React 컴포넌트로 렌더링한다.

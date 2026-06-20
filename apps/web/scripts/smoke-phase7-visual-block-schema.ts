@@ -1,8 +1,8 @@
 /**
  * Phase 07 Task 03: visual block 계약 스모크.
  *
- * API 호출 없이 8개 visual skill의 schema, invalid fallback, legacy detail
- * 호환성을 검증한다.
+ * API 호출 없이 9개 visual skill(Phase 17에서 worked_example 추가)의 schema,
+ * invalid fallback, legacy detail 호환성을 검증한다.
  */
 import { parseDocumentNodeDetailResponse, parseNodeDetailResponse } from "../src/lib/llm/parse";
 import {
@@ -110,18 +110,31 @@ const validBlocks: VisualBlock[] = [
     ],
     annotations: ["기준별 차이를 비교한다."],
   },
+  // Phase 17: worked_example — 단계별 풀이 계약 검증용(선택 필드 intermediate_value/common_mistake 포함).
+  {
+    type: "worked_example",
+    title: "주소 변환 풀이",
+    problem: "VPN 2 → PFN 5, offset 0xA50일 때 물리 주소는?",
+    steps: [
+      { label: "프레임 조회", explanation: "VPN 2의 PFN은 5다.", intermediate_value: "PFN=5" },
+      { label: "물리 주소 조립", explanation: "PFN을 옮기고 offset을 더한다.", intermediate_value: "0x5A50" },
+    ],
+    final_answer: "물리 주소는 0x5A50이다.",
+    common_mistake: "offset까지 바꾸려 하면 안 된다.",
+    annotations: ["offset은 변환 중에도 유지된다."],
+  },
 ];
 
 for (const block of validBlocks) {
   visualBlockSchema.parse(block);
 }
-assert(visualBlocksSchema.parse(validBlocks).length === 8, "all valid visual blocks should parse");
+assert(visualBlocksSchema.parse(validBlocks).length === 9, "all valid visual blocks should parse");
 
 const fixtureBlocks = phase7VisualDetailFixtures.flatMap(
   (fixture) => fixture.detail.visual_blocks ?? [],
 );
 const fixtureSkills = new Set(fixtureBlocks.map((block) => block.type));
-assert(fixtureSkills.size === 8, "fixture set should cover 8 visual skills");
+assert(fixtureSkills.size === 9, "fixture set should cover 9 visual skills");
 for (const fixture of phase7VisualDetailFixtures) {
   const parsed = parseNodeDetailResponse(JSON.stringify(fixture.detail), fixture.detail.node_id);
   assert(
